@@ -26,7 +26,7 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 from .config import Config
 from .database import db
-from .backup_utils import BACKUP_FOLDER, create_backup_archive, ensure_daily_backup, get_backup_path, list_backup_archives, restore_backup_archive
+from .backup_utils import BACKUP_FOLDER, create_backup_archive, ensure_backup_folder, ensure_daily_backup, get_backup_path, list_backup_archives, restore_backup_archive
 from .models import (
     Account,
     AuditLog,
@@ -6073,6 +6073,28 @@ def create_app():
         except Exception:
             db.session.rollback()
             return jsonify({'error': 'فشلت عملية الاستعادة. يرجى التحقق من ملف النسخة الاحتياطية والمحاولة مجدداً.'}), 500
+
+    @app.route('/api/backups/upload', methods=['POST'])
+    @api_login_required
+    @api_permission_required('manage_backups')
+    def api_upload_backup():
+        f = request.files.get('file')
+        if not f or not f.filename:
+            return jsonify({'error': 'لم يتم إرفاق ملف'}), 400
+        name = secure_filename(f.filename)
+        if not name.endswith('.zip'):
+            return jsonify({'error': 'يجب أن يكون الملف بصيغة .zip'}), 400
+        ensure_backup_folder()
+        dest = os.path.join(BACKUP_FOLDER, name)
+        # avoid overwrite — append microseconds if name already exists
+        if os.path.exists(dest):
+            ts = datetime.utcnow().strftime('%f')
+            name = name[:-4] + f'_{ts}.zip'
+            dest = os.path.join(BACKUP_FOLDER, name)
+        f.save(dest)
+        log_action('upload backup', 'Backup', None, name)
+        db.session.commit()
+        return jsonify({'filename': name, 'size': os.path.getsize(dest)}), 201
 
     @app.route('/api/backups/<path:filename>', methods=['DELETE'])
     @api_login_required
