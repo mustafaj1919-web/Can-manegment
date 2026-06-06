@@ -7,7 +7,6 @@ git config --global user.name "Mustafa"
 
 echo [2/6] Git add...
 git add backend/app.py frontend/src/lib/api/backup.ts frontend/src/app/backup/page.tsx
-git add autostart.vbs pull_on_slave.bat push_to_github.bat setup_autostart.bat setup_slave.bat
 
 echo [3/6] Git commit...
 git commit -m "add: backup upload and restore UI"
