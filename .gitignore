@@ -11,6 +11,7 @@ __pycache__/
 
 # قاعدة البيانات والنسخ الاحتياطية
 database/*.dump
+!database/shared_db.dump
 database/*.db
 database/old_sqlite_backup/
 data/backups/
