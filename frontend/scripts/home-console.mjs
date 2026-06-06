@@ -1,0 +1,12 @@
+﻿import { chromium } from 'playwright';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:900}});
+page.on('console', msg=>console.log('console', msg.type(), msg.text()));
+page.on('pageerror', err=>console.log('pageerror', err.message));
+await page.goto('http://127.0.0.1:3000/login',{waitUntil:'networkidle'});
+const payload=await page.evaluate(async()=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'owner',password:'Owner@12345'})});return r.json();});
+await page.evaluate(p=>{sessionStorage.setItem('auth-storage',JSON.stringify({state:{user:p.user,isAuthenticated:true},version:0})); localStorage.setItem('branch-storage',JSON.stringify({state:{branches:p.branches,activeBranch:p.active_branch},version:0}));}, payload);
+await page.goto('http://127.0.0.1:3000/',{waitUntil:'domcontentloaded'});
+await page.waitForTimeout(5000);
+console.log('html', (await page.content()).slice(0,1000));
+await browser.close();

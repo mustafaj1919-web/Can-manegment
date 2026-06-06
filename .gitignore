@@ -1,0 +1,35 @@
+# بيئة Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ملفات حساسة — لا ترفعها أبدا
+.env
+.secret_key
+
+# قاعدة البيانات والنسخ الاحتياطية
+database/*.dump
+database/*.db
+database/old_sqlite_backup/
+data/backups/
+
+# رفعات المستخدمين
+static/uploads/
+
+# ملفات Next.js
+frontend/.next/
+frontend/node_modules/
+
+# لوجات
+logs/
+*.log
+
+# ملفات Windows
+Thumbs.db
+desktop.ini
+
+# outputs مؤقتة
+outputs/
+cloud/

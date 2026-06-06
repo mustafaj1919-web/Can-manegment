@@ -1,0 +1,16 @@
+﻿import { chromium } from 'playwright';
+const browser=await chromium.launch({headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:900}});
+const page=await context.newPage();
+await page.goto('http://127.0.0.1:3000/login',{waitUntil:'networkidle'});
+await page.fill('input[autocomplete="username"]','owner');
+await page.fill('input[autocomplete="current-password"]','Owner@12345');
+await page.click('button[type="submit"]');
+await page.waitForTimeout(5000);
+console.log('after login url', page.url());
+console.log('text', (await page.locator('body').innerText()).slice(0,300));
+await page.goto('http://127.0.0.1:3000/inventory',{waitUntil:'domcontentloaded'});
+await page.waitForTimeout(5000);
+console.log('inventory url', page.url());
+console.log('inventory text', (await page.locator('body').innerText()).slice(0,500));
+await browser.close();
