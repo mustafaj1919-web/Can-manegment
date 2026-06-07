@@ -9,6 +9,15 @@ export const apiClient = axios.create({
   timeout: 15_000,
 })
 
+// FormData must set its own multipart boundary. The shared JSON header causes
+// Flask to receive an empty request.files collection.
+apiClient.interceptors.request.use((config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type')
+  }
+  return config
+})
+
 /* ─── Response Error Interceptor ─────────────────────────────────────────── */
 
 apiClient.interceptors.response.use(

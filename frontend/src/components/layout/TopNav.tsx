@@ -20,6 +20,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   close: 'إقفال الصندوق',
   contract: 'عقد',
   contracts: 'العقود',
+  crm: 'إدارة علاقات العملاء',
   customers: 'العملاء',
   edit: 'تعديل',
   employees: 'الموظفون',
@@ -29,6 +30,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   inventory: 'المخزون',
   'journal-entries': 'القيود اليومية',
   new: 'جديد',
+  performance: 'أداء الموظفين',
+  pipeline: 'خط أنابيب المبيعات',
   purchases: 'المشتريات',
   receipt: 'وصل',
   reports: 'التقارير',
@@ -42,26 +45,24 @@ const SEGMENT_LABELS: Record<string, string> = {
   users: 'المستخدمون',
   vouchers: 'السندات المالية',
   'accounting-rules': 'سلامة المحاسبة',
-  'balance-sheet':    'الميزانية العمومية',
-  'bank-movement':    'حركة البنك',
-  'ar-aging':          'أعمار الذمم',
+  'balance-sheet': 'الميزانية العمومية',
+  'bank-movement': 'حركة البنك',
+  'ar-aging': 'أعمار الذمم',
   'branch-comparison': 'مقارنة الفروع',
-  'crm':              'إدارة علاقات العملاء',
-  'pipeline':         'خط أنابيب المبيعات',
-  'performance':      'أداء الموظفين',
   'cashbox-movement': 'حركة الصندوق',
   'cost-center': 'مراكز التكلفة',
   'installment-aging': 'أعمار الأقساط',
   'vehicle-profitability': 'ربحية السيارات',
+  'monthly-profit': 'الأرباح الشهرية',
 }
 
 const NEW_ACTIONS: Record<string, { label: string; href: string }> = {
   '/inventory': { label: 'سيارة جديدة', href: '/inventory/new' },
-  '/sales': { label: 'بيعة جديدة', href: '/sales/new' },
-  '/purchases': { label: 'شراء جديد', href: '/purchases/new' },
-  '/customers': { label: 'عميل جديد', href: '/customers/new' },
-  '/expenses': { label: 'مصروف جديد', href: '/expenses/new' },
-  '/users': { label: 'مستخدم جديد', href: '/users/new' },
+  '/sales':     { label: 'بيعة جديدة',  href: '/sales/new' },
+  '/purchases': { label: 'شراء جديد',   href: '/purchases/new' },
+  '/customers': { label: 'عميل جديد',   href: '/customers/new' },
+  '/expenses':  { label: 'مصروف جديد', href: '/expenses/new' },
+  '/users':     { label: 'مستخدم جديد', href: '/users/new' },
 }
 
 function labelForSegment(segment: string) {
@@ -94,49 +95,61 @@ interface TopNavProps {
 
 export function TopNav({ onToggleSidebar, onToggleMobile }: TopNavProps) {
   const pathname = usePathname()
-  const crumbs = buildCrumbs(pathname)
-  const action = getNewAction(pathname)
+  const crumbs   = buildCrumbs(pathname)
+  const action   = getNewAction(pathname)
 
   return (
     <header className="app-topnav sticky top-0 z-30 flex h-[60px] shrink-0 items-center gap-3 border-b border-border px-4">
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onToggleSidebar}
-          className="hidden h-8 w-8 shrink-0 rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:flex"
-          aria-label="طي أو توسيع القائمة"
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onToggleMobile}
-          className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:hidden"
-          aria-label="فتح القائمة"
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
 
-        <nav className="hidden min-w-0 items-center gap-1 sm:flex" aria-label="breadcrumb">
+      {/* ── Left zone: menu toggle + breadcrumb ── */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {/* Desktop sidebar toggle */}
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label="طي أو توسيع القائمة"
+          className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-secondary/70 hover:text-foreground lg:flex"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+        {/* Mobile sidebar toggle */}
+        <button
+          type="button"
+          onClick={onToggleMobile}
+          aria-label="فتح القائمة"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-secondary/70 hover:text-foreground lg:hidden"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+
+        {/* Breadcrumb */}
+        <nav className="hidden min-w-0 items-center gap-0.5 sm:flex" aria-label="breadcrumb">
           {crumbs.map((crumb, index) => {
-            const isLast = index === crumbs.length - 1
+            const isLast  = index === crumbs.length - 1
             const isFirst = index === 0
 
             return (
-              <div key={crumb.href} className="flex min-w-0 items-center gap-1">
-                {index > 0 && <ChevronLeft className="rtl-flip h-3 w-3 shrink-0 text-muted-foreground/45" />}
+              <div key={crumb.href} className="flex min-w-0 items-center gap-0.5">
+                {index > 0 && (
+                  <ChevronLeft className="rtl-flip h-2.5 w-2.5 shrink-0 text-muted-foreground/28" />
+                )}
                 {isLast ? (
-                  <span className={cn('truncate text-sm font-semibold', isFirst ? 'text-muted-foreground' : 'text-foreground')}>
+                  <span className={cn(
+                    'truncate font-semibold',
+                    isFirst
+                      ? 'text-[11px] text-muted-foreground'
+                      : 'text-[13px] text-foreground',
+                  )}>
                     {crumb.label}
                   </span>
                 ) : (
                   <Link
                     href={crumb.href}
                     className={cn(
-                      'shrink-0 truncate text-sm transition-colors',
-                      isFirst ? 'font-medium text-muted-foreground hover:text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      'shrink-0 truncate transition-colors',
+                      isFirst
+                        ? 'text-[11px] font-medium text-muted-foreground/60 hover:text-muted-foreground'
+                        : 'text-[11px] text-muted-foreground/50 hover:text-muted-foreground',
                     )}
                   >
                     {crumb.label}
@@ -148,11 +161,16 @@ export function TopNav({ onToggleSidebar, onToggleMobile }: TopNavProps) {
         </nav>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      {/* ── Right zone: actions + utilities ── */}
+      <div className="flex shrink-0 items-center gap-1">
         <GlobalSearch />
 
         {action && (
-          <Button asChild size="sm" className="hidden h-8 gap-1.5 px-3 text-xs font-medium shadow-sm shadow-primary/20 sm:flex">
+          <Button
+            asChild
+            size="sm"
+            className="hidden h-8 gap-1.5 px-3.5 text-xs font-semibold shadow-sm shadow-primary/20 sm:flex"
+          >
             <Link href={action.href}>
               <Plus className="h-3.5 w-3.5 shrink-0" />
               {action.label}
@@ -160,7 +178,8 @@ export function TopNav({ onToggleSidebar, onToggleMobile }: TopNavProps) {
           </Button>
         )}
 
-        <div className="mx-1 hidden h-5 w-px bg-border sm:block" />
+        <div className="mx-1 hidden h-4 w-px bg-border/50 sm:block" />
+
         <ThemeToggle />
         <NotificationCenter />
         <BranchSelector />

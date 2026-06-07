@@ -946,21 +946,267 @@ export default function CarSpecificationPage() {
         @media print {
           @page { size: A4 landscape; margin: 5mm; }
           aside, header, nav, .spec-toolbar { display: none !important; }
-          html, body { background: white !important; }
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .spec-shell { padding: 0 !important; background: white !important; }
-          .spec-doc {
-            max-width: none;
-            width: 287mm;
-            min-height: 200mm;
-            border-radius: 0;
-            box-shadow: none;
-            page-break-inside: avoid;
+          html, body {
+            width: 287mm !important;
+            height: 200mm !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: white !important;
           }
-          .spec-hero-image { min-height: 470px; }
-          .spec-thumbs img { height: 68px; }
-          .spec-commercial { min-height: 108px; }
-          .spec-bottom-bar { min-height: 52px; }
+          body > div {
+            width: 287mm !important;
+            height: 200mm !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+          }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .spec-shell {
+            width: 287mm !important;
+            height: 200mm !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: white !important;
+          }
+          .spec-doc {
+            width: 287mm !important;
+            height: 200mm !important;
+            max-width: none !important;
+            min-height: 0 !important;
+            display: grid !important;
+            grid-template-columns: 54% 46% !important;
+            grid-template-rows: 188mm 12mm !important;
+            grid-template-areas:
+              "left right"
+              "bottom bottom" !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+          }
+          .spec-left {
+            grid-area: left !important;
+            height: 188mm !important;
+            padding: 2mm !important;
+            border-left: 1px solid #d7dee8 !important;
+            border-bottom: 0 !important;
+            overflow: hidden !important;
+          }
+          .spec-right {
+            grid-area: right !important;
+            height: 188mm !important;
+            display: grid !important;
+            gap: 2mm !important;
+            padding: 3mm !important;
+            overflow: hidden !important;
+          }
+          .spec-hero-top {
+            inset: 5mm 5mm auto 5mm !important;
+          }
+          .spec-hero-top h2 { font-size: 24px !important; }
+          .spec-hero-top strong {
+            margin-top: 1mm !important;
+            font-size: 22px !important;
+          }
+          .spec-hero-top p {
+            width: 52mm !important;
+            margin-top: 2mm !important;
+            padding-top: 2mm !important;
+            font-size: 10px !important;
+          }
+          .spec-brand img {
+            width: 18mm !important;
+            height: 13mm !important;
+          }
+          .spec-brand span { font-size: 13px !important; }
+          .spec-hero-image {
+            min-height: 0 !important;
+            height: 105mm !important;
+          }
+          .spec-hero-image img {
+            width: 86% !important;
+            max-height: 76mm !important;
+          }
+          .spec-no-photo {
+            height: 60mm !important;
+            margin: 30mm 5mm 7mm !important;
+          }
+          .spec-seal {
+            width: 23mm !important;
+            height: 23mm !important;
+            top: 36mm !important;
+            right: 5mm !important;
+          }
+          .spec-seal svg {
+            width: 5mm !important;
+            height: 5mm !important;
+          }
+          .spec-seal strong { font-size: 9px !important; }
+          .spec-seal span {
+            width: 18mm !important;
+            font-size: 6px !important;
+          }
+          .spec-counter {
+            left: 4mm !important;
+            bottom: 3mm !important;
+            padding: 1mm 3mm !important;
+            font-size: 9px !important;
+          }
+          .spec-thumbs {
+            height: 14mm !important;
+            padding: 0.5mm !important;
+          }
+          .spec-thumbs img {
+            height: 13mm !important;
+          }
+          .spec-metrics {
+            height: 25mm !important;
+            margin-top: 2mm !important;
+          }
+          .spec-metrics div {
+            padding: 2mm 1mm !important;
+          }
+          .spec-metrics svg {
+            width: 5mm !important;
+            height: 5mm !important;
+            margin-bottom: 1mm !important;
+          }
+          .spec-metrics span { font-size: 7px !important; }
+          .spec-metrics strong {
+            margin-top: 0.5mm !important;
+            font-size: 8px !important;
+          }
+          .spec-commercial {
+            height: 36mm !important;
+            min-height: 0 !important;
+            margin-top: 2mm !important;
+            grid-template-columns: 0.9fr 1.45fr 22mm !important;
+            gap: 3mm !important;
+            padding: 3mm 4mm !important;
+          }
+          .spec-price span,
+          .spec-contact strong {
+            margin-bottom: 1mm !important;
+            font-size: 8px !important;
+          }
+          .spec-price strong { font-size: 20px !important; }
+          .spec-price em {
+            margin-top: 1mm !important;
+            padding: 1mm 2mm !important;
+            font-size: 7px !important;
+          }
+          .spec-contact { padding-inline-start: 3mm !important; }
+          .spec-contact span {
+            grid-template-columns: 4mm 23mm 1fr !important;
+            gap: 1mm !important;
+            margin: 0.5mm 0 !important;
+            font-size: 8px !important;
+          }
+          .spec-contact bdi { font-size: 9px !important; }
+          .spec-contact em { font-size: 8px !important; }
+          .spec-contact .spec-address-line {
+            grid-template-columns: 4mm 1fr !important;
+            margin-top: 1mm !important;
+            font-size: 7px !important;
+          }
+          .spec-qr { height: 22mm !important; }
+          .spec-qr svg {
+            width: 9mm !important;
+            height: 9mm !important;
+          }
+          .spec-panel {
+            border-radius: 2mm !important;
+            box-shadow: none !important;
+          }
+          .spec-panel-title {
+            height: 10mm !important;
+            gap: 2mm !important;
+            padding: 0 4mm !important;
+          }
+          .spec-panel-title svg {
+            width: 5mm !important;
+            height: 5mm !important;
+          }
+          .spec-panel-title h3 { font-size: 13px !important; }
+          .spec-icon-row {
+            grid-template-columns: 5mm 1fr 1.2fr !important;
+            min-height: 6.5mm !important;
+            gap: 2mm !important;
+            padding: 0 4mm !important;
+          }
+          .spec-icon {
+            width: 3.5mm !important;
+            height: 3.5mm !important;
+          }
+          .spec-icon-row span,
+          .spec-icon-row strong,
+          .spec-row span,
+          .spec-row strong {
+            font-size: 8px !important;
+          }
+          .spec-features {
+            padding: 2mm 4mm 3mm !important;
+          }
+          .spec-feature {
+            min-height: 6mm !important;
+            grid-template-columns: 4mm 1fr !important;
+            gap: 1.5mm !important;
+            font-size: 8px !important;
+          }
+          .spec-feature svg {
+            width: 3.5mm !important;
+            height: 3.5mm !important;
+          }
+          .spec-info-grid {
+            grid-template-columns: 1.35fr 0.75fr !important;
+            gap: 2mm !important;
+          }
+          .spec-row {
+            min-height: 6mm !important;
+            padding: 0 3mm !important;
+          }
+          .spec-logo-panel {
+            min-height: 0 !important;
+          }
+          .spec-logo-panel img {
+            width: 22mm !important;
+            height: 16mm !important;
+          }
+          .spec-logo-panel strong { font-size: 10px !important; }
+          .spec-logo-panel span { font-size: 7px !important; }
+          .spec-notes {
+            padding: 2mm 3mm !important;
+            max-height: 18mm !important;
+            overflow: hidden !important;
+          }
+          .spec-notes span {
+            margin-bottom: 1mm !important;
+            font-size: 8px !important;
+          }
+          .spec-notes p {
+            font-size: 7px !important;
+            line-height: 1.35 !important;
+          }
+          .spec-bottom-bar {
+            grid-area: bottom !important;
+            min-height: 0 !important;
+            height: 12mm !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+          }
+          .spec-bottom-bar span {
+            gap: 2mm !important;
+            font-size: 8px !important;
+          }
+          .spec-bottom-bar svg {
+            width: 4mm !important;
+            height: 4mm !important;
+          }
         }
       `}</style>
     </div>

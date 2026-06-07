@@ -5,18 +5,19 @@ import { getDashboardStats } from '@/lib/api/dashboard'
 import { formatMoney } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  AlertTriangle, Car, TrendingDown, TrendingUp, Wallet,
+  AlertTriangle, Car, LayoutGrid, TrendingDown, TrendingUp, Wallet,
   ReceiptText, CalendarDays, DollarSign,
 } from 'lucide-react'
+import { DashboardWidget } from './DashboardWidget'
 
 interface MetricItem {
-  label: string
-  sublabel: string
-  icon: React.ElementType
-  iconColor: string
-  value: number
+  label:      string
+  sublabel:   string
+  icon:       React.ElementType
+  iconColor:  string
+  value:      number
   isMonetary: boolean
-  isAlert?: boolean
+  isAlert?:   boolean
 }
 
 export function ManagementPanel() {
@@ -113,13 +114,12 @@ export function ManagementPanel() {
   ]
 
   return (
-    <div className="dash-card p-5" dir="rtl">
-      <div className="flex items-center gap-2.5 mb-4">
-        <TrendingDown className="h-4 w-4 text-muted-foreground/70" />
-        <h2 className="text-sm font-semibold text-foreground">لوحة الإدارة</h2>
-        <span className="text-[10px] text-muted-foreground/50">— مؤشرات الأداء الرئيسية</span>
-      </div>
-
+    <DashboardWidget
+      title="لوحة الإدارة"
+      subtitle="مؤشرات الأداء الرئيسية"
+      icon={LayoutGrid}
+      iconColor="text-muted-foreground"
+    >
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -133,10 +133,10 @@ export function ManagementPanel() {
             return (
               <div
                 key={m.label}
-                className={`rounded-xl border p-3 transition-all ${
+                className={`rounded-lg border p-3 transition-all ${
                   m.isAlert && m.value > 0
                     ? 'border-rose-500/30 bg-rose-500/[0.06]'
-                    : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'
+                    : 'border-border/50 bg-secondary/20 hover:bg-secondary/40'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -146,21 +146,21 @@ export function ManagementPanel() {
                 {m.isMonetary ? (
                   <div>
                     <span className="text-[9px] text-muted-foreground/40 me-0.5">IQD</span>
-                    <span className={`font-numeric text-base font-black ${m.isAlert && m.value > 0 ? 'text-rose-400' : 'text-foreground'}`}>
+                    <span className={`font-numeric text-lg font-black ${m.isAlert && m.value > 0 ? 'text-rose-400' : 'text-foreground'}`}>
                       {m.value.toLocaleString('en-US')}
                     </span>
                   </div>
                 ) : (
-                  <p className={`font-numeric text-2xl font-black ${m.isAlert && m.value > 0 ? 'text-rose-400' : 'text-foreground'}`}>
+                  <p className={`font-numeric text-xl font-black ${m.isAlert && m.value > 0 ? 'text-rose-400' : 'text-foreground'}`}>
                     {m.value.toLocaleString('en-US')}
                   </p>
                 )}
-                <p className="text-[9px] text-muted-foreground/40 mt-1 leading-tight">{m.sublabel}</p>
+                <p className="text-[10px] text-muted-foreground/40 mt-1 leading-tight">{m.sublabel}</p>
               </div>
             )
           })}
         </div>
       )}
-    </div>
+    </DashboardWidget>
   )
 }

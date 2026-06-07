@@ -3510,6 +3510,70 @@ def create_app():
             },
         })
 
+    # ── Monthly Profit Report ─────────────────────────────────────────────
+
+    @app.route('/api/reports/monthly-profit')
+    @api_login_required
+    def api_monthly_profit():
+        """تقرير الأرباح الشهرية — آخر N شهر."""
+        import calendar as _cal
+        months_count = min(int(request.args.get('months', 12)), 24)
+        today = datetime.utcnow().date()
+        rows = []
+        ARABIC_MONTHS = [
+            '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+            'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+        ]
+        for i in range(months_count - 1, -1, -1):
+            # احسب بداية الشهر
+            year  = today.year
+            month = today.month - i
+            while month <= 0:
+                month += 12
+                year  -= 1
+            start = datetime(year, month, 1).date()
+            end   = datetime(year, month, _cal.monthrange(year, month)[1]).date()
+
+            sales = Sale.query.filter(
+                func.date(Sale.sale_date) >= start.isoformat(),
+                func.date(Sale.sale_date) <= end.isoformat(),
+                Sale.status != 'Cancelled',
+            ).all()
+            purchases = Purchase.query.filter(
+                func.date(Purchase.purchase_date) >= start.isoformat(),
+                func.date(Purchase.purchase_date) <= end.isoformat(),
+                Purchase.status != 'Cancelled',
+            ).all()
+            expenses = Expense.query.filter(
+                func.date(Expense.expense_date) >= start.isoformat(),
+                func.date(Expense.expense_date) <= end.isoformat(),
+            ).all()
+
+            revenue   = sum(to_iqd(s.selling_price - (s.discount or 0), s.currency) or 0 for s in sales)
+            cost      = sum(to_iqd(p.purchase_price, p.currency) or 0 for p in purchases)
+            exp_total = sum(to_iqd(e.amount, e.currency) or 0 for e in expenses)
+
+            rows.append({
+                'month':        f'{year:04d}-{month:02d}',
+                'label':        f'{ARABIC_MONTHS[month]} {year}',
+                'sales_count':  len(sales),
+                'revenue':      round(revenue, 2),
+                'cost':         round(cost, 2),
+                'expenses':     round(exp_total, 2),
+                'gross_profit': round(revenue - cost, 2),
+                'net_profit':   round(revenue - cost - exp_total, 2),
+            })
+
+        totals = {
+            'revenue':      round(sum(r['revenue']      for r in rows), 2),
+            'cost':         round(sum(r['cost']         for r in rows), 2),
+            'expenses':     round(sum(r['expenses']     for r in rows), 2),
+            'gross_profit': round(sum(r['gross_profit'] for r in rows), 2),
+            'net_profit':   round(sum(r['net_profit']   for r in rows), 2),
+            'sales_count':  sum(r['sales_count']        for r in rows),
+        }
+        return jsonify({'months': rows, 'totals': totals})
+
     # ── Anomaly Detection ─────────────────────────────────────────────────
 
     @app.route('/api/reports/anomalies')

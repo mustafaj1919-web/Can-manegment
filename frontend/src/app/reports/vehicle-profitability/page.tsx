@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, TrendingDown, RefreshCw, Car, AlertCircle } from 'lucide-react'
+import { TrendingUp, TrendingDown, RefreshCw, Car, AlertCircle, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatMoney } from '@/lib/utils'
 import { getVehicleProfitabilityReport, type VehicleProfitability } from '@/lib/api/inventory'
+import { exportXlsx } from '@/lib/export'
 
 function ProfitBadge({ pct, profit }: { pct: number | null; profit: number | null }) {
   if (profit === null) return <span className="text-[10px] text-muted-foreground/40">لم يُباع</span>
@@ -75,6 +76,20 @@ export default function VehicleProfitabilityPage() {
 
   const s = data?.summary
 
+  async function handleExport() {
+    if (!data) return
+    const headers = ['الماركة', 'الموديل', 'السنة', 'الشاصي', 'الحالة', 'التكلفة الكلية (د.ع)', 'سعر البيع (د.ع)', 'صافي الربح (د.ع)', 'هامش الربح %']
+    const rows = data.cars.map((c) => [
+      c.brand, c.model, c.year ?? '', c.vin ?? '',
+      c.status === 'Sold' ? 'مباع' : c.status === 'Available' ? 'متاح' : 'محجوز',
+      c.total_cost_iqd,
+      c.selling_price_iqd ?? '',
+      c.net_profit_iqd ?? '',
+      c.profit_pct !== null ? Number(c.profit_pct.toFixed(1)) : '',
+    ])
+    await exportXlsx('ربحية-السيارات', headers, rows)
+  }
+
   return (
     <div className="space-y-6" dir="rtl">
       {/* Header */}
@@ -102,6 +117,10 @@ export default function VehicleProfitabilityPage() {
           <Button variant="glass" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 h-8">
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             تحديث
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={!data} className="gap-1.5 h-8 border-white/10 text-xs">
+            <Download className="h-3.5 w-3.5" />
+            Excel
           </Button>
         </div>
       </div>

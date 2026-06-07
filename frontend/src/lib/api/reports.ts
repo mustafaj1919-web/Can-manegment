@@ -192,3 +192,30 @@ export async function getBranchComparison(params: { start_date?: string; end_dat
   if (params.end_date) qs.set('end_date', params.end_date)
   return get<BranchComparisonResponse>(`/reports/branch-comparison${qs.toString() ? '?' + qs.toString() : ''}`)
 }
+
+export interface MonthlyProfitRow {
+  month: string
+  label: string
+  sales_count: number
+  revenue: number
+  cost: number
+  expenses: number
+  gross_profit: number
+  net_profit: number
+}
+
+export interface MonthlyProfitResponse {
+  months: MonthlyProfitRow[]
+  totals: {
+    revenue: number
+    cost: number
+    expenses: number
+    gross_profit: number
+    net_profit: number
+    sales_count: number
+  }
+}
+
+export async function getMonthlyProfitReport(months = 12): Promise<MonthlyProfitResponse> {
+  return get<MonthlyProfitResponse>(`/reports/monthly-profit?months=${months}`)
+}

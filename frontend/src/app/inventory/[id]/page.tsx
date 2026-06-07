@@ -4,9 +4,8 @@ import { use, useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, ArrowRight, Car, DollarSign, Edit,
-  ExternalLink, FileText, Hash, Image, Settings,
-  TrendingUp, TrendingDown, Plus, Trash2,
+  AlertCircle, Car, Edit, ExternalLink, FileText, Image,
+  Plus, Trash2,
 } from 'lucide-react'
 import { cn, formatMoney, formatNumber, getStatusVariant, photoUrl, translateStatus } from '@/lib/utils'
 import { getCarById, getVehicleCosts, addVehicleCost, deleteVehicleCost } from '@/lib/api/inventory'
@@ -14,6 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DetailHeader } from '@/components/shared/DetailHeader'
+import { SectionCard } from '@/components/shared/SectionCard'
 
 const CONDITION_LABEL: Record<string, string> = {
   New: 'جديدة',
@@ -45,7 +46,7 @@ const PLATE_LABEL: Record<string, string> = {
 function SpecRow({ label, value, mono = false }: { label: string; value?: string | number | null; mono?: boolean }) {
   if (value === null || value === undefined || value === '') return null
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/[0.04] py-2.5 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border/20 py-2.5 last:border-0">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className={cn('break-words text-end text-xs font-medium text-foreground', mono && 'font-numeric')}>{value}</span>
     </div>
@@ -132,44 +133,23 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div className="glass rounded-lg px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className={cn(
-              'flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border',
-              car.status === 'Available'
-                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
-                : car.status === 'Sold'
-                  ? 'border-violet-500/20 bg-violet-500/10 text-violet-300'
-                  : 'border-amber-500/20 bg-amber-500/10 text-amber-300'
-            )}>
-              <Car className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-bold text-foreground">
-                  {car.brand} {car.model} {car.manufacturing_year}
-                </h1>
-                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', getStatusVariant(car.status))}>
-                  {translateStatus(car.status)}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {[car.trim, car.color, car.condition ? CONDITION_LABEL[car.condition] ?? car.condition : null].filter(Boolean).join(' - ')}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+      <DetailHeader
+        backHref="/inventory"
+        backLabel="المخزون"
+        title={`${car.brand} ${car.model} ${car.manufacturing_year}`}
+        subtitle={[car.trim, car.color, car.condition ? CONDITION_LABEL[car.condition] ?? car.condition : null].filter(Boolean).join(' · ')}
+        status={
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', getStatusVariant(car.status))}>
+            {translateStatus(car.status)}
+          </span>
+        }
+        actions={
+          <>
             <Button asChild variant="outline" size="sm" className="gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
               <Link href={`/inventory/${id}/specification`}>
                 <FileText className="h-3.5 w-3.5" />
                 مواصفات
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-1.5">
-              <Link href="/inventory">
-                <ArrowRight className="h-4 w-4" />
-                المخزون
               </Link>
             </Button>
             {car.status === 'Available' && (
@@ -180,97 +160,69 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                 </Link>
               </Button>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <section className="glass rounded-lg overflow-hidden">
-          <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10">
-              <Hash className="h-3.5 w-3.5 text-violet-300" />
-            </div>
-            <h2 className="text-sm font-semibold">التعريف</h2>
-          </div>
-          <div className="px-5 py-2">
-            <SpecRow label="رقم الشاصي" value={car.vin} mono />
-            <SpecRow label="رقم اللوحة" value={car.plate_number} mono />
-            <SpecRow label="حالة اللوحة" value={car.plate_status ? PLATE_LABEL[car.plate_status] ?? car.plate_status : null} />
-            <SpecRow label="الحالة" value={car.condition ? CONDITION_LABEL[car.condition] ?? car.condition : null} />
-            <SpecRow label="سنة الصنع" value={car.manufacturing_year} />
-            <SpecRow label="بلد الاستيراد" value={car.import_country} />
-          </div>
-        </section>
+        <SectionCard title="التعريف" contentClassName="px-5 py-0">
+          <SpecRow label="رقم الشاصي"  value={car.vin} mono />
+          <SpecRow label="رقم اللوحة"  value={car.plate_number} mono />
+          <SpecRow label="حالة اللوحة" value={car.plate_status ? PLATE_LABEL[car.plate_status] ?? car.plate_status : null} />
+          <SpecRow label="الحالة"       value={car.condition ? CONDITION_LABEL[car.condition] ?? car.condition : null} />
+          <SpecRow label="سنة الصنع"   value={car.manufacturing_year} />
+          <SpecRow label="بلد الاستيراد" value={car.import_country} />
+        </SectionCard>
 
-        <section className="glass rounded-lg overflow-hidden">
-          <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10">
-              <Settings className="h-3.5 w-3.5 text-cyan-300" />
-            </div>
-            <h2 className="text-sm font-semibold">المواصفات الفنية</h2>
-          </div>
-          <div className="px-5 py-2">
-            <SpecRow label="نوع الوقود" value={car.fuel_type ? FUEL_LABEL[car.fuel_type] ?? car.fuel_type : null} />
-            <SpecRow label="ناقل الحركة" value={car.transmission ? TRANS_LABEL[car.transmission] ?? car.transmission : null} />
-            <SpecRow label="حجم المحرك" value={car.engine_size} />
-            <SpecRow label="عدد الأسطوانات" value={car.cylinders} />
-            <SpecRow label="عدد المقاعد" value={car.seat_count} />
-            <SpecRow label="مادة المقاعد" value={car.seat_material} />
-            <SpecRow label="المسافة المقطوعة" value={car.mileage ? `${formatNumber(car.mileage)} كم` : null} />
-          </div>
-        </section>
+        <SectionCard title="المواصفات الفنية" contentClassName="px-5 py-0">
+          <SpecRow label="نوع الوقود"      value={car.fuel_type ? FUEL_LABEL[car.fuel_type] ?? car.fuel_type : null} />
+          <SpecRow label="ناقل الحركة"     value={car.transmission ? TRANS_LABEL[car.transmission] ?? car.transmission : null} />
+          <SpecRow label="حجم المحرك"      value={car.engine_size} />
+          <SpecRow label="عدد الأسطوانات"  value={car.cylinders} />
+          <SpecRow label="عدد المقاعد"     value={car.seat_count} />
+          <SpecRow label="مادة المقاعد"    value={car.seat_material} />
+          <SpecRow label="المسافة المقطوعة" value={car.mileage ? `${formatNumber(car.mileage)} كم` : null} />
+        </SectionCard>
       </div>
 
-      <section className="glass rounded-lg overflow-hidden">
-        <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
-            <DollarSign className="h-3.5 w-3.5 text-emerald-300" />
+      <SectionCard title="التسعير">
+        <div className="divide-y divide-border/30">
+          <div className="flex items-center justify-between py-3">
+            <span className="text-xs text-muted-foreground">سعر الشراء</span>
+            <span className="font-numeric text-sm font-bold text-foreground">{formatMoney(car.purchase_price, car.currency)}</span>
           </div>
-          <h2 className="text-sm font-semibold">التسعير</h2>
-        </div>
-        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-3">
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-4 text-center">
-            <p className="mb-1 text-[11px] text-muted-foreground">سعر الشراء</p>
-            <p className="font-numeric text-base font-bold text-foreground">{formatMoney(car.purchase_price, car.currency)}</p>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-xs text-muted-foreground">سعر البيع</span>
+            <span className="font-numeric text-sm font-bold text-amber-300">
+              {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
+            </span>
           </div>
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-4 text-center">
-            <p className="mb-1 text-[11px] text-muted-foreground">سعر البيع</p>
-            <p className="font-numeric text-base font-bold text-amber-300">
-              {car.selling_price ? formatMoney(car.selling_price, car.currency) : '-'}
-            </p>
-          </div>
-          <div className={cn('rounded-lg border p-4 text-center', profit && profit > 0 ? 'border-emerald-500/15 bg-emerald-500/5' : 'border-white/[0.06] bg-white/[0.03]')}>
-            <p className="mb-1 text-[11px] text-muted-foreground">هامش الربح</p>
-            <p className={cn('font-numeric text-base font-bold', profit && profit > 0 ? 'text-emerald-300' : 'text-muted-foreground')}>
-              {profit !== null ? formatMoney(profit, car.currency) : '-'}
-            </p>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-xs text-muted-foreground">هامش الربح</span>
+            <span className={cn('font-numeric text-sm font-bold', profit && profit > 0 ? 'text-emerald-300' : 'text-muted-foreground')}>
+              {profit !== null ? formatMoney(profit, car.currency) : '—'}
+            </span>
           </div>
         </div>
         {car.notes && (
-          <div className="px-5 pb-5">
+          <div className="mt-4 border-t border-border/30 pt-4">
             <p className="mb-1 text-[11px] text-muted-foreground">ملاحظات</p>
             <p className="text-sm text-foreground/80">{car.notes}</p>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       {/* ── Vehicle Costs & Profitability ── */}
-      <section className="glass rounded-lg overflow-hidden" dir="rtl">
-        <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10">
-            <TrendingUp className="h-3.5 w-3.5 text-indigo-300" />
-          </div>
-          <h2 className="text-sm font-semibold">التكاليف والربحية</h2>
-        </div>
-        <div className="p-5 space-y-5">
+      <SectionCard title="التكاليف والربحية" noPadding>
+        <div className="p-5 space-y-5" dir="rtl">
           {/* Profitability summary */}
           {profData && (
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {[
-                { label: 'سعر الشراء', value: formatMoney(profData.purchase_price_iqd, 'IQD'), cls: '' },
-                { label: 'إجمالي التكاليف', value: formatMoney(profData.costs_total_iqd, 'IQD'), cls: 'text-amber-300' },
-                { label: 'إجمالي التكلفة', value: formatMoney(profData.total_cost_iqd, 'IQD'), cls: 'text-orange-300' },
-                { label: 'سعر البيع', value: profData.selling_price_iqd ? formatMoney(profData.selling_price_iqd, 'IQD') : '—', cls: '' },
+                { label: 'سعر الشراء',      value: formatMoney(profData.purchase_price_iqd, 'IQD'), cls: '' },
+                { label: 'إجمالي التكاليف', value: formatMoney(profData.costs_total_iqd, 'IQD'),   cls: 'text-amber-300' },
+                { label: 'إجمالي التكلفة',  value: formatMoney(profData.total_cost_iqd, 'IQD'),    cls: 'text-orange-300' },
+                { label: 'سعر البيع',       value: profData.selling_price_iqd ? formatMoney(profData.selling_price_iqd, 'IQD') : '—', cls: '' },
                 {
                   label: 'صافي الربح',
                   value: profData.net_profit_iqd !== null
@@ -278,20 +230,20 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                     : '—',
                   cls: profData.net_profit_iqd !== null && profData.net_profit_iqd >= 0 ? 'text-emerald-300' : 'text-rose-400',
                 },
-              ].map(card => (
-                <div key={card.label} className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 text-center">
-                  <p className="text-[10px] text-muted-foreground mb-1">{card.label}</p>
-                  <p className={cn('text-xs font-bold font-numeric', card.cls || 'text-foreground')}>{card.value}</p>
-                </div>
+              ].map(item => (
+                <span key={item.label} className="flex items-baseline gap-1.5 text-[11px]">
+                  <span className="text-muted-foreground/60">{item.label}</span>
+                  <span className={cn('font-semibold tabular-nums font-numeric', item.cls || 'text-foreground')}>{item.value}</span>
+                </span>
               ))}
             </div>
           )}
 
           {/* Existing costs */}
           {profData?.costs && profData.costs.length > 0 && (
-            <div className="rounded-lg border border-white/[0.06] overflow-hidden">
+            <div className="rounded-lg border border-border/40 overflow-hidden">
               <table className="w-full text-xs">
-                <thead className="bg-white/[0.02] border-b border-white/[0.05]">
+                <thead className="bg-secondary/20 border-b border-border/30">
                   <tr>
                     {['النوع', 'الوصف', 'المبلغ', ''].map(h => (
                       <th key={h} className="px-3 py-2 text-start text-[10px] text-muted-foreground font-medium">{h}</th>
@@ -300,7 +252,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                 </thead>
                 <tbody>
                   {profData.costs.map(cost => (
-                    <tr key={cost.id} className="border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02]">
+                    <tr key={cost.id} className="border-b border-border/20 last:border-0 hover:bg-secondary/20">
                       <td className="px-3 py-2 font-medium text-foreground/90">{COST_TYPE_LABELS[cost.cost_type] ?? cost.cost_type}</td>
                       <td className="px-3 py-2 text-muted-foreground">{cost.description ?? '—'}</td>
                       <td className="px-3 py-2 font-numeric text-amber-300">{formatMoney(cost.amount, cost.currency as 'USD' | 'IQD')}</td>
@@ -321,7 +273,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
           )}
 
           {/* Add new cost */}
-          <div className="rounded-lg border border-dashed border-white/[0.1] p-4">
+          <div className="rounded-lg border border-dashed border-border/40 p-4">
             <p className="text-xs font-medium text-muted-foreground mb-3">إضافة تكلفة جديدة</p>
             <div className="flex flex-wrap gap-2">
               <Select value={newCostType} onValueChange={setNewCostType}>
@@ -370,20 +322,14 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
         </div>
-      </section>
+      </SectionCard>
 
       {/* ── Photo Gallery ── */}
-      <section className="glass rounded-lg overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10">
-              <Image className="h-3.5 w-3.5 text-amber-300" />
-            </div>
-            <h2 className="text-sm font-semibold">صور السيارة</h2>
-          </div>
-          <span className="text-xs text-muted-foreground">{(car.photos ?? []).length} صورة</span>
-        </div>
-
+      <SectionCard
+        title="صور السيارة"
+        action={<span className="text-xs text-muted-foreground">{(car.photos ?? []).length} صورة</span>}
+        noPadding
+      >
         {(car.photos ?? []).length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
             <Image className="h-10 w-10 text-muted-foreground/20" />
@@ -400,7 +346,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                 href={photoUrl(photo.filename, photo.subfolder ?? 'vehicles')}
                 target="_blank"
                 rel="noreferrer"
-                className="group relative block overflow-hidden rounded-lg border border-white/10 bg-white/[0.03] hover:border-amber-500/40 transition-colors"
+                className="group relative block overflow-hidden rounded-lg border border-border/40 bg-secondary/20 hover:border-amber-500/40 transition-colors"
               >
                 <img
                   src={photoUrl(photo.filename, photo.subfolder ?? 'vehicles')}
@@ -419,7 +365,8 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             ))}
           </div>
         )}
-      </section>
+      </SectionCard>
+
     </div>
   )
 }

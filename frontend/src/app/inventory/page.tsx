@@ -3,56 +3,43 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
 import {
-  AlertCircle,
-  ArrowUpRight,
-  Car,
-  Download,
-  Filter,
-  Fuel,
-  LayoutGrid,
-  List,
-  Palette,
-  Plus,
-  Search,
-  Settings,
+  ArrowUpRight, Car, CheckCircle2, Clock, Download,
+  Fuel, LayoutGrid, List, Palette, Plus, Settings, Tag,
 } from 'lucide-react'
 import { cn, formatMoney, getStatusVariant, photoUrl, translateStatus } from '@/lib/utils'
 import { getCars } from '@/lib/api/inventory'
 import type { CarPhoto } from '@/lib/api/inventory'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Pagination } from '@/components/ui/pagination'
 import { exportXlsx } from '@/lib/export'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { StatStrip } from '@/components/shared/StatStrip'
+import { FilterBar } from '@/components/shared/FilterBar'
+import { DataTable } from '@/components/shared/DataTable'
 
 const STATUS_OPTS = [
-  { value: 'all', label: 'الكل' },
+  { value: 'all',       label: 'جميع الحالات' },
   { value: 'Available', label: 'متاحة' },
-  { value: 'Sold', label: 'مباعة' },
-  { value: 'Reserved', label: 'محجوزة' },
+  { value: 'Sold',      label: 'مباعة' },
+  { value: 'Reserved',  label: 'محجوزة' },
 ]
 
-const FUEL_LABEL: Record<string, string> = {
-  Gasoline: 'بنزين',
-  Diesel: 'ديزل',
-  Hybrid: 'هايبرد',
-  Electric: 'كهربائي',
-}
 
+const FUEL_LABEL: Record<string, string> = {
+  Gasoline: 'بنزين', Diesel: 'ديزل', Hybrid: 'هايبرد', Electric: 'كهربائي',
+}
 const TRANS_LABEL: Record<string, string> = {
-  Automatic: 'أوتوماتيك',
-  Manual: 'يدوي',
-  CVT: 'CVT',
-  DCT: 'DCT',
+  Automatic: 'أوتوماتيك', Manual: 'يدوي', CVT: 'CVT', DCT: 'DCT',
 }
 
 export default function InventoryPage() {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('all')
-  const [view, setView] = useState<'cards' | 'table'>('cards')
-  const [page, setPage] = useState(1)
+  const [search, setSearch]     = useState('')
+  const [status, setStatus]     = useState('all')
+  const [view,   setView]       = useState<'cards' | 'table'>('cards')
+  const [page,   setPage]       = useState(1)
   const [exporting, setExporting] = useState(false)
   const perPage = 18
 
@@ -62,6 +49,37 @@ export default function InventoryPage() {
     status: status === 'all' ? undefined : status,
     search: search.trim() || undefined,
   }), [page, search, status])
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['inventory', params],
+    queryFn: () => getCars(params),
+    staleTime: 30_000,
+    retry: 1,
+  })
+
+  // Lightweight aggregate counts for StatStrip (per_page:1 returns only the total)
+  const { data: counts } = useQuery({
+    queryKey: ['inventory-counts'],
+    queryFn: async () => {
+      const [avail, reserved, sold] = await Promise.all([
+        getCars({ status: 'Available', per_page: 1, page: 1 }),
+        getCars({ status: 'Reserved',  per_page: 1, page: 1 }),
+        getCars({ status: 'Sold',      per_page: 1, page: 1 }),
+      ])
+      return { available: avail.total, reserved: reserved.total, sold: sold.total }
+    },
+    staleTime: 120_000,
+    retry: 1,
+  })
+
+  const items      = data?.items ?? []
+  const total      = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const hasFilters = !!(search || status !== 'all')
+
+  function resetFilters() {
+    setSearch(''); setStatus('all'); setPage(1)
+  }
 
   async function handleExport() {
     setExporting(true)
@@ -80,310 +98,319 @@ export default function InventoryPage() {
     }
   }
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', params],
-    queryFn: () => getCars(params),
-    staleTime: 30_000,
-    retry: 1,
-  })
-
-  const items = data?.items ?? []
-  const total = data?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    setPage(1)
-    refetch()
-  }
+  const viewToggle = (
+    <div className="flex rounded-lg border border-border/60 bg-secondary/30 p-0.5">
+      {([['cards', LayoutGrid], ['table', List]] as const).map(([v, Icon]) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => setView(v)}
+          aria-label={v === 'cards' ? 'عرض بطاقات' : 'عرض جدول'}
+          className={cn(
+            'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+            view === v
+              ? 'bg-secondary text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
+  )
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10">
-            <Car className="h-5 w-5 text-violet-300" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">المخزون</h1>
-            <p className="text-xs text-muted-foreground">
-              {isLoading ? 'جاري التحميل...' : `${total} سيارة`}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="glass flex rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => setView('cards')}
-              className={cn('flex h-8 w-8 items-center justify-center rounded-md transition-colors', view === 'cards' ? 'bg-violet-500/20 text-violet-200' : 'text-muted-foreground hover:text-foreground')}
-              aria-label="عرض بطاقات"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('table')}
-              className={cn('flex h-8 w-8 items-center justify-center rounded-md transition-colors', view === 'table' ? 'bg-violet-500/20 text-violet-200' : 'text-muted-foreground hover:text-foreground')}
-              aria-label="عرض جدول"
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </div>
-          <Button variant="outline" size="sm"
-            onClick={handleExport} disabled={exporting || isLoading || total === 0}
-            className="h-9 gap-2 border-white/10 bg-white/5 text-xs hover:bg-white/10">
-            <Download className="h-3.5 w-3.5" />
-            {exporting ? 'جاري التصدير...' : 'Excel'}
-          </Button>
-          <Button asChild className="gap-2 bg-violet-600 text-white hover:bg-violet-500">
-            <Link href="/inventory/new">
-              <Plus className="h-4 w-4" />
-              سيارة جديدة
-            </Link>
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-5" dir="rtl">
 
-      <div className="glass rounded-lg p-4">
-        <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
-            <Input
-              placeholder="بحث بالماركة أو الموديل أو الشاصي أو اللوحة"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 border-white/10 bg-white/5 ps-9"
-            />
-          </div>
-          <Select
-            value={status}
-            onValueChange={(value) => {
-              setStatus(value)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 sm:w-[150px]">
-              <Filter className="me-2 h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button type="submit" variant="secondary" className="h-10">
-            بحث
-          </Button>
-        </form>
-      </div>
+      <PageHeader
+        title="المخزون"
+        icon={<Car className="h-4 w-4" />}
+        count={isLoading ? undefined : total}
+        filtered={hasFilters}
+        actions={
+          <>
+            {viewToggle}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting || isLoading || total === 0}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? 'جاري التصدير...' : 'Excel'}
+            </Button>
+            <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
+              <Link href="/inventory/new">
+                <Plus className="h-3.5 w-3.5" />
+                سيارة جديدة
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      {isLoading ? (
-        <div className={cn(view === 'cards' ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-3')}>
-          {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} className="h-48 rounded-lg" />
-          ))}
-        </div>
-      ) : isError ? (
-        <div className="glass rounded-lg py-16 text-center">
-          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-rose-400/60" />
-          <p className="text-sm text-muted-foreground">تعذر تحميل المخزون</p>
-          <Button variant="ghost" size="sm" onClick={() => refetch()} className="mt-3 text-xs">
-            إعادة المحاولة
-          </Button>
-        </div>
-      ) : items.length === 0 ? (
-        <div className="glass rounded-lg py-16 text-center">
-          <Car className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground">لا توجد سيارات مطابقة</p>
-          <Button asChild size="sm" className="mt-4 gap-2 bg-violet-600 text-white hover:bg-violet-500">
-            <Link href="/inventory/new">
-              <Plus className="h-3.5 w-3.5" />
-              سيارة جديدة
-            </Link>
-          </Button>
-        </div>
-      ) : view === 'cards' ? (
-        <>
+      <StatStrip
+        stats={[
+          {
+            label: 'إجمالي السيارات',
+            value: counts ? counts.available + counts.reserved + counts.sold : '...',
+            icon: <Car className="h-4 w-4" />,
+            color: 'info',
+          },
+          {
+            label: 'متاحة للبيع',
+            value: counts?.available ?? '...',
+            icon: <CheckCircle2 className="h-4 w-4" />,
+            color: 'success',
+          },
+          {
+            label: 'محجوزة',
+            value: counts?.reserved ?? '...',
+            icon: <Clock className="h-4 w-4" />,
+            color: 'warning',
+          },
+          {
+            label: 'مباعة',
+            value: counts?.sold ?? '...',
+            icon: <Tag className="h-4 w-4" />,
+            color: 'default',
+          },
+        ]}
+      />
+
+      <FilterBar
+        search={{
+          value: search,
+          onChange: v => { setSearch(v); setPage(1) },
+          placeholder: 'بحث بالماركة أو الموديل أو رقم الهيكل أو اللوحة...',
+        }}
+        selects={[
+          {
+            value: status,
+            onChange: v => { setStatus(v); setPage(1) },
+            options: STATUS_OPTS,
+            width: 'w-full sm:w-[170px]',
+          },
+        ]}
+        hasActiveFilters={hasFilters}
+        onReset={resetFilters}
+        onRefresh={() => refetch()}
+      />
+
+      {/* Cards view — loading/error/empty handled inline; DataTable not suited for grid layout */}
+      {view === 'cards' && (
+        isLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {items.map((car, index) => (
-              <motion.div
-                key={car.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
-                className="glass-interactive overflow-hidden rounded-lg"
-              >
-                {/* Cover photo or accent bar */}
-                {car.cover_photo ? (
-                  <div className="relative h-36 w-full overflow-hidden bg-white/[0.03]">
-                    <img
-                      src={photoUrl(car.cover_photo.filename, car.cover_photo.subfolder ?? 'vehicles')}
-                      alt={`${car.brand} ${car.model}`}
-                      className="h-full w-full object-cover"
-                    />
-                    <div className={cn('absolute bottom-0 left-0 right-0 h-1', {
-                      'bg-emerald-500': car.status === 'Available',
-                      'bg-violet-500': car.status === 'Sold',
-                      'bg-amber-500': car.status === 'Reserved',
-                    })} />
-                  </div>
-                ) : (
-                  <div className={cn('h-1', {
-                    'bg-emerald-500': car.status === 'Available',
-                    'bg-violet-500': car.status === 'Sold',
-                    'bg-amber-500': car.status === 'Reserved',
-                  })} />
-                )}
-                <div className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-foreground">
-                        {car.brand} {car.model}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {car.manufacturing_year}{car.trim ? ` - ${car.trim}` : ''}
-                      </p>
-                    </div>
-                    <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', getStatusVariant(car.status))}>
-                      {translateStatus(car.status)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Palette className="h-3 w-3" />
-                      <span className="truncate">{car.color}</span>
-                    </div>
-                    {car.fuel_type && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <Fuel className="h-3 w-3" />
-                        <span>{FUEL_LABEL[car.fuel_type] ?? car.fuel_type}</span>
-                      </div>
-                    )}
-                    {car.transmission && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <Settings className="h-3 w-3" />
-                        <span>{TRANS_LABEL[car.transmission] ?? car.transmission}</span>
-                      </div>
-                    )}
-                    <div className="col-span-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <span>الشاصي:</span>
-                      <span className="font-numeric truncate">{car.vin}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-white/[0.06] pt-3">
-                    <div>
-                      <p className="font-numeric text-sm font-bold text-amber-300">
-                        {car.selling_price ? formatMoney(car.selling_price, car.currency) : '-'}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        شراء: {formatMoney(car.purchase_price, car.currency)}
-                      </p>
-                    </div>
-                    <Button asChild variant="ghost" size="icon-sm" className="h-8 w-8">
-                      <Link href={`/inventory/${car.id}`} aria-label="عرض تفاصيل السيارة">
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-52 rounded-xl" />
             ))}
           </div>
-          <Pagination page={page} totalPages={totalPages} total={total} setPage={setPage} />
-        </>
-      ) : (
-        <div className="glass overflow-hidden rounded-lg">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/[0.06]">
-                  {['السيارة', 'الشاصي', 'اللوحة', 'سعر البيع', 'سعر الشراء', 'الحالة', ''].map((heading) => (
-                    <th key={heading} className="px-4 py-3.5 text-start text-xs font-medium text-muted-foreground">
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((car, index) => (
-                  <motion.tr
-                    key={car.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.02 }}
-                    className="border-b border-white/[0.03] hover:bg-white/[0.02]"
-                  >
-                    <td className="px-4 py-3.5">
-                      <p className="text-xs font-semibold">{car.brand} {car.model}</p>
-                      <p className="text-[11px] text-muted-foreground">{car.manufacturing_year} - {car.color}</p>
-                    </td>
-                    <td className="font-numeric px-4 py-3.5 text-[11px] text-muted-foreground">{car.vin}</td>
-                    <td className="px-4 py-3.5 text-xs">{car.plate_number || '-'}</td>
-                    <td className="font-numeric px-4 py-3.5 text-xs text-amber-300">
-                      {car.selling_price ? formatMoney(car.selling_price, car.currency) : '-'}
-                    </td>
-                    <td className="font-numeric px-4 py-3.5 text-xs">{formatMoney(car.purchase_price, car.currency)}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', getStatusVariant(car.status))}>
+        ) : isError ? (
+          <div className="app-card rounded-xl">
+            <EmptyState
+              variant="error"
+              title="تعذر تحميل المخزون"
+              description="تحقق من تشغيل الخادم ثم أعد المحاولة"
+              action={
+                <Button type="button" variant="ghost" size="sm" onClick={() => refetch()}>
+                  إعادة المحاولة
+                </Button>
+              }
+            />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="app-card rounded-xl">
+            <EmptyState
+              variant={hasFilters ? 'search' : 'default'}
+              icon={<Car className="h-5 w-5" />}
+              title={hasFilters ? 'لا توجد سيارات مطابقة' : 'المخزون فارغ'}
+              description={hasFilters ? 'جرّب تعديل معايير البحث أو الفلترة' : 'أضف أول سيارة لبدء المخزون'}
+              action={
+                hasFilters ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5">
+                    مسح الفلاتر
+                  </Button>
+                ) : (
+                  <Button asChild size="sm">
+                    <Link href="/inventory/new">
+                      <Plus className="me-1.5 h-3.5 w-3.5" />
+                      سيارة جديدة
+                    </Link>
+                  </Button>
+                )
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {items.map((car) => (
+                <div
+                  key={car.id}
+                  className="glass-interactive overflow-hidden rounded-xl"
+                >
+                  {car.cover_photo && (
+                    <div className="relative h-36 w-full overflow-hidden bg-secondary/30">
+                      <img
+                        src={photoUrl((car.cover_photo as CarPhoto).filename, (car.cover_photo as CarPhoto).subfolder ?? 'vehicles')}
+                        alt={`${car.brand} ${car.model}`}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-foreground">
+                          {car.brand} {car.model}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {car.manufacturing_year}{car.trim ? ` · ${car.trim}` : ''}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                        getStatusVariant(car.status)
+                      )}>
                         {translateStatus(car.status)}
                       </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-end">
-                      <Button asChild variant="ghost" size="icon-sm" className="h-8 w-8">
-                        <Link href={`/inventory/${car.id}`}>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Palette className="h-3 w-3 shrink-0 opacity-60" />
+                        <span className="truncate">{car.color}</span>
+                      </div>
+                      {car.fuel_type && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <Fuel className="h-3 w-3 shrink-0 opacity-60" />
+                          <span>{FUEL_LABEL[car.fuel_type] ?? car.fuel_type}</span>
+                        </div>
+                      )}
+                      {car.transmission && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <Settings className="h-3 w-3 shrink-0 opacity-60" />
+                          <span>{TRANS_LABEL[car.transmission] ?? car.transmission}</span>
+                        </div>
+                      )}
+                      <div className="col-span-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="opacity-60">VIN:</span>
+                        <span className="font-code truncate">{car.vin}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-border/30 pt-3">
+                      <div>
+                        <p className="font-numeric text-sm font-bold text-foreground">
+                          {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
+                        </p>
+                        <p className="font-numeric text-[11px] text-muted-foreground">
+                          شراء: {formatMoney(car.purchase_price, car.currency)}
+                        </p>
+                      </div>
+                      <Button asChild variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                        <Link href={`/inventory/${car.id}`} aria-label="عرض تفاصيل السيارة">
                           <ArrowUpRight className="h-4 w-4" />
                         </Link>
                       </Button>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={page} totalPages={totalPages} total={total} setPage={setPage} compact />
-        </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} label="سيارة" />
+          </>
+        )
       )}
-    </div>
-  )
-}
 
-function Pagination({
-  page,
-  totalPages,
-  total,
-  setPage,
-  compact = false,
-}: {
-  page: number
-  totalPages: number
-  total: number
-  setPage: React.Dispatch<React.SetStateAction<number>>
-  compact?: boolean
-}) {
-  if (totalPages <= 1) return null
+      {/* Table view — DataTable handles all states */}
+      {view === 'table' && (
+        <DataTable
+          isLoading={isLoading}
+          isError={isError}
+          isEmpty={items.length === 0}
+          onRetry={() => refetch()}
+          emptyProps={{
+            variant: hasFilters ? 'search' : 'default',
+            icon: <Car className="h-5 w-5" />,
+            title: hasFilters ? 'لا توجد سيارات مطابقة' : 'المخزون فارغ',
+            description: hasFilters ? 'جرّب تعديل معايير البحث أو الفلترة' : 'أضف أول سيارة لبدء المخزون',
+            action: hasFilters ? (
+              <Button type="button" variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5">
+                مسح الفلاتر
+              </Button>
+            ) : (
+              <Button asChild size="sm">
+                <Link href="/inventory/new">
+                  <Plus className="me-1.5 h-3.5 w-3.5" />
+                  سيارة جديدة
+                </Link>
+              </Button>
+            ),
+          }}
+          footer={
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+              label="سيارة"
+              compact
+            />
+          }
+        >
+          <table className="app-table">
+            <thead>
+              <tr>
+                <th>السيارة</th>
+                <th>رقم الهيكل</th>
+                <th className="hidden sm:table-cell">اللوحة</th>
+                <th>سعر البيع</th>
+                <th className="hidden md:table-cell">سعر الشراء</th>
+                <th>الحالة</th>
+                <th className="w-10"><span className="sr-only">إجراءات</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((car) => (
+                <tr
+                  key={car.id}
+                >
+                  <td>
+                    <p className="text-xs font-semibold">{car.brand} {car.model}</p>
+                    <p className="text-[11px] text-muted-foreground">{car.manufacturing_year} · {car.color}</p>
+                  </td>
+                  <td className="font-code text-[11px] text-muted-foreground">{car.vin}</td>
+                  <td className="hidden sm:table-cell text-xs">{car.plate_number || '—'}</td>
+                  <td className="font-numeric text-xs font-semibold text-foreground">
+                    {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
+                  </td>
+                  <td className="hidden md:table-cell font-numeric text-xs text-muted-foreground">
+                    {formatMoney(car.purchase_price, car.currency)}
+                  </td>
+                  <td>
+                    <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', getStatusVariant(car.status))}>
+                      {translateStatus(car.status)}
+                    </span>
+                  </td>
+                  <td className="text-end">
+                    <Button asChild variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                      <Link href={`/inventory/${car.id}`}>
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
+      )}
 
-  return (
-    <div className={cn('glass flex items-center justify-between rounded-lg px-4 py-3', compact && 'rounded-none border-x-0 border-b-0')}>
-      <span className="text-xs text-muted-foreground">
-        صفحة {page} من {totalPages} - {total} سيارة
-      </span>
-      <div className="flex gap-2">
-        <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
-          السابق
-        </Button>
-        <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
-          التالي
-        </Button>
-      </div>
     </div>
   )
 }

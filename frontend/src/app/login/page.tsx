@@ -3,14 +3,17 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Car, Lock, User, AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Car, Lock, Loader2, User } from 'lucide-react'
 import { loginUser } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { FormGroup, FormLabel } from '@/components/ui/form-field'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { setAuth } = useAuthStore()
+  const { setAuth }                    = useAuthStore()
   const { setBranches, setActiveBranch } = useBranchStore()
 
   const [username, setUsername] = useState('')
@@ -20,103 +23,128 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!username.trim() || !password) return
     setError('')
     setLoading(true)
     try {
-      const res = await loginUser(username, password)
+      const res = await loginUser(username.trim(), password)
       setAuth(res.user)
       setBranches(res.branches)
       if (res.active_branch) setActiveBranch(res.active_branch)
       router.push('/')
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } }
-      setError(axiosErr?.response?.data?.error ?? 'حدث خطأ، حاول مرة أخرى')
+      setError(axiosErr?.response?.data?.error ?? 'اسم المستخدم أو كلمة المرور غير صحيحة')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="login-page-root" dir="rtl">
+      {/* Background decoration */}
+      <div className="login-bg-glow" />
+
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-sm"
+        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="login-card"
       >
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <img
-            src="/logo.png"
-            alt="شركة الأصدقاء"
-            className="mx-auto w-[220px] object-contain"
-            width={220}
-          />
-        </div>
-
-        {/* Card */}
-        <div className="glass rounded-2xl p-6 space-y-5">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">تسجيل الدخول</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">أدخل بيانات حسابك للمتابعة</p>
+        {/* Brand header */}
+        <div className="login-brand">
+          <div className="login-logo-ring">
+            <img src="/logo.png" alt="شركة الأصدقاء" className="login-logo-img" />
           </div>
-
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="flex items-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2.5"
-            >
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
-              <p className="text-xs text-rose-400">{error}</p>
-            </motion.div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">اسم المستخدم</label>
-              <div className="relative">
-                <User className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="أدخل اسم المستخدم"
-                  required
-                  autoComplete="username"
-                  className="w-full h-10 rounded-lg bg-white/5 border border-white/10 ps-9 pe-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">كلمة المرور</label>
-              <div className="relative">
-                <Lock className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="أدخل كلمة المرور"
-                  required
-                  autoComplete="current-password"
-                  className="w-full h-10 rounded-lg bg-white/5 border border-white/10 ps-9 pe-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-colors"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-10 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              {loading
-                ? <><Loader2 className="h-4 w-4 animate-spin" />جاري تسجيل الدخول...</>
-                : 'تسجيل الدخول'
-              }
-            </button>
-          </form>
+          <div>
+            <h1 className="login-brand-name">الأصدقاء</h1>
+            <p className="login-brand-sub">لتجارة السيارات · نظام الإدارة</p>
+          </div>
         </div>
+
+        {/* Divider */}
+        <div className="login-divider" />
+
+        {/* Form header */}
+        <div>
+          <h2 className="login-form-title">تسجيل الدخول</h2>
+          <p className="login-form-sub">أدخل بيانات حسابك للمتابعة</p>
+        </div>
+
+        {/* Error banner */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="login-error"
+            role="alert"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </motion.div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="login-form" noValidate>
+          <FormGroup>
+            <FormLabel htmlFor="username">اسم المستخدم</FormLabel>
+            <div className="relative">
+              <User className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="أدخل اسم المستخدم"
+                required
+                autoComplete="username"
+                autoFocus
+                className="ps-9"
+                aria-label="اسم المستخدم"
+              />
+            </div>
+          </FormGroup>
+
+          <FormGroup>
+            <FormLabel htmlFor="password">كلمة المرور</FormLabel>
+            <div className="relative">
+              <Lock className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="أدخل كلمة المرور"
+                required
+                autoComplete="current-password"
+                className="ps-9"
+                aria-label="كلمة المرور"
+              />
+            </div>
+          </FormGroup>
+
+          <Button
+            type="submit"
+            disabled={loading || !username.trim() || !password}
+            className="login-submit-btn"
+            size="lg"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                جاري تسجيل الدخول...
+              </>
+            ) : (
+              <>
+                <Car className="h-4 w-4" />
+                تسجيل الدخول
+              </>
+            )}
+          </Button>
+        </form>
+
+        {/* Footer */}
+        <p className="login-footer-text">نظام إدارة المعرض · v2.0</p>
       </motion.div>
     </div>
   )
