@@ -7,6 +7,10 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
   timeout: 15_000,
+  // Read the XSRF-TOKEN cookie set by Flask and send it as X-XSRF-TOKEN on
+  // every state-changing request. Flask validates header == session token.
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN',
 })
 
 // FormData must set its own multipart boundary. The shared JSON header causes

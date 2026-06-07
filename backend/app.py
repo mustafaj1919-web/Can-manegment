@@ -1,9 +1,11 @@
+import hmac
 import logging
 import logging.handlers
 import os
 import calendar
 import hashlib
 import json
+import secrets
 import subprocess
 import sys
 import threading
@@ -1774,6 +1776,31 @@ def create_app():
     def request_too_large(_e):
         return jsonify({'error': 'حجم الملف تجاوز الحد المسموح به (10 ميغابايت)'}), 413
 
+    # ── CSRF protection ───────────────────────────────────────────────────────
+    # Paths that must be reachable before a CSRF token can exist in the session.
+    _CSRF_EXEMPT = frozenset({'/api/auth/login'})
+
+    @app.before_request
+    def _csrf_ensure_token():
+        """Seed a CSRF token into every new session on GET requests."""
+        if request.method == 'GET' and 'csrf_token' not in session:
+            session['csrf_token'] = secrets.token_hex(32)
+
+    @app.before_request
+    def _csrf_validate():
+        """Reject state-changing requests whose CSRF token doesn't match the session."""
+        if request.method not in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            return
+        if request.path in _CSRF_EXEMPT:
+            return
+        session_token = session.get('csrf_token', '')
+        if not session_token:
+            # No session yet — auth layer will return 401; don't double-error here.
+            return
+        submitted = request.headers.get('X-XSRF-TOKEN', '')
+        if not submitted or not hmac.compare_digest(session_token, submitted):
+            return jsonify({'error': 'طلب غير مصرح به'}), 403
+
     @app.after_request
     def add_local_cors_headers(response):
         origin = request.headers.get('Origin')
@@ -1786,7 +1813,9 @@ def create_app():
         if origin and origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Headers'] = (
+                'Content-Type, Authorization, X-XSRF-TOKEN'
+            )
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
 
         # Security hardening headers
@@ -1798,6 +1827,27 @@ def create_app():
             'Permissions-Policy',
             'camera=(), microphone=(), geolocation=()',
         )
+        response.headers.setdefault(
+            'Content-Security-Policy',
+            "default-src 'none'; frame-ancestors 'none'",
+        )
+        if Config.CLOUD_MODE:
+            response.headers.setdefault(
+                'Strict-Transport-Security',
+                'max-age=31536000; includeSubDomains',
+            )
+
+        # Set XSRF-TOKEN cookie so the frontend (Axios) can read and echo it back
+        csrf_token = session.get('csrf_token')
+        if csrf_token:
+            response.set_cookie(
+                'XSRF-TOKEN',
+                csrf_token,
+                httponly=False,      # JS must be able to read this cookie
+                samesite='Lax',
+                secure=Config.CLOUD_MODE,
+                path='/',
+            )
         return response
 
     @app.route('/__cors/<path:_cors_path>', methods=['OPTIONS'])

@@ -53,8 +53,44 @@ if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 
 
+def _resolve_secret_key() -> str:
+    """Return a stable SECRET_KEY.
+
+    Priority:
+      1. SECRET_KEY env var / .env entry  — always wins
+      2. Cloud mode without env var       — fail fast (random key would invalidate sessions on restart)
+      3. Desktop mode without env var     — read/write .secret_key file so sessions survive restarts
+    """
+    key = os.environ.get('SECRET_KEY', '').strip()
+    if key:
+        return key
+
+    if _CLOUD_MODE:
+        raise RuntimeError(
+            "\n\nSECRET_KEY is not set in cloud mode.\n"
+            "Generate one and add to .env:\n"
+            "  python -c \"import secrets; print(secrets.token_hex(32))\"\n"
+            "Then add:  SECRET_KEY=<output>\n"
+        )
+
+    # Desktop mode: persist the key so sessions survive app restarts
+    key_file = Path(DATA_DIR) / '.secret_key'
+    if key_file.exists():
+        stored = key_file.read_text().strip()
+        if stored:
+            return stored
+
+    key = secrets.token_hex(32)
+    try:
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.write_text(key)
+    except OSError:
+        pass  # Best effort — key is valid this session
+    return key
+
+
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+    SECRET_KEY = _resolve_secret_key()
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE   = _CLOUD_MODE
