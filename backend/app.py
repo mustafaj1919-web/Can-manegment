@@ -667,7 +667,16 @@ def ensure_role_permissions():
     db.session.commit()
 
 
+def _default_data_seeding_enabled():
+    marker = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        '.preserve_empty_database',
+    )
+    return not os.path.exists(marker)
+
+
 def ensure_database_schema():
+    seed_defaults = _default_data_seeding_enabled()
     db.create_all()
     ensure_table_columns('car', {
         'branch_id': "ALTER TABLE car ADD COLUMN branch_id INTEGER",
@@ -698,7 +707,7 @@ def ensure_database_schema():
     })
     # Ensure showroom info exists with default values
     try:
-        if not ShowroomInfo.query.first():
+        if seed_defaults and not ShowroomInfo.query.first():
             db.session.add(ShowroomInfo(
                 name='معرض الأصدقاء لتجارة السيارات الحديثة',
                 address='بغداد / الكريعات / شارع الوقت السني / قرب كلية القانون',
@@ -766,12 +775,14 @@ def ensure_database_schema():
         'classification': "ALTER TABLE account ADD COLUMN classification VARCHAR(64)",
     })
     db.session.commit()
-    ensure_branches()
+    if seed_defaults:
+        ensure_branches()
     ensure_role_permissions()
     try:
         from .seed_chart_of_accounts import seed_chart_of_accounts, assign_classifications
-        seed_chart_of_accounts()
-        assign_classifications()
+        if seed_defaults:
+            seed_chart_of_accounts()
+            assign_classifications()
     except Exception:
         db.session.rollback()
     _apply_migrations()
@@ -1803,7 +1814,8 @@ def create_app():
     with app.app_context():
         db.create_all()
         ensure_database_schema()
-        _seed_cost_centers()
+        if _default_data_seeding_enabled():
+            _seed_cost_centers()
         ensure_daily_backup(created_by='system')
     start_daily_backup_scheduler(app)
 
