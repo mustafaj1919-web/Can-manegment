@@ -1,4 +1,4 @@
-import { get, post } from './client'
+import { apiClient, get, post } from './client'
 
 export interface BackupItem {
   filename: string
@@ -22,6 +22,16 @@ export async function createBackup(reason = 'manual'): Promise<BackupItem> {
 
 export async function restoreBackup(filename: string): Promise<{ success: boolean; message: string }> {
   return post(`/backups/${encodeURIComponent(filename)}/restore`)
+}
+
+export async function uploadBackup(file: File): Promise<BackupItem> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await apiClient.post<BackupItem>('/backups/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120_000,
+  })
+  return response.data
 }
 
 export function backupDownloadUrl(filename: string): string {

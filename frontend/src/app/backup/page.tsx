@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, DatabaseBackup, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { AlertTriangle, DatabaseBackup, Download, RefreshCw, RotateCcw, Upload } from 'lucide-react'
 import {
   backupDownloadUrl,
   createBackup,
@@ -10,6 +10,7 @@ import {
   listBackups,
   reasonLabel,
   restoreBackup,
+  uploadBackup,
   type BackupItem,
 } from '@/lib/api/backup'
 import { Button } from '@/components/ui/button'
@@ -69,6 +70,8 @@ function ConfirmDialog({
 export default function BackupPage() {
   const qc = useQueryClient()
   const [confirmRestore, setConfirmRestore] = useState<BackupItem | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['backups'],
@@ -81,6 +84,19 @@ export default function BackupPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['backups'] }),
   })
 
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadBackup(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['backups'] })
+      setUploadError(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'فشل رفع الملف'
+      setUploadError(msg)
+    },
+  })
+
   const restoreMutation = useMutation({
     mutationFn: (filename: string) => restoreBackup(filename),
     onSuccess: () => {
@@ -89,7 +105,14 @@ export default function BackupPage() {
     },
   })
 
-  const busy = createMutation.isPending || restoreMutation.isPending
+  const busy = createMutation.isPending || restoreMutation.isPending || uploadMutation.isPending
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError(null)
+    uploadMutation.mutate(file)
+  }
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -113,18 +136,54 @@ export default function BackupPage() {
             <p className="text-xs text-muted-foreground">إدارة نسخ قاعدة البيانات وملفات uploads</p>
           </div>
         </div>
-        <Button
-          size="sm"
-          className="gap-2 bg-blue-600 text-white hover:bg-blue-500"
-          onClick={() => createMutation.mutate()}
-          disabled={busy}
-        >
-          {createMutation.isPending
-            ? <RefreshCw className="h-4 w-4 animate-spin" />
-            : <DatabaseBackup className="h-4 w-4" />}
-          إنشاء نسخة احتياطية الآن
-        </Button>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".zip"
+            aria-label="رفع نسخة احتياطية"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            title="رفع نسخة احتياطية من جهاز آخر"
+          >
+            {uploadMutation.isPending
+              ? <RefreshCw className="h-4 w-4 animate-spin" />
+              : <Upload className="h-4 w-4" />}
+            رفع نسخة
+          </Button>
+          <Button
+            size="sm"
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-500"
+            onClick={() => createMutation.mutate()}
+            disabled={busy}
+          >
+            {createMutation.isPending
+              ? <RefreshCw className="h-4 w-4 animate-spin" />
+              : <DatabaseBackup className="h-4 w-4" />}
+            إنشاء نسخة احتياطية الآن
+          </Button>
+        </div>
       </div>
+
+      {uploadError && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-2.5">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+          <p className="text-xs text-rose-300">{uploadError}</p>
+        </div>
+      )}
+
+      {uploadMutation.isSuccess && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5">
+          <p className="text-xs text-emerald-300">تم رفع النسخة الاحتياطية بنجاح — يمكنك الآن استعادتها</p>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-2">
