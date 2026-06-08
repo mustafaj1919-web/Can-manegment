@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from datetime import datetime
 from sqlalchemy import func
 from .database import db
@@ -80,13 +81,13 @@ def create_journal_entry(
     # Assign reference number after flush (ID is now available)
     je.reference_number = _next_reference_number()
 
-    total_debit = 0.0
-    total_credit = 0.0
+    total_debit = Decimal(0)
+    total_credit = Decimal(0)
 
     for ln in lines:
         acct_code = ln.get('account_code')
-        debit = float(ln.get('debit') or 0)
-        credit = float(ln.get('credit') or 0)
+        debit = Decimal(str(ln.get('debit') or 0))
+        credit = Decimal(str(ln.get('credit') or 0))
         acct = get_account_by_code(acct_code)
 
         # منع استخدام حسابات الأب (التي لها حسابات فرعية)
@@ -107,7 +108,7 @@ def create_journal_entry(
         total_debit += debit
         total_credit += credit
 
-    if round(total_debit - total_credit, 2) != 0:
+    if abs(total_debit - total_credit) > Decimal('0.01'):
         raise ValueError(
             f'القيد غير متوازن — مدين: {total_debit:.2f}، دائن: {total_credit:.2f}'
         )
@@ -125,13 +126,13 @@ def _update_account_balances_for_entry(je: 'JournalEntry', reverse: bool = False
 
     reverse=True يُستخدم عند حذف قيد أو عكسه (يطرح التأثير بدل إضافته).
     """
-    sign = -1.0 if reverse else 1.0
+    sign = Decimal('-1') if reverse else Decimal('1')
     for line in je.lines:
         acct = Account.query.get(line.account_id)
         if acct is None:
             continue
-        delta = sign * (float(line.debit or 0) - float(line.credit or 0))
-        acct.balance = round((acct.balance or 0.0) + delta, 6)
+        delta = sign * ((line.debit or Decimal(0)) - (line.credit or Decimal(0)))
+        acct.balance = (acct.balance or Decimal(0)) + delta
         _propagate_balance_to_parents(acct)
 
 
@@ -158,7 +159,7 @@ def _propagate_balance_to_parents(account: 'Account') -> None:
     for pid in parent_ids:
         parent = db.session.get(Account, pid)
         if parent:
-            parent.balance = round(float(children_sums.get(pid) or 0.0), 6)
+            parent.balance = children_sums.get(pid) or Decimal(0)
 
 
 def recompute_all_account_balances() -> None:
@@ -166,7 +167,7 @@ def recompute_all_account_balances() -> None:
 
     يُستخدم عند الترقية أو بعد عمليات استعادة قاعدة البيانات.
     """
-    Account.query.update({'balance': 0.0}, synchronize_session=False)
+    Account.query.update({'balance': Decimal(0)}, synchronize_session=False)
     db.session.flush()
 
     q = (
@@ -182,7 +183,7 @@ def recompute_all_account_balances() -> None:
     for row in q:
         acct = Account.query.get(row.account_id)
         if acct:
-            acct.balance = round(float(row.d or 0) - float(row.c or 0), 6)
+            acct.balance = (row.d or Decimal(0)) - (row.c or Decimal(0))
 
     db.session.flush()
 
@@ -197,10 +198,10 @@ def recompute_all_account_balances() -> None:
         parent = Account.query.get(leaf.parent_id) if leaf.parent_id else None
         while parent and parent.id not in visited:
             child_sum = sum(
-                (c.balance or 0.0)
+                (c.balance or Decimal(0))
                 for c in Account.query.filter_by(parent_id=parent.id).all()
             )
-            parent.balance = round(child_sum, 6)
+            parent.balance = child_sum
             visited.add(parent.id)
             parent = Account.query.get(parent.parent_id) if parent.parent_id else None
 
@@ -229,21 +230,21 @@ def get_trial_balance(branch_id=None):
         q = q.filter(JournalEntry.branch_id == branch_id)
     for row in q:
         acct_sums[row.account_id] = {
-            'debits': float(row.debits or 0.0),
-            'credits': float(row.credits or 0.0),
+            'debits': row.debits or Decimal(0),
+            'credits': row.credits or Decimal(0),
         }
 
     accounts = Account.query.order_by(Account.code).all()
     lines = []
     for a in accounts:
-        sums = acct_sums.get(a.id, {'debits': 0.0, 'credits': 0.0})
-        bal = round(sums['debits'] - sums['credits'], 2)
+        sums = acct_sums.get(a.id, {'debits': Decimal(0), 'credits': Decimal(0)})
+        bal = float(round(sums['debits'] - sums['credits'], 2))
         lines.append({
             'code': a.code,
             'name': a.name,
             'type': a.type,
-            'debit': round(sums['debits'], 2),
-            'credit': round(sums['credits'], 2),
+            'debit': float(round(sums['debits'], 2)),
+            'credit': float(round(sums['credits'], 2)),
             'balance': bal,
         })
 

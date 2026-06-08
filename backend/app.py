@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.request
 from collections import defaultdict, deque
+from decimal import Decimal
 from uuid import uuid4
 
 APP_VERSION  = '1.0.0'
@@ -430,7 +431,7 @@ def get_current_exchange_rate():
 
 def exchange_rate_value():
     current_rate = get_current_exchange_rate()
-    return current_rate.rate if current_rate else None
+    return float(current_rate.rate) if current_rate else None
 
 
 def convert_money(amount, from_currency, to_currency, rate=None):
@@ -559,7 +560,7 @@ def refresh_installment_plan(plan):
     for schedule in plan.schedules:
         refresh_installment_status(schedule)
     plan.paid_amount = sum(item.paid_amount for item in plan.schedules)
-    plan.remaining_amount = max(plan.total_amount - plan.paid_amount, 0.0)
+    plan.remaining_amount = max(plan.total_amount - plan.paid_amount, 0)
     plan.status = 'Paid' if plan.remaining_amount <= 0 else 'Active'
 
 
@@ -1759,6 +1760,19 @@ def _configure_file_logging(app: 'Flask') -> None:
 def create_app():
     app = Flask(__name__, template_folder='../templates', static_folder=Config.STATIC_FOLDER)
     app.config.from_object(Config)
+
+    # Serialize Decimal values (from NUMERIC columns) as floats in JSON responses.
+    from flask.json.provider import DefaultJSONProvider
+
+    class _DecimalJSONProvider(DefaultJSONProvider):
+        def default(self, o):
+            if isinstance(o, Decimal):
+                return float(o)
+            return super().default(o)
+
+    app.json_provider_class = _DecimalJSONProvider
+    app.json = _DecimalJSONProvider(app)
+
     db.init_app(app)
     _configure_file_logging(app)
 
@@ -6233,7 +6247,7 @@ def create_app():
     @api_permission_required('manage_reports')
     def api_financial_consistency():
         """Check that stored paid_amount/remaining_amount match sums from Payment records."""
-        TOLERANCE = 0.02  # accept up to 2 fils/cents floating-point drift
+        TOLERANCE = Decimal('0.02')  # accept up to 2 fils/cents drift
 
         issues = []
 
@@ -6242,7 +6256,7 @@ def create_app():
             actual_paid = db.session.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
                 Payment.sale_id == sale.id,
             ).scalar()
-            expected_remaining = max(sale.selling_price - sale.discount - actual_paid, 0.0)
+            expected_remaining = max(sale.selling_price - sale.discount - actual_paid, 0)
             if abs(sale.paid_amount - actual_paid) > TOLERANCE:
                 issues.append({
                     'type': 'sale',
@@ -6269,7 +6283,7 @@ def create_app():
             actual_paid = db.session.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
                 Payment.purchase_id == purchase.id,
             ).scalar()
-            expected_remaining = max(purchase.purchase_price - actual_paid, 0.0)
+            expected_remaining = max(purchase.purchase_price - actual_paid, 0)
             if abs(purchase.paid_amount - actual_paid) > TOLERANCE:
                 issues.append({
                     'type': 'purchase',
@@ -7331,7 +7345,7 @@ def create_app():
             return jsonify({'error': 'هذا القسط مدفوع بالكامل بالفعل'}), 409
 
         data           = request.get_json(silent=True) or {}
-        amount         = float(data.get('amount') or 0)
+        amount         = Decimal(str(float(data.get('amount') or 0)))
         payment_method = data.get('payment_method') or 'Cash'
         notes          = data.get('notes')
 
@@ -7352,14 +7366,14 @@ def create_app():
             payment_date=datetime.utcnow(),
         )
         schedule.paid_amount      += amount
-        schedule.remaining_amount  = max(schedule.amount - schedule.paid_amount, 0.0)
+        schedule.remaining_amount  = max(schedule.amount - schedule.paid_amount, 0)
         if schedule.remaining_amount <= 0:
             schedule.payment_date = payment.payment_date
         refresh_installment_status(schedule)
         refresh_installment_plan(plan)
         plan.sale.paid_amount      += amount
         plan.sale.remaining_amount  = max(
-            plan.sale.selling_price - plan.sale.discount - plan.sale.paid_amount, 0.0
+            plan.sale.selling_price - plan.sale.discount - plan.sale.paid_amount, 0
         )
         db.session.add(payment)
         db.session.flush()
