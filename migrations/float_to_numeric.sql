@@ -82,7 +82,7 @@ ALTER TABLE employee_commission
     ALTER COLUMN commission_amount TYPE NUMERIC(15,2) USING commission_amount::NUMERIC;
 
 -- ── Phase 9: Pipeline Deals ───────────────────────────────────────────────
-ALTER TABLE pipeline_deal
+ALTER TABLE sale_pipeline
     ALTER COLUMN expected_price TYPE NUMERIC(15,2) USING expected_price::NUMERIC;
 
 COMMIT;

@@ -72,7 +72,7 @@ ALTER TABLE employee_commission
     ALTER COLUMN commission_rate   TYPE DOUBLE PRECISION USING commission_rate::DOUBLE PRECISION,
     ALTER COLUMN commission_amount TYPE DOUBLE PRECISION USING commission_amount::DOUBLE PRECISION;
 
-ALTER TABLE pipeline_deal
+ALTER TABLE sale_pipeline
     ALTER COLUMN expected_price TYPE DOUBLE PRECISION USING expected_price::DOUBLE PRECISION;
 
 COMMIT;
