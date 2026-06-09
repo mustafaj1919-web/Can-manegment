@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getXsrfToken } from '@/lib/api/client'
 import { useBranchStore } from '@/lib/stores/branch-store'
 import { toast } from 'sonner'
 import type { Branch } from '@/types'
@@ -32,23 +33,28 @@ export function BranchSelector() {
     if (switching || branch.id === current?.id) return
     setSwitching(true)
     try {
+      const csrfToken = getXsrfToken()
+      const body = new URLSearchParams({ branch_id: String(branch.id) })
       const response = await fetch('/branch/switch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'X-Requested-With': 'XMLHttpRequest',
+          'X-XSRF-TOKEN': csrfToken,
           Accept: 'application/json',
         },
-        body: `branch_id=${branch.id}`,
+        body,
         credentials: 'include',
       })
       if (!response.ok) {
-        toast.error('تعذر تبديل الفرع، حاول مرة أخرى')
+        const result = await response.json().catch(() => null) as { error?: string } | null
+        toast.error(result?.error ?? 'تعذر تبديل الفرع، حاول مرة أخرى')
         return
       }
       setActiveBranch(branch)
       await queryClient.invalidateQueries()
       router.refresh()
+      toast.success(`تم التبديل إلى فرع ${branch.name}`)
     } catch {
       toast.error('تعذر تبديل الفرع، تحقق من الاتصال بالخادم')
     } finally {

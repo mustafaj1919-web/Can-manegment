@@ -1,12 +1,25 @@
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime
 from sqlalchemy import func
 from .database import db
-from .models import Account, JournalEntry, JournalEntryLine
+from .models import Account, AccountingPeriod, JournalEntry, JournalEntryLine
 
 # نمط الأكواد النقطية القديمة مثل 1.1.1 أو 4.2 أو 5.1
 _DOT_CODE_RE = re.compile(r'^\d+\.\d')
+ACCOUNTING_QUANTUM = Decimal('0.0001')
+ZERO = Decimal('0')
+ACCOUNTING_EFFECT_STATUSES = ('posted', 'reversed')
+
+
+def decimal_amount(value) -> Decimal:
+    try:
+        amount = value if isinstance(value, Decimal) else Decimal(str(value or 0))
+        if not amount.is_finite():
+            raise ValueError('قيمة مالية غير صالحة')
+        return amount.quantize(ACCOUNTING_QUANTUM, rounding=ROUND_HALF_UP)
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f'قيمة مالية غير صحيحة: {value}') from exc
 
 
 def assert_no_dot_codes(lines):
@@ -19,13 +32,41 @@ def assert_no_dot_codes(lines):
             )
 
 
-def get_account_by_code(code):
+def check_period_lock(entry_date) -> None:
+    """يرفع ValueError إذا كان تاريخ القيد يقع في فترة محاسبية مغلقة."""
+    from datetime import date as _date
+    if isinstance(entry_date, datetime):
+        d = entry_date.date()
+    elif isinstance(entry_date, _date):
+        d = entry_date
+    else:
+        return
+    try:
+        closed = AccountingPeriod.query.filter(
+            AccountingPeriod.status == 'closed',
+            AccountingPeriod.start_date <= d,
+            AccountingPeriod.end_date >= d,
+        ).first()
+    except Exception:
+        # الجدول غير موجود بعد — نتجاهل ونكمل
+        return
+    if closed:
+        raise ValueError(
+            f'الفترة المحاسبية مغلقة: {closed.name} '
+            f'({closed.start_date} — {closed.end_date})'
+            f' — لا يمكن نشر قيود في فترات مغلقة.'
+        )
+
+
+def get_account_by_code(code, allow_inactive=False):
     """يرجع الحساب بالسجل المحدد أو يرفع ValueError إذا لم يوجد."""
     if not code:
         raise ValueError('لم يتم توفير رمز الحساب.')
     account = Account.query.filter_by(code=str(code)).first()
     if not account:
         raise ValueError(f'الحساب غير موجود للكود: {code}')
+    if not account.is_active and not allow_inactive:
+        raise ValueError(f'الحساب مؤرشف ولا يمكن استخدامه في قيد جديد: {code}')
     return account
 
 
@@ -44,6 +85,7 @@ def create_journal_entry(
     lines=None,
     auto_post=True,
     posted_by_id=None,
+    allow_inactive_accounts=False,
 ):
     """ينشئ قيداً محاسبياً مع سطوره.
 
@@ -61,6 +103,9 @@ def create_journal_entry(
         entry_date = datetime.utcnow()
 
     assert_no_dot_codes(lines)
+
+    if auto_post:
+        check_period_lock(entry_date)
 
     status = 'posted' if auto_post else 'draft'
     posted_at = datetime.utcnow() if auto_post else None
@@ -81,14 +126,14 @@ def create_journal_entry(
     # Assign reference number after flush (ID is now available)
     je.reference_number = _next_reference_number()
 
-    total_debit = Decimal(0)
-    total_credit = Decimal(0)
+    total_debit = ZERO
+    total_credit = ZERO
 
     for ln in lines:
         acct_code = ln.get('account_code')
-        debit = Decimal(str(ln.get('debit') or 0))
-        credit = Decimal(str(ln.get('credit') or 0))
-        acct = get_account_by_code(acct_code)
+        debit = decimal_amount(ln.get('debit'))
+        credit = decimal_amount(ln.get('credit'))
+        acct = get_account_by_code(acct_code, allow_inactive=allow_inactive_accounts)
 
         # منع استخدام حسابات الأب (التي لها حسابات فرعية)
         has_children = Account.query.filter_by(parent_id=acct.id).first()
@@ -103,6 +148,7 @@ def create_journal_entry(
             account_id=acct.id,
             debit=debit,
             credit=credit,
+            description=ln.get('description') or None,
         )
         db.session.add(jel)
         total_debit += debit
@@ -131,8 +177,8 @@ def _update_account_balances_for_entry(je: 'JournalEntry', reverse: bool = False
         acct = Account.query.get(line.account_id)
         if acct is None:
             continue
-        delta = sign * ((line.debit or Decimal(0)) - (line.credit or Decimal(0)))
-        acct.balance = (acct.balance or Decimal(0)) + delta
+        delta = sign * ((line.debit or ZERO) - (line.credit or ZERO))
+        acct.balance = (acct.balance or ZERO) + delta
         _propagate_balance_to_parents(acct)
 
 
@@ -159,7 +205,7 @@ def _propagate_balance_to_parents(account: 'Account') -> None:
     for pid in parent_ids:
         parent = db.session.get(Account, pid)
         if parent:
-            parent.balance = children_sums.get(pid) or Decimal(0)
+            parent.balance = children_sums.get(pid) or ZERO
 
 
 def recompute_all_account_balances() -> None:
@@ -167,7 +213,7 @@ def recompute_all_account_balances() -> None:
 
     يُستخدم عند الترقية أو بعد عمليات استعادة قاعدة البيانات.
     """
-    Account.query.update({'balance': Decimal(0)}, synchronize_session=False)
+    Account.query.update({'balance': ZERO}, synchronize_session=False)
     db.session.flush()
 
     q = (
@@ -177,13 +223,13 @@ def recompute_all_account_balances() -> None:
             func.sum(JournalEntryLine.credit).label('c'),
         )
         .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.id)
-        .filter(JournalEntry.status == 'posted')
+        .filter(JournalEntry.status.in_(ACCOUNTING_EFFECT_STATUSES))
         .group_by(JournalEntryLine.account_id)
     )
     for row in q:
         acct = Account.query.get(row.account_id)
         if acct:
-            acct.balance = (row.d or Decimal(0)) - (row.c or Decimal(0))
+            acct.balance = (row.d or ZERO) - (row.c or ZERO)
 
     db.session.flush()
 
@@ -198,7 +244,7 @@ def recompute_all_account_balances() -> None:
         parent = Account.query.get(leaf.parent_id) if leaf.parent_id else None
         while parent and parent.id not in visited:
             child_sum = sum(
-                (c.balance or Decimal(0))
+                (c.balance or ZERO)
                 for c in Account.query.filter_by(parent_id=parent.id).all()
             )
             parent.balance = child_sum
@@ -223,33 +269,37 @@ def get_trial_balance(branch_id=None):
             func.sum(JournalEntryLine.credit).label('credits'),
         )
         .join(JournalEntry)
-        .filter(JournalEntry.status == 'posted')
+        .filter(JournalEntry.status.in_(ACCOUNTING_EFFECT_STATUSES))
         .group_by(JournalEntryLine.account_id)
     )
     if branch_id is not None:
         q = q.filter(JournalEntry.branch_id == branch_id)
     for row in q:
         acct_sums[row.account_id] = {
-            'debits': row.debits or Decimal(0),
-            'credits': row.credits or Decimal(0),
+            'debits': row.debits or ZERO,
+            'credits': row.credits or ZERO,
         }
 
     accounts = Account.query.order_by(Account.code).all()
     lines = []
     for a in accounts:
-        sums = acct_sums.get(a.id, {'debits': Decimal(0), 'credits': Decimal(0)})
-        bal = float(round(sums['debits'] - sums['credits'], 2))
+        sums = acct_sums.get(a.id, {'debits': ZERO, 'credits': ZERO})
+        debit = sums['debits'].quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        credit = sums['credits'].quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        balance = (debit - credit).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         lines.append({
             'code': a.code,
             'name': a.name,
             'type': a.type,
-            'debit': float(round(sums['debits'], 2)),
-            'credit': float(round(sums['credits'], 2)),
-            'balance': bal,
+            'debit': float(debit),
+            'credit': float(credit),
+            'balance': float(balance),
         })
 
+    total_debit = sum((Decimal(str(line['debit'])) for line in lines), ZERO)
+    total_credit = sum((Decimal(str(line['credit'])) for line in lines), ZERO)
     totals = {
-        'total_debit': round(sum(l['debit'] for l in lines), 2),
-        'total_credit': round(sum(l['credit'] for l in lines), 2),
+        'total_debit': float(total_debit.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+        'total_credit': float(total_credit.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
     }
     return lines, totals

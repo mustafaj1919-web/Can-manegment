@@ -1,45 +1,66 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef } from 'react'
+import {
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, BarChart3, Car, TrendingUp, Users } from 'lucide-react'
-import { cn, formatNumber } from '@/lib/utils'
+import { ArrowLeft, BarChart3, Car, CircleGauge, TrendingUp } from 'lucide-react'
+import { formatNumber } from '@/lib/utils'
 import { getDashboardStats, getNotifications } from '@/lib/api/dashboard'
 import { useBranchStore } from '@/lib/stores/branch-store'
 
-function getCurrentPeriod() {
-  return new Intl.DateTimeFormat('ar-IQ', { month: 'long', year: 'numeric' }).format(new Date())
+function AnimatedCounter({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const previous = useRef(0)
+  const reducedMotion = useReducedMotion()
+
+  useEffect(() => {
+    const element = ref.current
+    if (!element || previous.current === value) return
+    if (reducedMotion) {
+      element.textContent = formatNumber(value)
+      previous.current = value
+      return
+    }
+
+    const start = previous.current
+    const startedAt = performance.now()
+    const tick = (now: number) => {
+      const progress = Math.min((now - startedAt) / 900, 1)
+      const eased = 1 - Math.pow(1 - progress, 4)
+      element.textContent = formatNumber(Math.round(start + (value - start) * eased))
+      if (progress < 1) requestAnimationFrame(tick)
+      else previous.current = value
+    }
+    requestAnimationFrame(tick)
+  }, [value, reducedMotion])
+
+  return <span ref={ref}>{formatNumber(value)}</span>
 }
 
-const ACTIONS = [
-  { label: 'بيعة جديدة',  href: '/sales/new',    icon: TrendingUp, variant: 'primary'   },
-  { label: 'سيارة جديدة', href: '/inventory/new', icon: Car,        variant: 'secondary' },
-  { label: 'عميل جديد',   href: '/customers/new', icon: Users,      variant: 'secondary' },
-  { label: 'التقارير',    href: '/reports',        icon: BarChart3,  variant: 'ghost'     },
-] as const
-
-function CommandStat({ label, value, unit, alert = false }: {
-  label: string; value: string; unit: string; alert?: boolean
-}) {
-  return (
-    <div>
-      <p className="text-[10px] font-medium leading-none text-muted-foreground/45 mb-1">{label}</p>
-      <p className={cn(
-        'font-numeric text-[1.35rem] font-bold leading-tight tabular-nums',
-        alert ? 'text-rose-400' : 'text-foreground/85',
-      )}>
-        {value}
-      </p>
-      <p className="text-[10px] leading-none mt-0.5 text-muted-foreground/35">{unit}</p>
-    </div>
-  )
+function getCurrentPeriod() {
+  return new Intl.DateTimeFormat('ar-IQ', {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date())
 }
 
 export function HeroBanner() {
   const period = useMemo(getCurrentPeriod, [])
-  const branch = useBranchStore((s) => s.activeBranch)
+  const branch = useBranchStore((state) => state.activeBranch)
+  const reducedMotion = useReducedMotion()
+  const pointerX = useMotionValue(0)
+  const pointerY = useMotionValue(0)
+  const smoothX = useSpring(pointerX, { stiffness: 90, damping: 22 })
+  const smoothY = useSpring(pointerY, { stiffness: 90, damping: 22 })
+  const imageX = useTransform(smoothX, [-0.5, 0.5], [-14, 14])
+  const imageY = useTransform(smoothY, [-0.5, 0.5], [-7, 7])
 
   const { data: stats } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -47,121 +68,170 @@ export function HeroBanner() {
     staleTime: 60_000,
     retry: 1,
   })
-  const { data: notif } = useQuery({
+  const { data: notifications } = useQuery({
     queryKey: ['notifications'],
     queryFn: getNotifications,
     staleTime: 60_000,
     retry: 1,
   })
 
-  const urgentCount = (notif?.overdue?.length ?? 0) + (notif?.due_today?.length ?? 0)
-  const revenue     = stats?.total_sales_amount ?? 0
-  const profit      = stats?.monthly_profit     ?? 0
-  const salesCount  = stats?.sales              ?? 0
-  const fleetCount  = stats?.available_cars     ?? 0
+  const urgentCount =
+    (notifications?.overdue?.length ?? 0) +
+    (notifications?.due_today?.length ?? 0)
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (reducedMotion) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    pointerX.set((event.clientX - bounds.left) / bounds.width - 0.5)
+    pointerY.set((event.clientY - bounds.top) / bounds.height - 0.5)
+  }
+
+  function resetPointer() {
+    pointerX.set(0)
+    pointerY.set(0)
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
+    <motion.section
+      initial={{ opacity: 0, y: reducedMotion ? 0 : 18 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="command-center relative overflow-hidden rounded-xl"
+      transition={{ duration: reducedMotion ? 0 : 0.5, ease: [0.16, 1, 0.3, 1] }}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={resetPointer}
+      className="revauto-hero overflow-hidden relative rounded-xl border border-white/10"
+      style={{
+        backgroundImage: "url('/hero_showroom_bg.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        minHeight: '660px'
+      }}
     >
-      <div className="command-center-mesh" aria-hidden />
+      {/* Top red accent bar */}
+      <div className="absolute top-0 inset-inline-start-7 w-24 h-[3px] bg-red-600 shadow-[0_0_20px_rgba(239,27,45,0.7)] z-20" />
+      
+      {/* Glow flare */}
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-red-600/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative px-6 py-5">
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 sm:p-8 lg:p-10 items-center min-h-[520px]">
+        {/* Info header (RTL safe) */}
+        <div className="lg:col-span-12 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-4">
+          <div className="flex items-center gap-2.5 text-[11px] font-semibold text-neutral-400">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-family-cairo">{branch?.name ?? 'المعرض الرئيسي'}</span>
+            <span className="text-white/20">/</span>
+            <span className="text-white/40">{period}</span>
+          </div>
+          {urgentCount > 0 && (
+            <Link href="/installments" className="px-3 py-1 bg-red-600/20 border border-red-500/30 text-red-400 rounded-md text-[10px] font-bold hover:bg-red-600 hover:text-white transition-all">
+              {urgentCount} تنبيه يحتاج متابعة
+            </Link>
+          )}
+        </div>
 
-        {/* ── Row 1: Context + Actions ── */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-
-          {/* Branch + period + alert */}
-          <div className="flex items-center gap-3">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.10em] text-muted-foreground/60">
-                {branch?.name ?? 'الفرع الرئيسي'}
-              </p>
-              <p className="mt-0.5 text-[12px] font-medium text-muted-foreground/40">{period}</p>
-            </div>
-            {urgentCount > 0 && (
-              <Link
-                href="/installments"
-                className="flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/[0.10] px-2.5 py-1 text-[11px] font-semibold text-rose-400 transition-colors hover:bg-rose-500/[0.16]"
-              >
-                <AlertTriangle className="h-3 w-3 shrink-0" />
-                {urgentCount} تنبيه عاجل
-              </Link>
-            )}
+        {/* Left column: Typography and CTA */}
+        <div className="lg:col-span-6 space-y-5">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-red-600/12 border border-red-500/25 text-red-400 rounded-full text-[11px] font-bold select-none w-fit tracking-wide">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
+            جديد في المعرض · New in Stock
           </div>
 
-          {/* Quick actions */}
-          <div className="flex items-center gap-2">
-            {ACTIONS.map(({ label, href, icon: Icon, variant }) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all duration-150',
-                  variant === 'primary'   && 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-                  variant === 'secondary' && 'border border-white/10 bg-white/[0.05] text-foreground/80 hover:bg-white/[0.09] hover:text-foreground',
-                  variant === 'ghost'     && 'text-muted-foreground/55 hover:text-muted-foreground',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="hidden sm:inline">{label}</span>
-              </Link>
-            ))}
+          <h1 className="text-3xl sm:text-4xl lg:text-[3rem] font-black text-white leading-[1.1] tracking-tight font-family-cairo">
+            Explore The Next <br />
+            <span className="text-red-500">Generation</span> Of Cars
+          </h1>
+
+          <p className="text-[13px] text-neutral-400 max-w-lg leading-relaxed font-family-cairo">
+            نظام إدارة صالة عرض السيارات الأحدث والأكثر تميزاً. تصفح أحدث الموديلات المتوفرة، وأدر مبيعاتك وعملائك بدقة فائقة من شاشة واحدة بأسلوب رياضي فخم.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Link href="/sales/new" className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-sm rounded-lg transition-all shadow-lg shadow-red-600/35 font-family-cairo">
+              إنشاء بيعة
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <Link href="/inventory" className="inline-flex items-center gap-2 px-6 py-3 border border-white/15 hover:border-white/35 text-white/90 font-semibold text-sm rounded-lg transition-all bg-white/[0.05] hover:bg-white/[0.09] active:scale-95 font-family-cairo">
+              استكشف المعرض
+            </Link>
+          </div>
+
+          {/* Trust element */}
+          <div className="flex items-center gap-3 pt-4 border-t border-white/[0.07]">
+            <div className="flex -space-x-2 overflow-hidden">
+              <div className="inline-flex h-9 w-9 rounded-full ring-[2.5px] ring-[#0c0c0c] bg-red-600 items-center justify-center text-[11px] text-white font-black">A</div>
+              <div className="inline-flex h-9 w-9 rounded-full ring-[2.5px] ring-[#0c0c0c] bg-neutral-700 items-center justify-center text-[11px] text-white font-black">D</div>
+              <div className="inline-flex h-9 w-9 rounded-full ring-[2.5px] ring-[#0c0c0c] bg-neutral-600 items-center justify-center text-[10px] text-white font-black">99</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1 mb-0.5">
+                {[...Array(5)].map((_, i) => (
+                  <span key={i} className="text-amber-400 text-[10px]">★</span>
+                ))}
+              </div>
+              <p className="text-[11px] font-bold text-white font-family-cairo">1,500+ تقييم إيجابي من العملاء</p>
+              <p className="text-[10px] text-neutral-500 font-family-cairo mt-0.5">ثقة، أمان وسرعة في إتمام المعاملات</p>
+            </div>
           </div>
         </div>
 
-        {/* ── Row 2: Primary metric + secondary stats ── */}
-        <div className="mt-5 flex flex-wrap items-end justify-between gap-6 border-t border-[var(--border-inner)] pt-5">
+        {/* Right column: Image showcase with glow */}
+        <div className="lg:col-span-6 flex items-center justify-center relative min-h-[420px]">
+          <div className="absolute w-[95%] h-[95%] bg-red-600/15 blur-[100px] rounded-full pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-900/25 via-transparent to-transparent opacity-50 pointer-events-none" />
+          <motion.div style={{ x: imageX, y: imageY }} className="z-10 w-full flex justify-center">
+            <motion.img
+              src="/fallback_car.png"
+              alt="Premium Car Showcase"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: -10, opacity: 1 }}
+              transition={{
+                y: { repeat: Infinity, repeatType: "reverse", duration: 3.5, ease: "easeInOut" },
+                opacity: { duration: 0.6 }
+              }}
+              className="w-full max-w-[600px] object-contain drop-shadow-[0_30px_80px_rgba(239,27,45,0.55)]"
+            />
+          </motion.div>
+          {/* Reflection */}
+          <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+        </div>
 
-          {/* Primary: Monthly revenue */}
-          <div className="min-w-0">
-            <p className="mb-2 text-[11px] font-medium text-muted-foreground/50">
-              إجمالي المبيعات — هذا الشهر
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="pb-1 text-[11px] font-semibold leading-none text-muted-foreground/38 select-none">
-                IQD
-              </span>
-              <span className="money text-[2.25rem] font-bold leading-none tracking-tight text-foreground">
-                {stats ? formatNumber(revenue) : '—'}
-              </span>
+        {/* Bottom column: Stats display */}
+        <div className="lg:col-span-12 border-t border-white/[0.07] pt-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5 items-center">
+            <div className="space-y-0.5">
+              <span className="text-[10px] uppercase tracking-widest text-neutral-500 block font-bold font-family-cairo">إجمالي المبيعات</span>
+              <div className="text-2xl font-black text-red-500 font-numeric tracking-tight flex items-baseline gap-1.5">
+                <AnimatedCounter value={stats?.total_sales_amount ?? 0} />
+                <small className="text-[11px] text-neutral-500 font-semibold">د.ع</small>
+              </div>
             </div>
-            {stats && profit > 0 && (
-              <p className="mt-2 text-[12px] text-muted-foreground/50">
-                صافي الربح:
-                <span className="ms-1.5 font-semibold text-emerald-400">
-                  {formatNumber(profit)} IQD
-                </span>
-              </p>
-            )}
-          </div>
-
-          {/* Secondary stats */}
-          <div className="flex shrink-0 items-end gap-7">
-            <CommandStat
-              label="مبيعات مكتملة"
-              value={stats ? formatNumber(salesCount) : '—'}
-              unit="صفقة"
-            />
-            <CommandStat
-              label="متاح للبيع"
-              value={stats ? formatNumber(fleetCount) : '—'}
-              unit="سيارة"
-            />
-            {urgentCount > 0 && (
-              <CommandStat
-                label="أقساط متأخرة"
-                value={String(urgentCount)}
-                unit="قسط"
-                alert
-              />
-            )}
+            <div className="space-y-0.5">
+              <span className="text-[10px] uppercase tracking-widest text-neutral-500 block font-bold font-family-cairo">السيارات المتاحة</span>
+              <div className="text-2xl font-black text-white font-numeric tracking-tight flex items-baseline gap-1.5">
+                <AnimatedCounter value={stats?.available_cars ?? 0} />
+                <small className="text-[11px] text-neutral-500 font-semibold">سيارة</small>
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] uppercase tracking-widest text-neutral-500 block font-bold font-family-cairo">الصفقات المكتملة</span>
+              <div className="text-2xl font-black text-white font-numeric tracking-tight flex items-baseline gap-1.5">
+                <AnimatedCounter value={stats?.sales ?? 0} />
+                <small className="text-[11px] text-neutral-500 font-semibold">بيعة</small>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Link href="/reports" className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-red-600 hover:border-red-600 text-white transition-all active:scale-95" title="فتح التقارير">
+                <CircleGauge className="h-5 w-5" />
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-    </motion.div>
+    </motion.section>
   )
 }

@@ -273,20 +273,33 @@ def _replace_directory_from_backup(temp_root, archive_relative_path, target_path
         os.makedirs(target_abs, exist_ok=True)
 
 
+def _verify_backup_integrity(zip_file):
+    """Validate that a backup ZIP contains expected structure and a valid manifest."""
+    names = set(zip_file.namelist())
+    for name in names:
+        normalized = os.path.normpath(name)
+        if os.path.isabs(name) or normalized.startswith('..') or '..' + os.sep in normalized:
+            raise ValueError('Backup contains unsafe paths')
+    if 'metadata.json' not in names:
+        raise ValueError('Invalid backup: missing metadata.json')
+    try:
+        metadata = json.loads(zip_file.read('metadata.json').decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f'Invalid backup: malformed metadata.json ({exc})')
+    if not isinstance(metadata, dict) or 'created_at' not in metadata:
+        raise ValueError('Invalid backup: metadata.json missing required fields')
+    has_json = 'database/data.json' in names
+    has_sqlite = 'database/showroom.db' in names
+    if not has_json and not has_sqlite:
+        raise ValueError('Backup does not contain database/data.json or database/showroom.db')
+    return names, has_json, has_sqlite
+
+
 def restore_backup_archive(backup_path):
     if not backup_path or not os.path.exists(backup_path):
         raise FileNotFoundError('Backup file not found')
     with zipfile.ZipFile(backup_path, 'r') as zip_file:
-        names = set(zip_file.namelist())
-        for name in names:
-            normalized = os.path.normpath(name)
-            if os.path.isabs(name) or normalized.startswith('..') or '..' + os.sep in normalized:
-                raise ValueError('Backup contains unsafe paths')
-        # Support both new JSON-based backups and legacy SQLite backups
-        has_json = 'database/data.json' in names
-        has_sqlite = 'database/showroom.db' in names
-        if not has_json and not has_sqlite:
-            raise ValueError('Backup does not contain database/data.json or database/showroom.db')
+        names, has_json, has_sqlite = _verify_backup_integrity(zip_file)
         with tempfile.TemporaryDirectory() as temp_root:
             zip_file.extractall(temp_root)
             if has_json:

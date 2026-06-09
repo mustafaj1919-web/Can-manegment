@@ -72,22 +72,25 @@ function SummaryCard({
   tone: 'emerald' | 'rose' | 'cyan' | 'amber' | 'violet' | 'slate'
 }) {
   const tones = {
-    emerald: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
-    rose: 'border-rose-500/20 bg-rose-500/10 text-rose-300',
-    cyan: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300',
-    amber: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
-    violet: 'border-violet-500/20 bg-violet-500/10 text-violet-300',
-    slate: 'border-slate-500/20 bg-slate-500/10 text-slate-300',
+    emerald: { icon: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300', glow: 'bg-emerald-500' },
+    rose:    { icon: 'border-rose-500/20 bg-rose-500/10 text-rose-300', glow: 'bg-rose-500' },
+    cyan:    { icon: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300', glow: 'bg-cyan-500' },
+    amber:   { icon: 'border-amber-500/20 bg-amber-500/10 text-amber-300', glow: 'bg-amber-500' },
+    violet:  { icon: 'border-violet-500/20 bg-violet-500/10 text-violet-300', glow: 'bg-violet-500' },
+    slate:   { icon: 'border-slate-500/20 bg-slate-500/10 text-slate-300', glow: 'bg-slate-500' },
   }
+  const t = tones[tone]
   return (
-    <div className="glass rounded-lg p-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="glass rounded-lg p-4 relative overflow-hidden group hover:border-white/10 transition-all duration-300">
+      {/* Subtle corner glow */}
+      <div className={cn('absolute -top-6 -end-6 w-20 h-20 rounded-full blur-[35px] opacity-15 group-hover:opacity-30 transition-opacity', t.glow)} />
+      <div className="flex items-center justify-between gap-3 relative z-10">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
           <p className="mt-1 truncate font-numeric text-lg font-black text-foreground">{value}</p>
         </div>
-        <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border', tones[tone])}>
-          <Icon className="h-4 w-4" />
+        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ring-1 ring-white/5', t.icon)}>
+          <Icon className="h-4.5 w-4.5" />
         </div>
       </div>
     </div>
@@ -99,17 +102,25 @@ function DataTable<T extends { id: number }>({
   rows,
   columns,
   emptyText,
+  isLocalLight,
 }: {
   title: string
   rows: T[]
   columns: Column<T>[]
   emptyText: string
+  isLocalLight?: boolean
 }) {
   return (
-    <section className="glass overflow-hidden rounded-lg">
-      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-muted-foreground">
+    <section className={cn(
+      "glass overflow-hidden rounded-lg transition-colors duration-200",
+      isLocalLight && "bg-white border-slate-200 shadow-sm"
+    )}>
+      <div className={cn("flex items-center justify-between gap-3 border-b px-5 py-3.5 transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06]")}>
+        <h2 className={cn("text-sm font-semibold transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>{title}</h2>
+        <span className={cn(
+          "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+          isLocalLight ? "border-slate-200 bg-slate-100 text-slate-600" : "border-white/10 text-muted-foreground"
+        )}>
           {rows.length} سجل
         </span>
       </div>
@@ -120,11 +131,11 @@ function DataTable<T extends { id: number }>({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className={cn("w-full min-w-[760px] text-sm transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>
             <thead>
-              <tr className="border-b border-white/[0.05] bg-white/[0.02]">
+              <tr className={cn("border-b transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/30" : "border-white/[0.05] bg-white/[0.02]")}>
                 {columns.map((column) => (
-                  <th key={column.key} className={cn('px-4 py-3 text-start text-xs font-medium text-muted-foreground', column.className)}>
+                  <th key={column.key} className={cn('px-4 py-3 text-start text-xs font-medium transition-colors', isLocalLight ? 'text-slate-500' : 'text-muted-foreground', column.className)}>
                     {column.label}
                   </th>
                 ))}
@@ -132,9 +143,12 @@ function DataTable<T extends { id: number }>({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                <tr key={row.id} className={cn(
+                  "border-b transition-colors",
+                  isLocalLight ? "border-slate-100 hover:bg-slate-50" : "border-white/[0.03] hover:bg-white/[0.02]"
+                )}>
                   {columns.map((column) => (
-                    <td key={column.key} className={cn('px-4 py-3 text-xs text-foreground/90', column.className)}>
+                    <td key={column.key} className={cn('px-4 py-3 text-xs transition-colors', isLocalLight ? 'text-slate-800' : 'text-foreground/90', column.className)}>
                       {column.render(row)}
                     </td>
                   ))}
@@ -165,6 +179,7 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState(toDateInput(monthAgo))
   const [endDate, setEndDate] = useState(toDateInput(today))
   const [branchId, setBranchId] = useState('all')
+  const [isLocalLight, setIsLocalLight] = useState(false)
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['reports', startDate, endDate, branchId],
@@ -184,54 +199,54 @@ export default function ReportsPage() {
   }, [branches, branchId])
 
   const salesColumns = useMemo<Column<ReportRow>[]>(() => [
-    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className="font-mono text-amber-300">{row.invoice_number ?? '-'}</span> },
+    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className={cn("font-mono", isLocalLight ? "text-amber-700 font-bold" : "text-amber-300")}>{row.invoice_number ?? '-'}</span> },
     { key: 'date', label: 'التاريخ', render: (row) => formatDate(row.date) },
     { key: 'customer', label: 'العميل', render: (row) => row.customer ?? '-' },
     { key: 'car', label: 'السيارة', render: (row) => row.car ?? '-' },
     { key: 'total', label: 'الإجمالي', render: (row) => money(row.total_iqd), className: 'font-numeric' },
-    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: 'font-numeric text-emerald-300' },
-    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: 'font-numeric text-rose-300' },
+    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: cn('font-numeric', isLocalLight ? 'text-emerald-700' : 'text-emerald-300') },
+    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: cn('font-numeric', isLocalLight ? 'text-rose-700' : 'text-rose-300') },
     { key: 'status', label: 'الحالة', render: (row) => <StatusPill status={row.status} /> },
-  ], [])
+  ], [isLocalLight])
 
   const purchaseColumns = useMemo<Column<ReportRow>[]>(() => [
-    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className="font-mono text-blue-300">{row.invoice_number ?? '-'}</span> },
+    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className={cn("font-mono", isLocalLight ? "text-blue-700 font-bold" : "text-blue-300")}>{row.invoice_number ?? '-'}</span> },
     { key: 'date', label: 'التاريخ', render: (row) => formatDate(row.date) },
     { key: 'seller', label: 'البائع', render: (row) => row.customer ?? '-' },
     { key: 'car', label: 'السيارة', render: (row) => row.car ?? '-' },
     { key: 'total', label: 'الإجمالي', render: (row) => money(row.total_iqd), className: 'font-numeric' },
-    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: 'font-numeric text-emerald-300' },
-    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: 'font-numeric text-rose-300' },
+    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: cn('font-numeric', isLocalLight ? 'text-emerald-700' : 'text-emerald-300') },
+    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: cn('font-numeric', isLocalLight ? 'text-rose-700' : 'text-rose-300') },
     { key: 'status', label: 'الحالة', render: (row) => <StatusPill status={row.status} /> },
-  ], [])
+  ], [isLocalLight])
 
   const installmentColumns = useMemo<Column<ReportRow>[]>(() => [
-    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className="font-mono text-cyan-300">{row.invoice_number ?? '-'}</span> },
+    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className={cn("font-mono", isLocalLight ? "text-cyan-700 font-bold" : "text-cyan-300")}>{row.invoice_number ?? '-'}</span> },
     { key: 'date', label: 'تاريخ الخطة', render: (row) => formatDate(row.date) },
     { key: 'customer', label: 'العميل', render: (row) => row.customer ?? '-' },
     { key: 'car', label: 'السيارة', render: (row) => row.car ?? '-' },
     { key: 'months', label: 'الأشهر', render: (row) => row.months ?? '-' },
     { key: 'total', label: 'الإجمالي', render: (row) => money(row.total_iqd), className: 'font-numeric' },
-    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: 'font-numeric text-emerald-300' },
-    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: 'font-numeric text-rose-300' },
+    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: cn('font-numeric', isLocalLight ? 'text-emerald-700' : 'text-emerald-300') },
+    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: cn('font-numeric', isLocalLight ? 'text-rose-700' : 'text-rose-300') },
     { key: 'status', label: 'الحالة', render: (row) => <StatusPill status={row.status} /> },
-  ], [])
+  ], [isLocalLight])
 
   const overdueColumns = useMemo<Column<ReportRow>[]>(() => [
-    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className="font-mono text-rose-300">{row.invoice_number ?? '-'}</span> },
+    { key: 'invoice', label: 'الفاتورة', render: (row) => <span className={cn("font-mono", isLocalLight ? "text-rose-700 font-bold" : "text-rose-300")}>{row.invoice_number ?? '-'}</span> },
     { key: 'due_date', label: 'تاريخ الاستحقاق', render: (row) => formatDate(row.due_date) },
     { key: 'customer', label: 'العميل', render: (row) => row.customer ?? '-' },
     { key: 'amount', label: 'القسط', render: (row) => money(row.amount_iqd), className: 'font-numeric' },
-    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: 'font-numeric text-emerald-300' },
-    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: 'font-numeric text-rose-300' },
+    { key: 'paid', label: 'المدفوع', render: (row) => money(row.paid_iqd), className: cn('font-numeric', isLocalLight ? 'text-emerald-700' : 'text-emerald-300') },
+    { key: 'remaining', label: 'المتبقي', render: (row) => money(row.remaining_iqd), className: cn('font-numeric', isLocalLight ? 'text-rose-700' : 'text-rose-300') },
     { key: 'status', label: 'الحالة', render: (row) => <StatusPill status={row.status} /> },
-  ], [])
+  ], [isLocalLight])
 
   const balanceColumns = useMemo<Column<CustomerBalanceRow>[]>(() => [
     { key: 'name', label: 'العميل', render: (row) => row.name },
     { key: 'type', label: 'النوع', render: (row) => translateStatus(row.type) },
-    { key: 'balance', label: 'الرصيد', render: (row) => money(row.balance_iqd), className: 'font-numeric text-amber-300' },
-  ], [])
+    { key: 'balance', label: 'الرصيد', render: (row) => money(row.balance_iqd), className: cn('font-numeric', isLocalLight ? 'text-amber-700' : 'text-amber-300') },
+  ], [isLocalLight])
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -246,6 +261,14 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsLocalLight(p => !p)}
+            className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-white/5 bg-white/[0.02]"
+          >
+            {isLocalLight ? 'عرض الجداول داكنة' : 'عرض الجداول فاتحة'}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 border border-white/10">
             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
             تحديث
@@ -309,6 +332,7 @@ export default function ReportsPage() {
           installmentColumns={installmentColumns}
           overdueColumns={overdueColumns}
           balanceColumns={balanceColumns}
+          isLocalLight={isLocalLight}
         />
       )}
     </div>
@@ -416,6 +440,7 @@ function ReportsContent({
   installmentColumns,
   overdueColumns,
   balanceColumns,
+  isLocalLight,
 }: {
   data: ReportsResponse
   salesColumns: Column<ReportRow>[]
@@ -423,6 +448,7 @@ function ReportsContent({
   installmentColumns: Column<ReportRow>[]
   overdueColumns: Column<ReportRow>[]
   balanceColumns: Column<CustomerBalanceRow>[]
+  isLocalLight?: boolean
 }) {
   const { summary } = data
   const balances = data.customer_balances.filter((row) => row.balance_iqd > 0)
@@ -498,19 +524,19 @@ function ReportsContent({
         </div>
 
         <TabsContent value="sales">
-          <DataTable title="تقرير المبيعات" rows={data.sales} columns={salesColumns} emptyText="لا توجد مبيعات ضمن الفترة المحددة" />
+          <DataTable title="تقرير المبيعات" rows={data.sales} columns={salesColumns} emptyText="لا توجد مبيعات ضمن الفترة المحددة" isLocalLight={isLocalLight} />
         </TabsContent>
         <TabsContent value="purchases">
-          <DataTable title="تقرير المشتريات" rows={data.purchases} columns={purchaseColumns} emptyText="لا توجد مشتريات ضمن الفترة المحددة" />
+          <DataTable title="تقرير المشتريات" rows={data.purchases} columns={purchaseColumns} emptyText="لا توجد مشتريات ضمن الفترة المحددة" isLocalLight={isLocalLight} />
         </TabsContent>
         <TabsContent value="installments">
-          <DataTable title="تقرير الأقساط" rows={data.installments} columns={installmentColumns} emptyText="لا توجد خطط أقساط ضمن الفترة المحددة" />
+          <DataTable title="تقرير الأقساط" rows={data.installments} columns={installmentColumns} emptyText="لا توجد خطط أقساط ضمن الفترة المحددة" isLocalLight={isLocalLight} />
         </TabsContent>
         <TabsContent value="overdue">
-          <DataTable title="تقرير الأقساط المتأخرة" rows={data.overdue_installments} columns={overdueColumns} emptyText="لا توجد أقساط متأخرة ضمن الفترة المحددة" />
+          <DataTable title="تقرير الأقساط المتأخرة" rows={data.overdue_installments} columns={overdueColumns} emptyText="لا توجد أقساط متأخرة ضمن الفترة المحددة" isLocalLight={isLocalLight} />
         </TabsContent>
         <TabsContent value="balances">
-          <DataTable title="تقرير أرصدة العملاء" rows={balances} columns={balanceColumns} emptyText="لا توجد أرصدة مستحقة للعملاء" />
+          <DataTable title="تقرير أرصدة العملاء" rows={balances} columns={balanceColumns} emptyText="لا توجد أرصدة مستحقة للعملاء" isLocalLight={isLocalLight} />
         </TabsContent>
         <TabsContent value="profit">
           <KeyValueReport
@@ -524,6 +550,7 @@ function ReportsContent({
               ['المصاريف', data.profit_loss.expenses],
               ['صافي الربح والخسارة', data.profit_loss.net_profit],
             ]}
+            isLocalLight={isLocalLight}
           />
         </TabsContent>
         <TabsContent value="cashbox">
@@ -537,34 +564,48 @@ function ReportsContent({
               ['المصاريف', data.cashbox.expenses],
               ['الرصيد', data.cashbox.balance],
             ]}
+            isLocalLight={isLocalLight}
           />
         </TabsContent>
       </Tabs>
 
       <div className="hidden print:block space-y-5">
-        <DataTable title="تقرير المبيعات" rows={data.sales} columns={salesColumns} emptyText="لا توجد مبيعات ضمن الفترة المحددة" />
-        <DataTable title="تقرير المشتريات" rows={data.purchases} columns={purchaseColumns} emptyText="لا توجد مشتريات ضمن الفترة المحددة" />
-        <DataTable title="تقرير الأقساط" rows={data.installments} columns={installmentColumns} emptyText="لا توجد خطط أقساط ضمن الفترة المحددة" />
-        <DataTable title="تقرير الأقساط المتأخرة" rows={data.overdue_installments} columns={overdueColumns} emptyText="لا توجد أقساط متأخرة ضمن الفترة المحددة" />
-        <DataTable title="تقرير أرصدة العملاء" rows={balances} columns={balanceColumns} emptyText="لا توجد أرصدة مستحقة للعملاء" />
+        <DataTable title="تقرير المبيعات" rows={data.sales} columns={salesColumns} emptyText="لا توجد مبيعات ضمن الفترة المحددة" isLocalLight={isLocalLight} />
+        <DataTable title="تقرير المشتريات" rows={data.purchases} columns={purchaseColumns} emptyText="لا توجد مشتريات ضمن الفترة المحددة" isLocalLight={isLocalLight} />
+        <DataTable title="تقرير الأقساط" rows={data.installments} columns={installmentColumns} emptyText="لا توجد خطط أقساط ضمن الفترة المحددة" isLocalLight={isLocalLight} />
+        <DataTable title="تقرير الأقساط المتأخرة" rows={data.overdue_installments} columns={overdueColumns} emptyText="لا توجد أقساط متأخرة ضمن الفترة المحددة" isLocalLight={isLocalLight} />
+        <DataTable title="تقرير أرصدة العملاء" rows={balances} columns={balanceColumns} emptyText="لا توجد أرصدة مستحقة للعملاء" isLocalLight={isLocalLight} />
       </div>
     </>
   )
 }
 
-function KeyValueReport({ title, rows }: { title: string; rows: Array<[string, number]> }) {
+function KeyValueReport({ title, rows, isLocalLight }: { title: string; rows: Array<[string, number]>; isLocalLight?: boolean }) {
   return (
-    <section className="glass overflow-hidden rounded-lg">
-      <div className="border-b border-white/[0.06] px-5 py-3.5">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+    <section className={cn(
+      "glass overflow-hidden rounded-lg transition-colors duration-200",
+      isLocalLight && "bg-white border-slate-200 shadow-sm"
+    )}>
+      <div className={cn("border-b px-5 py-3.5 transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06]")}>
+        <h2 className={cn("text-sm font-semibold transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>{title}</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <tbody>
             {rows.map(([label, value], index) => (
-              <tr key={label} className={cn('border-b border-white/[0.03]', index === rows.length - 1 && 'bg-white/[0.03]')}>
-                <td className="px-5 py-3 text-xs text-muted-foreground">{label}</td>
-                <td className={cn('px-5 py-3 text-end font-numeric text-xs font-semibold', value >= 0 ? 'text-foreground' : 'text-rose-300')}>
+              <tr key={label} className={cn(
+                'border-b transition-colors',
+                isLocalLight
+                  ? cn('border-slate-100', index === rows.length - 1 && 'bg-slate-100/30')
+                  : cn('border-white/[0.03]', index === rows.length - 1 && 'bg-white/[0.03]')
+              )}>
+                <td className={cn("px-5 py-3 text-xs transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>{label}</td>
+                <td className={cn(
+                  'px-5 py-3 text-end font-numeric text-xs font-semibold transition-colors',
+                  value >= 0
+                    ? (isLocalLight ? 'text-slate-800' : 'text-foreground')
+                    : (isLocalLight ? 'text-rose-700' : 'text-rose-300')
+                )}>
                   {money(value)}
                 </td>
               </tr>

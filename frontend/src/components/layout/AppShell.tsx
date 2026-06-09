@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
 import { getCurrentUser } from '@/lib/api/auth'
@@ -17,8 +17,9 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const pathname    = usePathname()
-  const router      = useRouter()
+  const pathname            = usePathname()
+  const router              = useRouter()
+  const prefersReducedMotion = useReducedMotion()
   const { isAuthenticated, isLoading, setAuth, clearAuth, setLoading } = useAuthStore()
   const { setBranches, setActiveBranch }        = useBranchStore()
 
@@ -110,7 +111,20 @@ export function AppShell({ children }: AppShellProps) {
         />
         <main className="app-shell-content flex-1 overflow-auto">
           <div className="page-container" style={{ paddingTop: 16 }}>
-            {children}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -6 }}
+                transition={{
+                  duration: prefersReducedMotion ? 0 : 0.22,
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
       </motion.div>

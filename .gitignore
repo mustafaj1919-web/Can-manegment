@@ -22,6 +22,8 @@ static/uploads/
 # ملفات Next.js
 frontend/.next/
 frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
 
 # لوجات
 logs/
@@ -34,3 +36,17 @@ desktop.ini
 # outputs مؤقتة
 outputs/
 cloud/
+
+# نسخ احتياطية محلية — لا ترفعها
+backups/
+BACKUP_BEFORE_*/
+
+# ملفات أدوات المحرر
+.claude/
+
+# رسم بياني للكود (مولّد تلقائياً)
+graphify-out/
+**/graphify-out/
+
+# تقارير الأمان — معلومات حساسة
+SECURITY_VA_PT_REPORT_*.md

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowUpRight, Ban, Calendar, Car, CheckCircle2,
@@ -13,9 +14,25 @@ import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
 import { exportXlsx } from '@/lib/export'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { StatStrip } from '@/components/shared/StatStrip'
 import { FilterBar } from '@/components/shared/FilterBar'
 import { DataTable } from '@/components/shared/DataTable'
+
+function KpiCard({ icon, label, value, iconColor, iconBg }: {
+  icon: React.ReactNode; label: string; value: number | string
+  iconColor: string; iconBg: string
+}) {
+  return (
+    <div className="app-card rounded-xl p-4">
+      <div className={cn('mb-3 flex h-8 w-8 items-center justify-center rounded-lg', iconBg)}>
+        <span className={iconColor}>{icon}</span>
+      </div>
+      <p className="font-numeric text-2xl font-bold tabular-nums text-foreground">
+        {typeof value === 'number' ? value.toLocaleString('ar-EG') : value}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+    </div>
+  )
+}
 
 const STATUS_OPTS = [
   { value: 'all',       label: 'كل الحالات' },
@@ -45,6 +62,7 @@ export default function PurchasesPage() {
   const [page,      setPage]      = useState(1)
   const [exporting, setExporting] = useState(false)
   const perPage = 20
+  const router = useRouter()
 
   const params = {
     page,
@@ -63,7 +81,6 @@ export default function PurchasesPage() {
     retry: 1,
   })
 
-  // Lightweight aggregate counts for StatStrip
   const { data: counts } = useQuery({
     queryKey: ['purchase-counts'],
     queryFn: async () => {
@@ -144,34 +161,36 @@ export default function PurchasesPage() {
         }
       />
 
-      <StatStrip
-        stats={[
-          {
-            label: 'إجمالي الفواتير',
-            value: counts ? counts.active + counts.cancelled : '...',
-            icon: <ShoppingBag className="h-4 w-4" />,
-            color: 'info',
-          },
-          {
-            label: 'نشطة',
-            value: counts?.active ?? '...',
-            icon: <CheckCircle2 className="h-4 w-4" />,
-            color: 'success',
-          },
-          {
-            label: 'ملغاة',
-            value: counts?.cancelled ?? '...',
-            icon: <Ban className="h-4 w-4" />,
-            color: 'danger',
-          },
-          {
-            label: 'بالأقساط',
-            value: counts?.installment ?? '...',
-            icon: <Clock className="h-4 w-4" />,
-            color: 'warning',
-          },
-        ]}
-      />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiCard
+          icon={<ShoppingBag className="h-4 w-4" />}
+          label="إجمالي الفواتير"
+          value={counts ? counts.active + counts.cancelled : '...'}
+          iconColor="text-blue-400"
+          iconBg="bg-blue-500/10"
+        />
+        <KpiCard
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label="نشطة"
+          value={counts?.active ?? '...'}
+          iconColor="text-emerald-400"
+          iconBg="bg-emerald-500/10"
+        />
+        <KpiCard
+          icon={<Ban className="h-4 w-4" />}
+          label="ملغاة"
+          value={counts?.cancelled ?? '...'}
+          iconColor="text-rose-400"
+          iconBg="bg-rose-500/10"
+        />
+        <KpiCard
+          icon={<Clock className="h-4 w-4" />}
+          label="بالأقساط"
+          value={counts?.installment ?? '...'}
+          iconColor="text-amber-400"
+          iconBg="bg-amber-500/10"
+        />
+      </div>
 
       <FilterBar
         search={{
@@ -253,6 +272,8 @@ export default function PurchasesPage() {
             {items.map((purchase) => (
               <tr
                 key={purchase.id}
+                data-clickable
+                onClick={() => router.push(`/purchases/${purchase.id}`)}
               >
                 <td>
                   <p className="font-code text-xs font-semibold text-primary">{purchase.invoice_number}</p>

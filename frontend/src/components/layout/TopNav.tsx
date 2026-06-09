@@ -138,7 +138,7 @@ export function TopNav({ onToggleSidebar, onToggleMobile }: TopNavProps) {
                     'truncate font-semibold',
                     isFirst
                       ? 'text-[11px] text-muted-foreground'
-                      : 'text-[13px] text-foreground',
+                      : 'text-[13px] text-foreground/95 tracking-tight',
                   )}>
                     {crumb.label}
                   </span>
@@ -169,7 +169,7 @@ export function TopNav({ onToggleSidebar, onToggleMobile }: TopNavProps) {
           <Button
             asChild
             size="sm"
-            className="hidden h-8 gap-1.5 px-3.5 text-xs font-semibold shadow-sm shadow-primary/20 sm:flex"
+            className="hidden h-8 gap-1.5 px-3.5 text-xs font-semibold shadow-sm shadow-primary/25 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/30 active:translate-y-0 active:scale-[0.97] sm:flex"
           >
             <Link href={action.href}>
               <Plus className="h-3.5 w-3.5 shrink-0" />

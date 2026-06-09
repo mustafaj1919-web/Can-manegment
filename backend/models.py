@@ -326,6 +326,7 @@ class Account(db.Model):
     #         cogs | operating_expense | admin_expense
     classification = db.Column(db.String(64), nullable=True)
     balance = db.Column(db.Numeric(15, 4), default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
     branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     children = db.relationship('Account', backref=db.backref('parent', remote_side=[id]), lazy=True)
@@ -368,6 +369,7 @@ class JournalEntryLine(db.Model):
     account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
     debit = db.Column(db.Numeric(15, 4), default=0)
     credit = db.Column(db.Numeric(15, 4), default=0)
+    description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     account = db.relationship('Account', backref='journal_lines', lazy=True)
 
@@ -451,6 +453,21 @@ class RolePermission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     role = db.Column(db.String(32), nullable=False)
     permission = db.Column(db.String(64), nullable=False)
+
+
+class LoginAttempt(db.Model):
+    """Persistent store for login failures — survives server restarts."""
+    __tablename__ = 'login_attempt'
+    __table_args__ = (
+        db.Index('ix_login_attempt_username', 'username'),
+        db.Index('ix_login_attempt_ip', 'ip_address'),
+        db.Index('ix_login_attempt_at', 'attempted_at'),
+    )
+    id           = db.Column(db.Integer, primary_key=True)
+    ip_address   = db.Column(db.String(45), nullable=False)
+    username     = db.Column(db.String(80), nullable=False)
+    attempted_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    success      = db.Column(db.Boolean, nullable=False, default=False)
 
 
 class AuditLog(db.Model):
@@ -595,3 +612,22 @@ class EmployeeCommission(db.Model):
     created_at        = db.Column(db.DateTime, default=datetime.utcnow)
     employee          = db.relationship('Employee', backref='commissions', lazy=True)
     sale              = db.relationship('Sale', backref='commissions', lazy=True)
+
+
+class AccountingPeriod(db.Model):
+    """فترة محاسبية — تمنع نشر القيود في الفترات المغلقة."""
+    __tablename__ = 'accounting_period'
+    __table_args__ = (
+        db.Index('ix_accounting_period_status', 'status'),
+        db.Index('ix_accounting_period_start', 'start_date'),
+    )
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(128), nullable=False)
+    start_date    = db.Column(db.Date, nullable=False)
+    end_date      = db.Column(db.Date, nullable=False)
+    status        = db.Column(db.String(16), nullable=False, default='open')  # open | closed
+    closed_at     = db.Column(db.DateTime, nullable=True)
+    closed_by_id  = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    closed_by     = db.relationship('User', foreign_keys='AccountingPeriod.closed_by_id',
+                                    backref='closed_periods', lazy=True)

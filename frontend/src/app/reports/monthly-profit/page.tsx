@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  Area, Bar, CartesianGrid, ComposedChart, Legend, Line,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { TrendingUp, TrendingDown, Download, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -19,14 +21,21 @@ const PERIOD_OPTIONS = [
 ]
 
 function StatCard({ label, value, sub, positive }: { label: string; value: string; sub?: string; positive?: boolean }) {
+  const reduceMotion = useReducedMotion()
+
   return (
-    <div className="glass rounded-lg p-4">
+    <motion.div
+      whileHover={reduceMotion ? undefined : { y: -4, scale: 1.01 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+      className="glass group relative overflow-hidden rounded-lg p-4"
+    >
+      <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
       <p className="text-[11px] text-muted-foreground mb-1">{label}</p>
       <p className={cn('font-numeric text-lg font-bold', positive === true ? 'text-emerald-400' : positive === false ? 'text-rose-400' : 'text-foreground')}>
         {value}
       </p>
       {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
-    </div>
+    </motion.div>
   )
 }
 
@@ -43,8 +52,8 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }: any) => {
       <p className="font-semibold text-foreground mb-2">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex justify-between gap-4">
-          <span style={{ color: p.fill }}>{p.name}</span>
-          <span className="font-numeric font-medium">{formatMoney(p.value, 'IQD')}</span>
+          <span style={{ color: p.color }}>{p.name}</span>
+          <span className="font-numeric font-medium">{Number(p.value).toLocaleString('ar-IQ')} مليون</span>
         </div>
       ))}
     </div>
@@ -53,6 +62,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }: any) => {
 
 export default function MonthlyProfitPage() {
   const [months, setMonths] = useState(12)
+  const reduceMotion = useReducedMotion()
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['monthly-profit', months],
@@ -134,23 +144,39 @@ export default function MonthlyProfitPage() {
       )}
 
       {/* Chart */}
-      <div className="glass rounded-lg p-4">
-        <p className="text-xs font-semibold text-muted-foreground mb-4">بالمليون دينار</p>
+      <div className="glass relative overflow-hidden rounded-xl p-4 sm:p-5">
+        <div className="pointer-events-none absolute -left-16 top-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="relative mb-5 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-foreground">اتجاه الأداء المالي</p>
+            <p className="text-[11px] text-muted-foreground">القيم بالمليون دينار عراقي</p>
+          </div>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] text-muted-foreground">تفاعلي</span>
+        </div>
         {isLoading ? (
           <Skeleton className="h-64 w-full rounded-lg" />
         ) : chartData && (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData} barGap={2} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={chartData} barGap={1} barCategoryGap="24%" margin={{ top: 14, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="revenueBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#818cf8" /><stop offset="100%" stopColor="#4f46e5" stopOpacity={0.35} /></linearGradient>
+                <linearGradient id="costBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fbbf24" /><stop offset="100%" stopColor="#d97706" stopOpacity={0.3} /></linearGradient>
+                <linearGradient id="expenseBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fb7185" /><stop offset="100%" stopColor="#be123c" stopOpacity={0.3} /></linearGradient>
+                <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34d399" stopOpacity={0.3} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                <filter id="profitGlow"><feGaussianBlur stdDeviation="2.5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+              </defs>
+              <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="rgba(255,255,255,0.06)" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={40} />
               <Tooltip content={<CUSTOM_TOOLTIP />} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="الإيرادات"     fill="#6366f1" radius={[3,3,0,0]} />
-              <Bar dataKey="تكلفة البضاعة" fill="#f59e0b" radius={[3,3,0,0]} />
-              <Bar dataKey="المصاريف"      fill="#ef4444" radius={[3,3,0,0]} />
-              <Bar dataKey="الربح الصافي"  fill="#10b981" radius={[3,3,0,0]} />
-            </BarChart>
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />
+              <Area type="monotone" dataKey="الربح الصافي" fill="url(#profitArea)" stroke="none" isAnimationActive={!reduceMotion} animationDuration={1100} />
+              <Bar dataKey="الإيرادات" fill="url(#revenueBar)" radius={[6,6,1,1]} maxBarSize={30} isAnimationActive={!reduceMotion} animationDuration={900} />
+              <Bar dataKey="تكلفة البضاعة" fill="url(#costBar)" radius={[6,6,1,1]} maxBarSize={30} isAnimationActive={!reduceMotion} animationBegin={100} animationDuration={900} />
+              <Bar dataKey="المصاريف" fill="url(#expenseBar)" radius={[6,6,1,1]} maxBarSize={30} isAnimationActive={!reduceMotion} animationBegin={180} animationDuration={900} />
+              <Line type="monotone" dataKey="الربح الصافي" stroke="#34d399" strokeWidth={3} dot={{ r: 3, fill: '#07111f', stroke: '#6ee7b7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', stroke: '#d1fae5', strokeWidth: 2 }} style={{ filter: 'url(#profitGlow)' }} isAnimationActive={!reduceMotion} animationBegin={250} animationDuration={1200} />
+            </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   TrendingUp, Plus, Car, User,
@@ -44,6 +45,7 @@ export default function SalesPage() {
   const [page,      setPage]      = useState(1)
   const [exporting, setExporting] = useState(false)
   const PER_PAGE = 20
+  const router = useRouter()
 
   const params = {
     page,
@@ -199,6 +201,8 @@ export default function SalesPage() {
             {items.map((sale) => (
               <tr
                 key={sale.id}
+                data-clickable
+                onClick={() => router.push(`/sales/${sale.id}`)}
               >
                 <td>
                   <p className="font-code text-xs font-semibold text-primary">{sale.invoice_number}</p>

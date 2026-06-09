@@ -1,4 +1,5 @@
-/** @type {import('tailwindcss').Config} */
+const colors = require('tailwindcss/colors');
+
 module.exports = {
   darkMode: ['class'],
   content: [
@@ -10,6 +11,10 @@ module.exports = {
     container: { center: true, padding: '2rem', screens: { '2xl': '1400px' } },
     extend: {
       colors: {
+        violet: colors.rose,
+        cyan: colors.stone,
+        blue: colors.red,
+        emerald: colors.emerald,
         border:      'hsl(var(--border))',
         input:       'hsl(var(--input))',
         ring:        'hsl(var(--ring))',
@@ -25,24 +30,24 @@ module.exports = {
 
         /* ── Brand palette ── */
         brand: {
-          blue:    '#2563eb',   /* primary CTA */
-          navy:    '#1d4ed8',   /* deeper blue */
+          blue:    '#ef1b2d',   /* primary automotive red */
+          navy:    '#991b2a',   /* deeper red */
           emerald: '#10b981',   /* accent / success */
           gold:    '#d4a44c',   /* prices, premium */
           silver:  '#94a3b8',   /* secondary labels */
-          carbon:  '#0d1526',   /* surface cards */
+          carbon:  '#111111',   /* surface cards */
         },
 
         /* ── Surface scale ── */
         surface: {
-          '0':     '#070d1c',
-          '1':     '#0d1526',
-          '2':     '#111e36',
-          '3':     '#172646',
-          '4':     '#1e3158',
-          DEFAULT: '#0d1526',
-          elevated:'#111e36',
-          overlay: '#172646',
+          '0':     '#070707',
+          '1':     '#111111',
+          '2':     '#171717',
+          '3':     '#202020',
+          '4':     '#292929',
+          DEFAULT: '#111111',
+          elevated:'#171717',
+          overlay: '#202020',
         },
       },
 
@@ -86,7 +91,7 @@ module.exports = {
         xl:           '0 16px 56px rgba(0,0,0,0.60)',
         glass:        '0 4px 24px rgba(0,0,0,0.50)',
         'glass-lg':   '0 8px 48px rgba(0,0,0,0.60)',
-        'glow-primary': '0 0 24px rgba(37,99,235,0.34)',
+        'glow-primary': '0 0 24px rgba(239,27,45,0.34)',
         'glow-success': '0 0 24px rgba(16,185,129,0.28)',
         'glow-alert':   '0 0 24px rgba(244,63,94,0.26)',
       },
@@ -94,12 +99,12 @@ module.exports = {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-mesh':
-          'radial-gradient(ellipse at 50% -5%, rgba(37,99,235,0.08) 0%, transparent 55%),' +
+          'radial-gradient(ellipse at 50% -5%, rgba(239,27,45,0.08) 0%, transparent 55%),' +
           'radial-gradient(ellipse at 0% 100%, rgba(16,185,129,0.04) 0%, transparent 50%)',
         'card-gradient':
           'linear-gradient(135deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.008) 100%)',
         'sidebar-gradient':
-          'linear-gradient(180deg, rgba(37,99,235,0.05) 0%, rgba(0,0,0,0) 40%)',
+          'linear-gradient(180deg, rgba(239,27,45,0.06) 0%, rgba(0,0,0,0) 40%)',
       },
 
       animation: {

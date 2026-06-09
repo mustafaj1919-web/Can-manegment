@@ -7,7 +7,7 @@ import {
   Scale, Search, TrendingDown, TrendingUp, X, XCircle,
 } from 'lucide-react'
 import { getTrialBalance, type TrialBalanceAccount } from '@/lib/api/accounting'
-import { formatMoney } from '@/lib/utils'
+import { cn, formatMoney } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -39,6 +39,7 @@ export default function TrialBalancePage() {
   const [search,   setSearch]   = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [exporting, setExporting] = useState(false)
+  const [isLocalLight, setIsLocalLight] = useState(false)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['trial-balance'],
@@ -101,6 +102,14 @@ export default function TrialBalancePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsLocalLight(p => !p)}
+            className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-white/5 bg-white/[0.02]"
+          >
+            {isLocalLight ? 'عرض الجدول داكن' : 'عرض الجدول فاتح'}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => refetch()}
             className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
             <RefreshCw className="h-3.5 w-3.5" />تحديث
@@ -175,7 +184,10 @@ export default function TrialBalancePage() {
       </div>
 
       {/* Table */}
-      <div className="glass overflow-hidden rounded-lg">
+      <div className={cn(
+        "glass overflow-hidden rounded-lg transition-colors duration-200",
+        isLocalLight && "bg-white border-slate-200 shadow-sm"
+      )}>
         {isLoading ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
@@ -189,7 +201,7 @@ export default function TrialBalancePage() {
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center">
             <Scale className="mx-auto mb-3 h-10 w-10 text-muted-foreground/25" />
-            <p className="font-medium text-foreground/70">
+            <p className={cn("font-medium transition-colors", isLocalLight ? "text-slate-700" : "text-foreground/70")}>
               {activeFilter ? 'لا توجد حسابات تطابق البحث' : 'لا توجد حسابات في الميزان'}
             </p>
             {activeFilter && (
@@ -200,38 +212,41 @@ export default function TrialBalancePage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className={cn("w-full min-w-[640px] text-sm transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>
               <thead>
-                <tr className="border-b border-white/[0.06] bg-white/[0.03]">
-                  <th className="px-5 py-3 text-start text-xs font-medium text-muted-foreground">رمز الحساب</th>
-                  <th className="px-4 py-3 text-start text-xs font-medium text-muted-foreground">اسم الحساب</th>
-                  <th className="px-4 py-3 text-start text-xs font-medium text-muted-foreground">النوع</th>
-                  <th className="px-4 py-3 text-end text-xs font-medium text-muted-foreground">
+                <tr className={cn("border-b transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06] bg-white/[0.03]")}>
+                  <th className={cn("px-5 py-3 text-start text-xs font-medium transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>رمز الحساب</th>
+                  <th className={cn("px-4 py-3 text-start text-xs font-medium transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>اسم الحساب</th>
+                  <th className={cn("px-4 py-3 text-start text-xs font-medium transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>النوع</th>
+                  <th className={cn("px-4 py-3 text-end text-xs font-medium transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>
                     <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3" />مدين</span>
                   </th>
-                  <th className="px-4 py-3 text-end text-xs font-medium text-muted-foreground">
+                  <th className={cn("px-4 py-3 text-end text-xs font-medium transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>
                     <span className="inline-flex items-center gap-1"><TrendingDown className="h-3 w-3" />دائن</span>
                   </th>
-                  <th className="px-4 py-3 text-end text-xs font-medium text-muted-foreground">الرصيد</th>
+                  <th className={cn("px-4 py-3 text-end text-xs font-medium transition-colors", isLocalLight ? "text-slate-500" : "text-muted-foreground")}>الرصيد</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((account) => (
-                  <tr key={account.code} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
-                    <td className="px-5 py-2.5 font-numeric text-xs font-bold text-cyan-300">{account.code}</td>
-                    <td className="px-4 py-2.5 text-xs text-foreground/90">{account.name}</td>
+                  <tr key={account.code} className={cn(
+                    "border-b transition-colors",
+                    isLocalLight ? "border-slate-100 hover:bg-slate-50" : "border-white/[0.03] hover:bg-white/[0.02]"
+                  )}>
+                    <td className={cn("px-5 py-2.5 font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-cyan-700" : "text-cyan-300")}>{account.code}</td>
+                    <td className={cn("px-4 py-2.5 text-xs transition-colors", isLocalLight ? "text-slate-800" : "text-foreground/90")}>{account.name}</td>
                     <td className="px-4 py-2.5">
                       <span className={`text-[10px] font-medium ${TYPE_TONE[account.type] ?? 'text-muted-foreground'}`}>
                         {TYPE_LABEL[account.type] ?? account.type}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-end font-numeric text-xs text-emerald-400/90">
+                    <td className={cn("px-4 py-2.5 text-end font-numeric text-xs transition-colors", isLocalLight ? "text-emerald-600" : "text-emerald-400/90")}>
                       {account.debit > 0 ? formatMoney(account.debit, 'IQD') : '—'}
                     </td>
-                    <td className="px-4 py-2.5 text-end font-numeric text-xs text-rose-400/90">
+                    <td className={cn("px-4 py-2.5 text-end font-numeric text-xs transition-colors", isLocalLight ? "text-rose-600" : "text-rose-400/90")}>
                       {account.credit > 0 ? formatMoney(account.credit, 'IQD') : '—'}
                     </td>
-                    <td className="px-4 py-2.5 text-end font-numeric text-xs font-bold text-foreground">
+                    <td className={cn("px-4 py-2.5 text-end font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-slate-900" : "text-foreground")}>
                       {formatMoney(account.balance, 'IQD')}
                     </td>
                   </tr>
@@ -240,15 +255,15 @@ export default function TrialBalancePage() {
               {/* Totals row */}
               {!activeFilter && data && (
                 <tfoot>
-                  <tr className="border-t border-white/[0.1] bg-white/[0.03]">
-                    <td colSpan={3} className="px-5 py-3 text-xs font-semibold text-foreground">الإجمالي</td>
-                    <td className="px-4 py-3 text-end font-numeric text-xs font-bold text-emerald-400">
+                  <tr className={cn("border-t transition-colors", isLocalLight ? "border-slate-300 bg-slate-100" : "border-white/[0.1] bg-white/[0.03]")}>
+                    <td colSpan={3} className={cn("px-5 py-3 text-xs font-semibold transition-colors", isLocalLight ? "text-slate-900" : "text-foreground")}>الإجمالي</td>
+                    <td className={cn("px-4 py-3 text-end font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-emerald-700" : "text-emerald-400")}>
                       {formatMoney(data.total_debit, 'IQD')}
                     </td>
-                    <td className="px-4 py-3 text-end font-numeric text-xs font-bold text-rose-400">
+                    <td className={cn("px-4 py-3 text-end font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-rose-700" : "text-rose-400")}>
                       {formatMoney(data.total_credit, 'IQD')}
                     </td>
-                    <td className="px-4 py-3 text-end font-numeric text-xs font-bold text-foreground">
+                    <td className={cn("px-4 py-3 text-end font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-slate-900" : "text-foreground")}>
                       {formatMoney(data.difference, 'IQD')}
                     </td>
                   </tr>

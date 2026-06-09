@@ -93,8 +93,8 @@ class Config:
     SECRET_KEY = _resolve_secret_key()
 
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE   = _CLOUD_MODE
-    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE   = _CLOUD_MODE          # True in cloud/HTTPS, False in desktop HTTP
+    SESSION_COOKIE_SAMESITE = 'Strict' if _CLOUD_MODE else 'Lax'  # Strict in cloud for stronger CSRF protection
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024

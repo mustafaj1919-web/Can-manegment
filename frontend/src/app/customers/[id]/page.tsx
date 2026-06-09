@@ -27,7 +27,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
-import { StatStrip } from '@/components/shared/StatStrip'
 
 const TYPE_LABEL: Record<string, string> = {
   Buyer: 'مشتري',
@@ -150,12 +149,22 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         </SectionCard>
       </div>
 
-      <StatStrip
-        stats={[
-          { label: 'فواتير البيع كـمشتري',  value: salesCount,     color: 'info' },
-          { label: 'فواتير الشراء كـبائع',  value: purchasesCount, color: 'info' },
-        ]}
-      />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="app-card flex items-center gap-3 rounded-xl px-4 py-3">
+          <CreditCard className="h-4 w-4 shrink-0 text-cyan-400/70" />
+          <div>
+            <p className="font-numeric text-lg font-bold text-foreground tabular-nums">{salesCount}</p>
+            <p className="text-[11px] text-muted-foreground">فواتير البيع كمشتري</p>
+          </div>
+        </div>
+        <div className="app-card flex items-center gap-3 rounded-xl px-4 py-3">
+          <Car className="h-4 w-4 shrink-0 text-amber-400/70" />
+          <div>
+            <p className="font-numeric text-lg font-bold text-foreground tabular-nums">{purchasesCount}</p>
+            <p className="text-[11px] text-muted-foreground">فواتير الشراء كبائع</p>
+          </div>
+        </div>
+      </div>
 
       {customer.customer_type === 'Buyer' && (
         <CustomerStatement customerId={id} customerName={displayName} />

@@ -13,6 +13,17 @@ export const apiClient = axios.create({
   xsrfHeaderName: 'X-XSRF-TOKEN',
 })
 
+export function getXsrfToken(): string {
+  if (typeof document === 'undefined') return ''
+
+  const prefix = 'XSRF-TOKEN='
+  const cookie = document.cookie
+    .split('; ')
+    .find((item) => item.startsWith(prefix))
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : ''
+}
+
 // FormData must set its own multipart boundary. The shared JSON header causes
 // Flask to receive an empty request.files collection.
 apiClient.interceptors.request.use((config) => {

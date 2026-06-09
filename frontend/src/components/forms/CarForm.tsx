@@ -265,7 +265,7 @@ export function CarForm({ car }: CarFormProps) {
                   onClick={handleVinDecode}
                   disabled={vinLoading || vin.trim().length !== 17}
                   title="فك شفرة الشاصي"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-secondary/30 text-muted-foreground transition-colors hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-secondary/30 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {vinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
                 </button>
@@ -397,7 +397,7 @@ export function CarForm({ car }: CarFormProps) {
               ))}
 
               {pendingPhotos.map((file, index) => (
-                <div key={`pending-${index}`} className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border border-cyan-500/30 bg-cyan-500/5">
+                <div key={`pending-${index}`} className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border border-primary/30 bg-primary/5">
                   <img
                     src={URL.createObjectURL(file)}
                     alt={file.name}
@@ -420,7 +420,7 @@ export function CarForm({ car }: CarFormProps) {
               <button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
-                className="flex h-24 w-24 flex-shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/50 text-muted-foreground hover:border-violet-500/40 hover:text-violet-400 transition-colors"
+                className="flex h-24 w-24 flex-shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
               >
                 <Plus className="h-5 w-5" />
                 <span className="text-[10px]">إضافة صورة</span>
@@ -428,7 +428,7 @@ export function CarForm({ car }: CarFormProps) {
             </div>
 
             {pendingPhotos.length > 0 && (
-              <p className="mt-3 text-xs text-cyan-400">
+              <p className="mt-3 text-xs text-primary">
                 <Upload className="me-1 inline h-3 w-3" />
                 {pendingPhotos.length} صورة ستُرفع بعد حفظ البيانات
               </p>
@@ -456,18 +456,28 @@ export function CarForm({ car }: CarFormProps) {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="ملاحظات إضافية اختيارية"
               rows={3}
-              className="w-full resize-none rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-violet-500/50 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+              className="w-full resize-none rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
             />
           </SectionCard>
 
         </div>
 
         {/* ── Sticky action bar ── */}
-        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-border/40 bg-background/95 py-4 backdrop-blur-sm">
-          <Button type="button" variant="ghost" onClick={() => router.back()} disabled={mutation.isPending}>
+        <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mt-8 flex items-center justify-end gap-3 border-t border-white/5 bg-black/60 py-4 backdrop-blur-md shadow-[0_-12px_40px_rgba(0,0,0,0.6)]">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            onClick={() => router.back()} 
+            disabled={mutation.isPending}
+            className="hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all duration-200"
+          >
             إلغاء
           </Button>
-          <Button type="submit" disabled={mutation.isPending} className="min-w-[150px] gap-2 bg-violet-600 text-white hover:bg-violet-500">
+          <Button 
+            type="submit" 
+            disabled={mutation.isPending} 
+            className="min-w-[150px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(239,27,45,0.2)] hover:shadow-[0_0_25px_rgba(239,27,45,0.35)] transition-all duration-300"
+          >
             {mutation.isPending ? (
               <><Loader2 className="h-4 w-4 animate-spin" />جاري الحفظ...</>
             ) : (

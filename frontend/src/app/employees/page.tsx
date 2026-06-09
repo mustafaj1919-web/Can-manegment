@@ -57,8 +57,8 @@ function EmployeeDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" dir="rtl">
-      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a1628] shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" dir="rtl">
+      <div className="w-full max-w-md rounded-xl border border-white/5 bg-[var(--card)] shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
           <h2 className="text-sm font-semibold text-white">
@@ -149,7 +149,7 @@ function EmployeeDialog({
             size="sm"
             disabled={mutation.isPending || !form.full_name.trim() || !form.phone.trim()}
             onClick={() => mutation.mutate()}
-            className="bg-[#1e3a5f] hover:bg-[#2d5490] text-white border border-[#2d5490]"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(239,27,45,0.2)]"
           >
             {mutation.isPending
               ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -171,8 +171,8 @@ function ConfirmDelete({
   emp: Employee; onConfirm: () => void; onCancel: () => void; busy: boolean
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" dir="rtl">
-      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a1628] p-6 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" dir="rtl">
+      <div className="w-full max-w-sm rounded-xl border border-white/5 bg-[var(--card)] p-6 shadow-2xl space-y-4">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-rose-400 shrink-0" />
           <h2 className="text-sm font-semibold text-foreground">حذف الموظف</h2>
@@ -225,7 +225,7 @@ export default function EmployeesPage() {
   const employees = data?.items ?? []
 
   return (
-    <div className="min-h-screen bg-[#07111f] text-foreground" dir="rtl">
+    <div className="min-h-screen bg-background text-foreground" dir="rtl">
       {/* dialogs */}
       {dialog === 'add' && (
         <EmployeeDialog
@@ -253,8 +253,8 @@ export default function EmployeesPage() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1e3a5f]/60 border border-[#2d5490]/40">
-              <Users className="h-4.5 w-4.5 text-[#5b9bd5]" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+              <Users className="h-4.5 w-4.5 text-primary" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white leading-tight">الموظفون</h1>
@@ -273,7 +273,7 @@ export default function EmployeesPage() {
             <Button
               size="sm"
               onClick={() => setDialog('add')}
-              className="bg-[#1e3a5f] hover:bg-[#2d5490] text-white border border-[#2d5490] gap-1.5"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-[0_0_15px_rgba(239,27,45,0.2)]"
             >
               <Plus className="h-3.5 w-3.5" />
               موظف جديد

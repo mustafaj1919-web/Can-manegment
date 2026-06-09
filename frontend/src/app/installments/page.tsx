@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -19,9 +20,25 @@ import type { InstallmentListItem } from '@/lib/api/installments'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { StatStrip } from '@/components/shared/StatStrip'
 import { FilterBar } from '@/components/shared/FilterBar'
 import { DataTable } from '@/components/shared/DataTable'
+
+function KpiCard({ icon, label, value, iconColor, iconBg }: {
+  icon: React.ReactNode; label: string; value: number | string
+  iconColor: string; iconBg: string
+}) {
+  return (
+    <div className="app-card rounded-xl p-4">
+      <div className={cn('mb-3 flex h-8 w-8 items-center justify-center rounded-lg', iconBg)}>
+        <span className={iconColor}>{icon}</span>
+      </div>
+      <p className="font-numeric text-2xl font-bold tabular-nums text-foreground">
+        {typeof value === 'number' ? value.toLocaleString('ar-EG') : value}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+    </div>
+  )
+}
 
 function toWaPhone(phone: string) {
   const d = phone.replace(/\D/g, '')
@@ -82,6 +99,7 @@ export default function InstallmentsPage() {
   const [filter, setFilter] = useState<InstallmentFilter>('all')
   const [page,   setPage]   = useState(1)
   const perPage = 20
+  const router = useRouter()
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['installments', page, filter],
@@ -106,34 +124,36 @@ export default function InstallmentsPage() {
         filtered={isFiltered}
       />
 
-      <StatStrip
-        stats={[
-          {
-            label: 'متأخرة',
-            value: isLoading ? '...' : (summary?.overdue_count ?? 0),
-            icon: <AlertTriangle className="h-4 w-4" />,
-            color: 'danger',
-          },
-          {
-            label: 'تستحق اليوم',
-            value: isLoading ? '...' : (summary?.due_today_count ?? 0),
-            icon: <Clock className="h-4 w-4" />,
-            color: 'warning',
-          },
-          {
-            label: 'الخطط النشطة',
-            value: isLoading ? '...' : (summary?.active_plans ?? 0),
-            icon: <CreditCard className="h-4 w-4" />,
-            color: 'info',
-          },
-          {
-            label: 'مسددة',
-            value: isLoading ? '...' : (summary?.paid_schedule_count ?? 0),
-            icon: <CheckCircle2 className="h-4 w-4" />,
-            color: 'success',
-          },
-        ]}
-      />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiCard
+          icon={<AlertTriangle className="h-4 w-4" />}
+          label="متأخرة"
+          value={isLoading ? '...' : (summary?.overdue_count ?? 0)}
+          iconColor="text-rose-400"
+          iconBg="bg-rose-500/10"
+        />
+        <KpiCard
+          icon={<Clock className="h-4 w-4" />}
+          label="تستحق اليوم"
+          value={isLoading ? '...' : (summary?.due_today_count ?? 0)}
+          iconColor="text-amber-400"
+          iconBg="bg-amber-500/10"
+        />
+        <KpiCard
+          icon={<CreditCard className="h-4 w-4" />}
+          label="الخطط النشطة"
+          value={isLoading ? '...' : (summary?.active_plans ?? 0)}
+          iconColor="text-blue-400"
+          iconBg="bg-blue-500/10"
+        />
+        <KpiCard
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label="مسددة"
+          value={isLoading ? '...' : (summary?.paid_schedule_count ?? 0)}
+          iconColor="text-emerald-400"
+          iconBg="bg-emerald-500/10"
+        />
+      </div>
 
       <FilterBar
         selects={[
@@ -178,7 +198,11 @@ export default function InstallmentsPage() {
             return (
               <div
                 key={plan.id}
-                className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/40"
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/installments/${plan.id}`)}
+                onKeyDown={(e) => e.key === 'Enter' && router.push(`/installments/${plan.id}`)}
+                className="flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
               >
                 {/* Status icon well — semantic colors retained */}
                 <div className={cn(

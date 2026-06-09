@@ -45,8 +45,8 @@ function ConfirmDialog({
   danger?: boolean
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" dir="rtl">
-      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a1628] p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" dir="rtl">
+      <div className="w-full max-w-sm rounded-xl border border-white/5 bg-[var(--card)] p-6 shadow-2xl">
         <div className="mb-1 flex items-center gap-2">
           <AlertTriangle className={cn('h-5 w-5', danger ? 'text-rose-400' : 'text-amber-400')} />
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
@@ -128,8 +128,8 @@ export default function BackupPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-500/20 bg-blue-500/10">
-            <DatabaseBackup className="h-5 w-5 text-blue-300" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+            <DatabaseBackup className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground">النسخ الاحتياطي والاستعادة</h1>
@@ -160,7 +160,7 @@ export default function BackupPage() {
           </Button>
           <Button
             size="sm"
-            className="gap-2 bg-blue-600 text-white hover:bg-blue-500"
+            className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(239,27,45,0.2)]"
             onClick={() => createMutation.mutate()}
             disabled={busy}
           >
