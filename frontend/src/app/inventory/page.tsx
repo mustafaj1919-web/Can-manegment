@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion, type Variants } from 'framer-motion'
 import {
   ArrowUpRight, Car, Download,
-  Fuel, Gauge, LayoutGrid, List, Palette, Plus, Search, Settings, X,
+  Fuel, Gauge, LayoutGrid, List, Palette, Plus, Search, Settings, X, Clock,
 } from 'lucide-react'
 import { cn, formatMoney, getStatusVariant, photoUrl, translateStatus } from '@/lib/utils'
 import { getCars } from '@/lib/api/inventory'
@@ -44,6 +44,17 @@ const TRANS_LABEL: Record<string, string> = {
 }
 const CONDITION_LABEL: Record<string, string> = {
   New: 'جديدة', Used: 'مستعملة', Damaged: 'متضررة',
+}
+
+function getDaysInInventory(createdAt: string | null) {
+  if (!createdAt) return 'مضاف حديثاً'
+  const createdDate = new Date(createdAt)
+  const diffTime = Math.abs(new Date().getTime() - createdDate.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  if (diffDays <= 1) return 'اليوم'
+  if (diffDays === 2) return 'أمس'
+  if (diffDays <= 10) return `منذ ${diffDays} أيام`
+  return `منذ ${diffDays} يوماً`
 }
 
 // ── Framer-Motion Variants ───────────────────────────────────────────────────
@@ -484,14 +495,16 @@ export default function InventoryPage() {
                     const margin = sp > 0 && pp > 0
                       ? Math.round(((sp - pp) / pp) * 100)
                       : null
+                    
+                    const daysInStock = getDaysInInventory(car.created_at)
 
                     return (
                       <motion.div key={car.id} variants={cardVariants}>
                         <div
-                          className="vehicle-card group block overflow-hidden rounded-xl bg-[#111111] border border-white/5 hover:border-red-500/30 transition-all duration-300"
+                          className="group bg-[#0e0e0e] border border-white/[0.05] hover:border-red-500/30 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[0_12px_30px_rgba(239,27,45,0.12)] flex flex-col h-full"
                         >
-                          {/* Image Link container */}
-                          <Link href={`/inventory/${car.id}`} className="block relative h-64 overflow-hidden bg-[#161616]">
+                          {/* Photo Container */}
+                          <div className="relative h-64 overflow-hidden bg-[#070707] w-full shrink-0">
                             {car.cover_photo ? (
                               <img
                                 src={photoUrl(
@@ -499,114 +512,111 @@ export default function InventoryPage() {
                                   (car.cover_photo as CarPhoto).subfolder ?? 'vehicles',
                                 )}
                                 alt={`${car.brand} ${car.model}`}
-                                className="h-full w-full object-cover transition-all duration-500 group-hover:scale-[1.05]"
+                                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
                                 loading="lazy"
                               />
                             ) : (
-                              <div className="relative flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_110%,rgba(239,27,45,0.12),transparent_46%),linear-gradient(145deg,#161616,#090909)] p-6">
+                              <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_110%,rgba(239,27,45,0.1),transparent_50%)] p-6">
                                 <img
                                   src="/fallback_car.png"
                                   alt="Premium Showroom Car"
-                                  className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.04] drop-shadow-[0_15px_30px_rgba(239,27,45,0.35)]"
+                                  className="h-full w-full object-contain transition-transform duration-700 group-hover:scale-[1.03] drop-shadow-[0_12px_25px_rgba(239,27,45,0.25)]"
                                   loading="lazy"
                                 />
-                                <span className="absolute top-3 start-3 text-[9px] font-black uppercase tracking-widest text-white/30 font-family-cairo">
-                                  {car.brand}
-                                </span>
                               </div>
                             )}
-                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/85 to-transparent" />
+
+                            {/* Soft dark overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e0e] via-transparent to-transparent opacity-80" />
+
+                            {/* Floating Badges */}
                             <span className={cn(
-                              'absolute bottom-3 start-3 rounded-full px-2.5 py-1 text-[10px] font-bold border backdrop-blur-md',
+                              'absolute top-3.5 start-3.5 rounded-full px-3 py-1 text-[10px] font-bold border backdrop-blur-md shadow-sm',
                               getStatusVariant(car.status),
                             )}>
                               {translateStatus(car.status)}
                             </span>
-                            {car.condition && car.condition !== 'New' && (
-                              <span className="absolute bottom-3 end-3 rounded-full bg-black/60 border border-white/10 px-2.5 py-1 text-[10px] font-bold text-white/80 backdrop-blur-md">
-                                {CONDITION_LABEL[car.condition] ?? car.condition}
-                              </span>
-                            )}
-                          </Link>
 
-                          {/* Card body */}
-                          <div className="space-y-3 p-4">
-                            <Link href={`/inventory/${car.id}`} className="block">
-                              <p className="text-[15px] font-black leading-tight text-white font-family-cairo hover:text-red-500 transition-colors">
+                            <span className="absolute top-3.5 end-3.5 rounded-full bg-black/65 border border-white/10 px-3 py-1 text-[10px] font-bold text-white/90 backdrop-blur-md shadow-sm flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-red-500" />
+                              {daysInStock}
+                            </span>
+                          </div>
+
+                          {/* Info Body */}
+                          <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{car.manufacturing_year}</span>
+                                <span className="text-[10px] text-neutral-500">{car.condition ? (CONDITION_LABEL[car.condition] ?? car.condition) : '—'}</span>
+                              </div>
+                              <h3 className="text-lg font-black text-white group-hover:text-red-500 transition-colors font-family-cairo leading-snug line-clamp-1">
                                 {car.brand} {car.model}
-                              </p>
-                              <p className="mt-1 text-[10px] text-neutral-400/80">
-                                {car.manufacturing_year}{car.trim ? ` · ${car.trim}` : ''}
-                              </p>
-                            </Link>
-
-                            {/* Spec chips */}
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              <span className={cn(
-                                "inline-flex items-center gap-1 rounded-full bg-white/[0.03] border border-white/[0.07] px-2.5 py-1 text-[9px]",
-                                car.fuel_type ? "text-neutral-300" : "text-neutral-600"
-                              )}>
-                                <Fuel className="h-2.5 w-2.5 opacity-80 text-red-500" />
-                                {car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : "غير محدد"}
-                              </span>
-
-                              <span className={cn(
-                                "inline-flex items-center gap-1 rounded-full bg-white/[0.03] border border-white/[0.07] px-2.5 py-1 text-[9px]",
-                                car.transmission ? "text-neutral-300" : "text-neutral-600"
-                              )}>
-                                <Settings className="h-2.5 w-2.5 opacity-80 text-red-500" />
-                                {car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : "غير محدد"}
-                              </span>
-
-                              <span className={cn(
-                                "inline-flex items-center gap-1 rounded-full bg-white/[0.03] border border-white/[0.07] px-2.5 py-1 text-[9px]",
-                                car.mileage !== undefined && car.mileage !== null ? "text-neutral-300" : "text-neutral-600"
-                              )}>
-                                <Gauge className="h-2.5 w-2.5 opacity-80 text-red-500" />
-                                {car.mileage !== undefined && car.mileage !== null ? `${car.mileage.toLocaleString('ar-EG')} كم` : "غير محدد"}
-                              </span>
+                              </h3>
+                              <p className="text-xs text-neutral-400 line-clamp-1">{car.trim || 'فئة قياسية'}</p>
                             </div>
 
-                            {/* Price section */}
-                            <div className="flex items-center justify-between rounded-lg bg-white/[0.025] border border-white/[0.055] px-3 py-2.5 mt-2">
-                              <div className="min-w-0">
-                                <p className="font-numeric text-[17px] font-black leading-none text-red-500">
-                                  {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
-                                </p>
-                                <p className="font-numeric mt-1 text-[9px] text-neutral-500">
+                            {/* Specs bar */}
+                            <div className="grid grid-cols-3 gap-2 py-2.5 border-y border-white/[0.04] text-[10px] text-neutral-400 font-bold">
+                              <div className="flex flex-col items-center justify-center text-center py-1 bg-white/[0.01] rounded-lg border border-white/[0.02]">
+                                <Fuel className="h-3.5 w-3.5 text-red-500/80 mb-1" />
+                                <span className="truncate w-full px-1">{car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : '—'}</span>
+                              </div>
+                              <div className="flex flex-col items-center justify-center text-center py-1 bg-white/[0.01] rounded-lg border border-white/[0.02]">
+                                <Settings className="h-3.5 w-3.5 text-red-500/80 mb-1" />
+                                <span className="truncate w-full px-1">{car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : '—'}</span>
+                              </div>
+                              <div className="flex flex-col items-center justify-center text-center py-1 bg-white/[0.01] rounded-lg border border-white/[0.02]">
+                                <Gauge className="h-3.5 w-3.5 text-red-500/80 mb-1" />
+                                <span>{car.mileage != null ? `${car.mileage.toLocaleString()} كم` : '—'}</span>
+                              </div>
+                            </div>
+
+                            {/* Internal Price Info Card */}
+                            <div className="flex items-center justify-between rounded-xl bg-white/[0.02] border border-white/[0.04] p-3.5 hover:bg-white/[0.04] transition-all">
+                              <div className="flex flex-col">
+                                <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider">سعر البيع المعروض</span>
+                                <span className="font-numeric text-lg font-black text-white mt-0.5">
+                                  {car.selling_price ? formatMoney(car.selling_price, car.currency) : 'يحدد عند الطلب'}
+                                </span>
+                                <span className="font-numeric text-[10px] text-neutral-500 mt-1 flex items-center gap-1">
+                                  <span className="w-1 h-1 rounded-full bg-neutral-600" />
                                   شراء: {formatMoney(car.purchase_price, car.currency)}
-                                </p>
+                                </span>
                               </div>
                               {margin !== null && (
-                                <span className={cn(
-                                  'shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black border',
-                                  margin >= 0
-                                    ? 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400'
-                                    : 'bg-rose-500/10 border-rose-500/15 text-rose-400',
-                                )}>
-                                  {margin >= 0 ? '+' : ''}{margin}%
-                                </span>
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className="text-[9px] text-neutral-500 font-bold">الهامش المتوقع</span>
+                                  <span className={cn(
+                                    'shrink-0 rounded-full px-2.5 py-0.5 text-[9px] font-black border backdrop-blur-md shadow-sm',
+                                    margin >= 0
+                                      ? 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400'
+                                      : 'bg-rose-500/10 border-rose-500/15 text-rose-400',
+                                  )}>
+                                    {margin >= 0 ? '+' : ''}{margin}%
+                                  </span>
+                                </div>
                               )}
                             </div>
 
-                            {/* Redesigned Quick Action buttons */}
-                            <div className="grid grid-cols-3 gap-1.5 border-t border-white/5 pt-3 mt-2">
-                              <Button asChild size="sm" className="col-span-2 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] h-8">
+                            {/* Quick Actions Panel */}
+                            <div className="grid grid-cols-3 gap-2 pt-2">
+                              <Button asChild size="sm" className="col-span-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs h-9 rounded-xl transition-all shadow-md shadow-red-600/10">
                                 <Link href={`/inventory/${car.id}`}>
                                   عرض التفاصيل
                                 </Link>
                               </Button>
 
-                              <div className="flex gap-1 justify-end">
-                                <Button asChild size="icon-sm" variant="ghost" className="h-8 w-8 rounded bg-white/5 border border-white/5 text-neutral-400 hover:text-white hover:bg-white/10" title="تعديل">
+                              <div className="flex gap-1.5 justify-end">
+                                <Button asChild size="icon" variant="ghost" className="h-9 w-9 rounded-xl bg-white/[0.04] border border-white/[0.07] text-neutral-400 hover:text-white hover:bg-white/[0.08]" title="تعديل">
                                   <Link href={`/inventory/${car.id}/edit`}>
-                                    <Settings className="h-3.5 w-3.5" />
+                                    <Settings className="h-4 w-4" />
                                   </Link>
                                 </Button>
                                 {car.status === 'Available' && (
-                                  <Button asChild size="icon-sm" variant="ghost" className="h-8 w-8 rounded bg-red-600/10 border border-red-500/10 text-red-500 hover:text-white hover:bg-red-600" title="تسجيل بيع">
+                                  <Button asChild size="icon" variant="ghost" className="h-9 w-9 rounded-xl bg-red-600/10 border border-red-500/10 text-red-500 hover:text-white hover:bg-red-600" title="تسجيل بيع">
                                     <Link href={`/sales/new?car_id=${car.id}`}>
-                                      <ArrowUpRight className="h-3.5 w-3.5" />
+                                      <ArrowUpRight className="h-4 w-4" />
                                     </Link>
                                   </Button>
                                 )}

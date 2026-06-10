@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import type { ElementType } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
@@ -74,6 +75,15 @@ function displayValue(value?: string | number | null) {
 export default function CarSpecificationPage() {
   const params = useParams<{ id: string }>()
   const carId = Number(params.id)
+
+  const [qrUrl, setQrUrl] = useState('')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const publicUrl = `${window.location.origin}/showroom/${carId}`
+      setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicUrl)}`)
+    }
+  }, [carId])
 
   const { data: car, isLoading, isError } = useQuery({
     queryKey: ['car-spec', carId],
@@ -197,7 +207,11 @@ export default function CarSpecificationPage() {
           {/* QR Code and Bottom Highlights */}
           <div className="spec-right-bottom">
             <div className="spec-qr-card">
-              <QrCode className="spec-qr-icon" />
+              {qrUrl ? (
+                <img src={qrUrl} alt="رمز الاستجابة السريعة" className="spec-qr-img" />
+              ) : (
+                <QrCode className="spec-qr-icon" />
+              )}
               <div className="spec-qr-text">
                 <strong>مسح الرمز (QR)</strong>
                 <span>لرؤية كامل تفاصيل السيارة والمستندات</span>
@@ -775,6 +789,13 @@ export default function CarSpecificationPage() {
           height: 32px;
           color: #0f172a;
           flex-shrink: 0;
+        }
+        .spec-qr-img {
+          width: 48px;
+          height: 48px;
+          object-fit: contain;
+          flex-shrink: 0;
+          border-radius: 4px;
         }
         .spec-qr-text {
           display: flex;
