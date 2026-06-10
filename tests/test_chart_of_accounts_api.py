@@ -37,6 +37,11 @@ class ChartOfAccountsApiTest(unittest.TestCase):
 
         with cls.app.app_context():
             seed_chart_of_accounts()
+            branch = Branch.query.filter_by(is_main=True).first()
+            if not branch:
+                branch = Branch(name='Main Branch', is_main=True)
+                db.session.add(branch)
+                db.session.flush()
             user = User(
                 username='accountant',
                 role='Accountant',
@@ -406,7 +411,7 @@ class ChartOfAccountsApiTest(unittest.TestCase):
 
             self.assertRegex(backup['filename'], r'^backup_\d{8}_\d{6}(?:_\d+)?\.zip$')
             self.assertTrue(os.path.exists(backup['path']))
-            self.assertEqual(os.path.dirname(backup['path']), os.environ['BACKUP_FOLDER'])
+            self.assertEqual(os.path.dirname(backup['path']), Config.BACKUP_FOLDER)
 
             with zipfile.ZipFile(backup['path'], 'r') as archive:
                 names = set(archive.namelist())
@@ -433,7 +438,14 @@ class ChartOfAccountsApiTest(unittest.TestCase):
         with self.app.app_context():
             backup = create_backup_archive(created_by='tester', reason='manual')
 
-        response = self.client.delete(f"/api/backups/{backup['filename']}")
+        csrf_token = 'backup-delete-test'
+        with self.client.session_transaction() as session:
+            session['csrf_token'] = csrf_token
+
+        response = self.client.delete(
+            f"/api/backups/{backup['filename']}",
+            headers={'X-XSRF-TOKEN': csrf_token},
+        )
 
         self.assertEqual(response.status_code, 405)
         self.assertTrue(os.path.exists(backup['path']))
@@ -442,12 +454,17 @@ class ChartOfAccountsApiTest(unittest.TestCase):
         self.authenticate_owner()
         suffix = uuid4().hex[:8]
 
+        csrf_token = f'accounting-flow-{suffix}'
+        with self.client.session_transaction() as session:
+            session['csrf_token'] = csrf_token
+        headers = {'X-XSRF-TOKEN': csrf_token}
+
         seller_response = self.client.post('/api/customers', json={
             'name': f'Seller {suffix}',
             'phone': '07000000001',
             'id_number': f'SELLER-{suffix}',
             'customer_type': 'Seller',
-        })
+        }, headers=headers)
         self.assertEqual(seller_response.status_code, 201, seller_response.get_data(as_text=True))
         seller_id = seller_response.get_json()['id']
 
@@ -465,7 +482,7 @@ class ChartOfAccountsApiTest(unittest.TestCase):
             'currency': 'IQD',
             'payment_method': 'Cash',
             'purchase_date': '2026-06-05',
-        })
+        }, headers=headers)
         self.assertEqual(purchase_response.status_code, 201, purchase_response.get_data(as_text=True))
         purchase_id = purchase_response.get_json()['id']
 
@@ -474,7 +491,7 @@ class ChartOfAccountsApiTest(unittest.TestCase):
             'phone': '07000000002',
             'id_number': f'BUYER-{suffix}',
             'customer_type': 'Buyer',
-        })
+        }, headers=headers)
         self.assertEqual(buyer_response.status_code, 201, buyer_response.get_data(as_text=True))
         buyer_id = buyer_response.get_json()['id']
 
@@ -494,7 +511,7 @@ class ChartOfAccountsApiTest(unittest.TestCase):
             'currency': 'IQD',
             'payment_method': 'Cash',
             'sale_date': '2026-06-05',
-        })
+        }, headers=headers)
         self.assertEqual(sale_response.status_code, 201, sale_response.get_data(as_text=True))
         sale_id = sale_response.get_json()['id']
 
@@ -505,7 +522,7 @@ class ChartOfAccountsApiTest(unittest.TestCase):
             'category': 'fuel',
             'payment_method': 'Cash',
             'expense_date': '2026-06-05',
-        })
+        }, headers=headers)
         self.assertEqual(expense_response.status_code, 201, expense_response.get_data(as_text=True))
         expense_id = expense_response.get_json()['id']
 

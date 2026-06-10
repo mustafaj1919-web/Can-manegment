@@ -99,18 +99,14 @@ export function AppShell({ children }: AppShellProps) {
       />
 
       {/* Main */}
-      <motion.div
-        className="app-shell-main flex min-h-screen flex-col"
-        animate={{ marginInlineStart: collapsed ? COLLAPSED_W : EXPANDED_W }}
-        transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-      >
+      <div className="app-shell-root flex min-h-screen flex-col w-full">
         <TopNav
           collapsed={collapsed}
           onToggleSidebar={toggle}
           onToggleMobile={toggleMobile}
         />
         <main className="app-shell-content flex-1 overflow-auto">
-          <div className="page-container" style={{ paddingTop: 16 }}>
+          <div className="page-container pt-4">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={pathname}
@@ -127,7 +123,7 @@ export function AppShell({ children }: AppShellProps) {
             </AnimatePresence>
           </div>
         </main>
-      </motion.div>
+      </div>
     </div>
   )
 }

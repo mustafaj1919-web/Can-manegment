@@ -87,6 +87,20 @@ export async function getCarById(id: number): Promise<Car> {
   return get<Car>(`/inventory/${id}`)
 }
 
+export async function getPublicCars(params: {
+  page?: number; per_page?: number; search?: string
+} = {}): Promise<CarsListResponse> {
+  const qs = new URLSearchParams()
+  qs.set('page',     String(params.page     ?? 1))
+  qs.set('per_page', String(params.per_page ?? 25))
+  if (params.search) qs.set('search', params.search)
+  return get<CarsListResponse>(`/public/inventory?${qs.toString()}`)
+}
+
+export async function getPublicCarById(id: number): Promise<Car> {
+  return get<Car>(`/public/inventory/${id}`)
+}
+
 export async function createCar(payload: CarPayload): Promise<Car> {
   return post<Car>('/inventory', payload)
 }

@@ -1,4 +1,4 @@
-﻿/** @type {import('next').NextConfig} */
+/** @type {import('next').NextConfig} */
 
 // FLASK_BACKEND_URL: override to point Next.js proxy at a different Flask host.
 // Defaults to localhost:5000 (desktop mode).

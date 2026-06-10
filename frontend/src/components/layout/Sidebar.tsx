@@ -424,21 +424,6 @@ export function Sidebar({ collapsed, mobileOpen, onCollapse, onCloseMobile }: Si
 
   return (
     <TooltipProvider>
-      <motion.aside
-        animate={{ width: collapsed ? 56 : 240 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 30 }}
-        className={cn(sharedClasses, 'fixed inset-y-0 start-0 hidden lg:flex flex-col')}
-        style={{ ...sharedStyle, minWidth: 0 }}
-      >
-        <SidebarInner
-          collapsed={collapsed}
-          pathname={pathname}
-          onCollapse={onCollapse}
-          activeBranchName={activeBranch?.name}
-          alertCount={alertCount}
-        />
-      </motion.aside>
-
       <AnimatePresence>
         {mobileOpen && (
           <motion.aside

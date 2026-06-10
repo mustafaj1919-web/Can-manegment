@@ -8073,7 +8073,7 @@ def create_app():
         Keep scanner payloads small enough for the browser.
         High-DPI WIA scans can be huge; sending them as base64 can freeze the UI.
         """
-        from PIL import Image, ImageOps
+        from PIL import Image, ImageOps  # type: ignore[import-untyped]
         import io
 
         with Image.open(path) as img:
@@ -8564,6 +8564,68 @@ def create_app():
                 for p in (c.photos or [])
             ],
         }
+
+    def _public_car_payload(c):
+        return {
+            'id':                c.id,
+            'branch_id':         c.branch_id,
+            'branch':            branch_json(c.branch),
+            'brand':             c.brand,
+            'model':             c.model,
+            'manufacturing_year': c.manufacturing_year,
+            'trim':              c.trim,
+            'condition':         c.condition,
+            'color':             c.color,
+            'vin':               c.vin,
+            'plate_number':      c.plate_number,
+            'plate_status':      c.plate_status,
+            'mileage':           c.mileage,
+            'engine_size':       c.engine_size,
+            'cylinders':         c.cylinders,
+            'transmission':      c.transmission,
+            'fuel_type':         c.fuel_type,
+            'import_country':    c.import_country,
+            'seat_count':        c.seat_count,
+            'seat_material':     c.seat_material,
+            'selling_price':     c.selling_price,
+            'currency':          c.currency,
+            'status':            c.status,
+            'created_at':        c.created_at.isoformat() if c.created_at else None,
+            'photos': [
+                {'id': p.id, 'filename': p.filename, 'subfolder': CAR_PHOTO_SUBFOLDER}
+                for p in (c.photos or [])
+            ],
+            'cover_photo': (
+                {'id': c.photos[0].id, 'filename': c.photos[0].filename, 'subfolder': CAR_PHOTO_SUBFOLDER}
+                if c.photos else None
+            ),
+        }
+
+    @app.route('/api/public/inventory', methods=['GET'])
+    def api_public_inventory():
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 25)), 100)
+        search = request.args.get('search')
+
+        query = scoped_query(Car).filter_by(status='Available')
+        if search:
+            q = f"%{search}%"
+            query = query.filter(or_(Car.brand.ilike(q), Car.model.ilike(q), Car.vin.ilike(q)))
+
+        from sqlalchemy.orm import joinedload as _jl, subqueryload as _sl
+        total = query.count()
+        items = query.options(
+            _sl(Car.photos), _jl(Car.branch)
+        ).order_by(Car.created_at.desc()).offset((page-1)*per_page).limit(per_page).all()
+        results = []
+        for c in items:
+            results.append(_public_car_payload(c))
+        return jsonify({'total': total, 'page': page, 'per_page': per_page, 'items': results})
+
+    @app.route('/api/public/inventory/<int:car_id>', methods=['GET'])
+    def api_public_car_detail(car_id):
+        c = Car.query.get_or_404(car_id)
+        return jsonify(_public_car_payload(c))
 
     @app.route('/api/inventory/<int:car_id>', methods=['GET'])
     @api_login_required
