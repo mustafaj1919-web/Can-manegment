@@ -5,7 +5,7 @@ import { formatNumber } from '@/lib/utils'
 export default function VehicleCard({ vehicle }){
   return (
     <div className="bg-white/4 border border-white/6 rounded-2xl p-4 flex flex-col gap-3 hover:shadow-lg transition">
-      <div className="h-40 bg-white/6 rounded-lg flex items-center justify-center">صورة السيارة</div>
+      <div className="h-40 bg-white/6 rounded-lg flex items-center justify-center glare-effect">صورة السيارة</div>
       <div className="flex justify-between items-start">
         <div>
           <div className="font-extrabold">{vehicle.brand} {vehicle.model} ({vehicle.manufacturing_year || ''})</div>

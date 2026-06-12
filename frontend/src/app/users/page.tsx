@@ -89,7 +89,7 @@ function ResetPasswordDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" dir="rtl">
       <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a1628] p-6 shadow-2xl">
         <h2 className="text-sm font-semibold text-foreground mb-4">
-          إعادة تعيين كلمة مرور: <span className="text-violet-300">{user.username}</span>
+          إعادة تعيين كلمة مرور: <span className="text-primary">{user.username}</span>
         </h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -106,7 +106,7 @@ function ResetPasswordDialog({
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={mutation.isPending}>إلغاء</Button>
             <Button size="sm" type="submit" disabled={mutation.isPending}
-              className="bg-violet-600 hover:bg-violet-500 text-white">
+              className="bg-primary hover:bg-primary/90 text-primary-foreground">
               {mutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'حفظ'}
             </Button>
           </div>
@@ -143,7 +143,7 @@ function UserRow({
           </div>
           <div>
             <p className="text-sm font-medium text-foreground">{user.username}</p>
-            {isSelf && <p className="text-[10px] text-violet-400">أنت</p>}
+            {isSelf && <p className="text-[10px] text-primary/70">أنت</p>}
           </div>
         </div>
       </td>
@@ -155,7 +155,7 @@ function UserRow({
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {user.branch?.name ?? (user.branch_id ? `فرع ${user.branch_id}` : '—')}
         {user.can_access_all_branches && (
-          <span className="mr-1 text-[10px] text-violet-400">(جميع الفروع)</span>
+          <span className="mr-1 text-[10px] text-muted-foreground">(جميع الفروع)</span>
         )}
       </td>
       <td className="px-4 py-3">
@@ -284,15 +284,15 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10">
-            <Users className="h-5 w-5 text-violet-300" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+            <Users className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground">المستخدمون</h1>
             <p className="text-xs text-muted-foreground">إدارة حسابات المستخدمين والصلاحيات</p>
           </div>
         </div>
-        <Button asChild size="sm" className="gap-2 bg-violet-600 hover:bg-violet-500 text-white">
+        <Button asChild size="sm" className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
           <Link href="/users/new"><Plus className="h-4 w-4" />مستخدم جديد</Link>
         </Button>
       </div>
@@ -313,7 +313,7 @@ export default function UsersPage() {
             <select
               value={roleFilter}
               onChange={e => setRoleFilter(e.target.value)}
-              className="flex-1 h-9 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+              className="flex-1 h-9 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
             >
               <option value="">كل الأدوار</option>
               {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}

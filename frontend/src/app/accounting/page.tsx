@@ -51,26 +51,42 @@ function MetricCard({ icon: Icon, label, value, tone, sub }: {
 
 interface PnLRow { label: string; value: number; bold?: boolean; isTotal?: boolean; negative?: boolean; indent?: boolean }
 
-function PnLTable({ rows, title }: { rows: PnLRow[]; title: string }) {
+function PnLTable({ rows, title, isLocalLight }: { rows: PnLRow[]; title: string; isLocalLight?: boolean }) {
   return (
-    <div className="glass overflow-hidden rounded-xl">
-      <div className="border-b border-white/[0.06] px-5 py-4">
-        <h2 className="text-sm font-bold text-foreground">{title}</h2>
+    <div className={cn(
+      "glass overflow-hidden rounded-xl transition-colors duration-200",
+      isLocalLight && "bg-white border-slate-200 shadow-sm"
+    )}>
+      <div className={cn("border-b px-5 py-4 transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06]")}>
+        <h2 className={cn("text-sm font-bold transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>{title}</h2>
       </div>
       <table className="w-full text-sm">
         <tbody>
           {rows.map((row, i) => (
             <tr key={i} className={cn(
-              'border-b border-white/[0.03] last:border-0 transition-colors',
-              row.isTotal ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]',
+              'border-b last:border-0 transition-colors',
+              isLocalLight
+                ? cn('border-slate-200/80', row.isTotal ? 'bg-slate-100/60' : 'hover:bg-slate-50')
+                : cn('border-white/[0.03]', row.isTotal ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]')
             )}>
-              <td className={cn('py-3 text-xs', row.isTotal ? 'px-5 font-bold text-foreground' : row.indent ? 'pr-10 pl-5 text-muted-foreground' : 'px-5 text-foreground/80')}>
+              <td className={cn(
+                'py-3 text-xs transition-colors',
+                row.isTotal
+                  ? cn('px-5 font-bold', isLocalLight ? 'text-slate-900' : 'text-foreground')
+                  : row.indent
+                    ? cn('pr-10 pl-5', isLocalLight ? 'text-slate-500' : 'text-muted-foreground')
+                    : cn('px-5', isLocalLight ? 'text-slate-700' : 'text-foreground/80')
+              )}>
                 {row.label}
               </td>
               <td className={cn(
-                'px-5 py-3 text-left font-numeric text-xs',
+                'px-5 py-3 text-left font-numeric text-xs transition-colors',
                 row.isTotal ? 'text-base font-black' : 'font-semibold',
-                row.negative || row.value < 0 ? 'text-rose-400' : row.isTotal ? 'text-foreground' : 'text-foreground/90',
+                row.negative || row.value < 0
+                  ? (isLocalLight ? 'text-rose-600' : 'text-rose-400')
+                  : row.isTotal
+                    ? (isLocalLight ? 'text-slate-900' : 'text-foreground')
+                    : (isLocalLight ? 'text-slate-800' : 'text-foreground/90'),
               )}>
                 {row.negative ? `(${money(Math.abs(row.value))})` : money(row.value)}
               </td>
@@ -106,6 +122,7 @@ export default function AccountingPage() {
   const [endDate, setEndDate]     = useState(toDateInput(today))
   const [branchId, setBranchId]   = useState('all')
   const [tab, setTab]             = useState<'summary' | 'pnl'>('summary')
+  const [isLocalLight, setIsLocalLight] = useState(false)
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['accounting-dashboard', startDate, endDate, branchId],
@@ -150,6 +167,16 @@ export default function AccountingPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {tab === 'pnl' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsLocalLight(p => !p)}
+              className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-white/5 bg-white/[0.02]"
+            >
+              {isLocalLight ? 'عرض الجداول داكنة' : 'عرض الجداول فاتحة'}
+            </Button>
+          )}
           <Button asChild variant="ghost" size="sm" className="gap-2 border border-white/10 text-xs">
             <Link href="/expenses"><ReceiptText className="h-3.5 w-3.5" />المصاريف</Link>
           </Button>
@@ -247,26 +274,33 @@ export default function AccountingPage() {
           <PnLTable
             title={`قائمة الأرباح والخسائر — ${formatDate(startDate)} إلى ${formatDate(endDate)}`}
             rows={pnlRows}
+            isLocalLight={isLocalLight}
           />
 
           {/* Cashbox summary */}
-          <div className="glass overflow-hidden rounded-xl">
-            <div className="border-b border-white/[0.06] px-5 py-4">
-              <h2 className="text-sm font-bold text-foreground">ملخص الصندوق</h2>
+          <div className={cn(
+            "glass overflow-hidden rounded-xl transition-colors duration-200",
+            isLocalLight && "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div className={cn("border-b px-5 py-4 transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06]")}>
+              <h2 className={cn("text-sm font-bold transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>ملخص الصندوق</h2>
             </div>
             <table className="w-full text-sm">
               <tbody>
                 {[
-                  { label: 'مدفوعات المبيعات',  value: data.cashbox?.sales_paid,        tone: 'text-emerald-400' },
-                  { label: 'تحصيلات الأقساط',  value: data.cashbox?.installment_income, tone: 'text-cyan-400' },
-                  { label: 'إيرادات أخرى',      value: data.cashbox?.other_income,       tone: 'text-teal-400' },
-                  { label: 'مدفوعات المشتريات', value: data.cashbox?.purchases_paid,     tone: 'text-rose-400' },
-                  { label: 'المصاريف',           value: data.cashbox?.expenses,           tone: 'text-orange-400' },
-                  { label: 'رصيد الصندوق الصافي', value: data.cashbox?.balance,          tone: (data.cashbox?.balance ?? 0) >= 0 ? 'text-emerald-300 font-black text-base' : 'text-rose-300 font-black text-base' },
+                  { label: 'مدفوعات المبيعات',  value: data.cashbox?.sales_paid,        tone: isLocalLight ? 'text-emerald-600' : 'text-emerald-400' },
+                  { label: 'تحصيلات الأقساط',  value: data.cashbox?.installment_income, tone: isLocalLight ? 'text-cyan-600' : 'text-cyan-400' },
+                  { label: 'إيرادات أخرى',      value: data.cashbox?.other_income,       tone: isLocalLight ? 'text-teal-600' : 'text-teal-400' },
+                  { label: 'مدفوعات المشتريات', value: data.cashbox?.purchases_paid,     tone: isLocalLight ? 'text-rose-600' : 'text-rose-400' },
+                  { label: 'المصاريف',           value: data.cashbox?.expenses,           tone: isLocalLight ? 'text-orange-600' : 'text-orange-400' },
+                  { label: 'رصيد الصندوق الصافي', value: data.cashbox?.balance,          tone: (data.cashbox?.balance ?? 0) >= 0 ? (isLocalLight ? 'text-emerald-700 font-bold' : 'text-emerald-300 font-bold') : (isLocalLight ? 'text-rose-700 font-bold' : 'text-rose-300 font-bold') },
                 ].map(row => (
-                  <tr key={row.label} className="border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02]">
-                    <td className="px-5 py-3 text-xs text-foreground/80">{row.label}</td>
-                    <td className={`px-5 py-3 text-left font-numeric text-xs font-semibold ${row.tone}`}>{money(row.value)}</td>
+                  <tr key={row.label} className={cn(
+                    "border-b last:border-0 hover:bg-white/[0.02] transition-colors",
+                    isLocalLight ? "border-slate-200 hover:bg-slate-50" : "border-white/[0.03] hover:bg-white/[0.02]"
+                  )}>
+                    <td className={cn("px-5 py-3 text-xs transition-colors", isLocalLight ? "text-slate-700" : "text-foreground/80")}>{row.label}</td>
+                    <td className={`px-5 py-3 text-left font-numeric text-xs font-semibold transition-colors ${row.tone}`}>{money(row.value)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CalendarDays, CheckCircle2, Clock, AlertTriangle, AlertCircle,
-  ArrowRight, Car, User, Banknote, Loader2, DollarSign,
+  ArrowRight, Car, User, Banknote, Loader2, DollarSign, MessageCircle,
 } from 'lucide-react'
 import { cn, formatMoney, formatDate, translateStatus } from '@/lib/utils'
 import { getInstallmentPlan, payInstallmentSchedule } from '@/lib/api/installments'
@@ -17,6 +17,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+
+function toWaPhone(phone: string) {
+  const d = phone.replace(/\D/g, '')
+  if (d.startsWith('964')) return d
+  if (d.startsWith('0'))   return '964' + d.slice(1)
+  return '964' + d
+}
 
 const STATUS_META: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   Paid:    { icon: CheckCircle2,  color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -258,9 +265,27 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
 
           {/* Buyer */}
           <div className="glass rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <User className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="text-xs font-medium text-muted-foreground">المشتري</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <User className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-xs font-medium text-muted-foreground">المشتري</span>
+              </div>
+              {plan.buyer_phone && (() => {
+                const msg = [
+                  `مرحباً ${plan.buyer_name ?? ''}،`,
+                  `نود تذكيركم بالأقساط المستحقة لسيارة ${plan.car_name ?? ''}.`,
+                  `💰 المتبقي الإجمالي: ${formatMoney(plan.remaining_amount, plan.currency)}`,
+                  '',
+                  'شركة الأصدقاء لتجارة السيارات 🚗',
+                ].join('\n')
+                return (
+                  <a href={`https://wa.me/${toWaPhone(plan.buyer_phone)}?text=${encodeURIComponent(msg)}`}
+                    target="_blank" rel="noopener noreferrer" title="تذكير واتساب"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </a>
+                )
+              })()}
             </div>
             <p className="text-sm font-semibold text-foreground">{plan.buyer_name ?? '—'}</p>
             {plan.buyer_phone && <p className="text-xs text-muted-foreground mt-0.5">{plan.buyer_phone}</p>}
@@ -434,15 +459,34 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
                         {sc.payment_date ? formatDate(sc.payment_date) : '—'}
                       </td>
                       <td className="px-4 py-3.5">
-                        {canPay && (
-                          <Button
-                            size="sm"
-                            onClick={() => setPayingSchedule(sc)}
-                            className="h-7 text-xs bg-emerald-600/80 hover:bg-emerald-500 text-white px-3"
-                          >
-                            دفع
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {canPay && (
+                            <Button
+                              size="sm"
+                              onClick={() => setPayingSchedule(sc)}
+                              className="h-7 text-xs bg-emerald-600/80 hover:bg-emerald-500 text-white px-3"
+                            >
+                              دفع
+                            </Button>
+                          )}
+                          {canPay && plan.buyer_phone && (() => {
+                            const msg = [
+                              `مرحباً ${plan.buyer_name ?? ''}،`,
+                              `نود تذكيركم بالقسط رقم ${sc.installment_number} لسيارة ${plan.car_name ?? ''}.`,
+                              `📅 تاريخ الاستحقاق: ${formatDate(sc.due_date)}`,
+                              `💰 المبلغ المستحق: ${formatMoney(sc.remaining_amount, sc.currency)}`,
+                              '',
+                              'شركة الأصدقاء لتجارة السيارات 🚗',
+                            ].join('\n')
+                            return (
+                              <a href={`https://wa.me/${toWaPhone(plan.buyer_phone!)}?text=${encodeURIComponent(msg)}`}
+                                target="_blank" rel="noopener noreferrer" title="تذكير واتساب"
+                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                                <MessageCircle className="h-3.5 w-3.5" />
+                              </a>
+                            )
+                          })()}
+                        </div>
                       </td>
                     </motion.tr>
                   )

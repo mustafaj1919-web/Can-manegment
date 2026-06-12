@@ -106,6 +106,7 @@ def run():
     from sqlalchemy import func
 
     app = create_app()
+    app.config['TESTING'] = True
     uid = uuid4().hex[:8]
     PFX = f'E2E-{uid}'
 

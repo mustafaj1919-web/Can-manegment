@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
@@ -38,12 +39,19 @@ const TableFooter = React.forwardRef<
 ))
 TableFooter.displayName = 'TableFooter'
 
-const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
+export interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
+  clickable?: boolean
+  selected?: boolean
+}
+
+const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
+  ({ className, clickable = false, selected = false, ...props }, ref) => (
     <tr
       ref={ref}
+      data-clickable={clickable ? '' : undefined}
+      data-selected={selected ? 'true' : undefined}
       className={cn(
-        'border-b border-border/50 transition-colors hover:bg-muted/30 data-[state=selected]:bg-muted',
+        'border-b border-border/50',
         className
       )}
       {...props}
@@ -73,7 +81,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn('px-4 py-2.5 align-middle text-sm [&:has([role=checkbox])]:pe-0', className)}
+    className={cn('px-4 py-3 align-middle text-sm [&:has([role=checkbox])]:pe-0', className)}
     {...props}
   />
 ))
@@ -91,4 +99,46 @@ const TableCaption = React.forwardRef<
 ))
 TableCaption.displayName = 'TableCaption'
 
-export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption }
+export type SortDirection = 'asc' | 'desc' | null
+
+interface TableSortHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
+  sortable?: boolean
+  sortDirection?: SortDirection
+  onSort?: () => void
+}
+
+const TableSortHead = React.forwardRef<HTMLTableCellElement, TableSortHeadProps>(
+  ({ className, sortable, sortDirection, onSort, children, ...props }, ref) => (
+    <th
+      ref={ref}
+      data-sortable={sortable ? '' : undefined}
+      data-sort={sortDirection ?? undefined}
+      className={cn(
+        'h-9 px-4 text-start align-middle text-xs font-semibold text-muted-foreground',
+        sortable && 'select-none',
+        sortDirection && 'text-primary/90',
+        '[&:has([role=checkbox])]:pe-0',
+        className
+      )}
+      {...props}
+    >
+      {sortable ? (
+        <button type="button" className="table-sort-button" onClick={onSort}>
+          {children}
+          {sortDirection === 'asc' ? (
+            <ChevronUp className="h-3 w-3 text-primary" />
+          ) : sortDirection === 'desc' ? (
+            <ChevronDown className="h-3 w-3 text-primary" />
+          ) : (
+            <ChevronsUpDown className="h-3 w-3 opacity-35" />
+          )}
+        </button>
+      ) : (
+        <span className="inline-flex items-center gap-1">{children}</span>
+      )}
+    </th>
+  )
+)
+TableSortHead.displayName = 'TableSortHead'
+
+export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, TableSortHead }

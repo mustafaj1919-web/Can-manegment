@@ -1,7 +1,8 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { BarChart2 } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { BarChart2, TrendingDown, TrendingUp } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getDashboardStats } from '@/lib/api/dashboard'
 import { cn, formatMoney } from '@/lib/utils'
@@ -13,24 +14,21 @@ import {
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
+  const item = payload[0]?.payload
   return (
-    <div className="dash-card px-3 py-2 text-xs" style={{ minWidth: 160 }}>
+    <div className="dash-card min-w-[170px] overflow-hidden px-3 py-2.5 text-xs shadow-2xl">
+      <div className="mb-2 h-0.5 w-full rounded-full" style={{ background: item?.color }} />
       <p className="dash-sub mb-1">{label}</p>
-      <p className="font-semibold money" style={{ color: payload[0]?.fill }}>
-        {formatMoney(Math.abs(payload[0]?.value ?? 0), 'IQD')}
+      <p className="money text-sm font-bold" style={{ color: item?.color }}>
+        {formatMoney(payload[0]?.value ?? 0, 'IQD')}
       </p>
+      <p className="mt-1 text-[10px] text-muted-foreground/50">اضغط على التقارير للتفاصيل الكاملة</p>
     </div>
   )
 }
 
-const CHART_ITEMS = [
-  { key: 'sales',    label: 'مبيعات الشهر',   color: '#10b981' },
-  { key: 'purch',    label: 'مشتريات الشهر',  color: '#cc2118' },
-  { key: 'profit',   label: 'صافي الربح',     color: '#d4a44c' },
-  { key: 'cashbox',  label: 'رصيد الصندوق',   color: '#22d3ee' },
-]
-
 export function FinancialChartWidget() {
+  const reduceMotion = useReducedMotion()
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-stats'], queryFn: getDashboardStats, staleTime: 60_000, retry: 1,
   })
@@ -42,10 +40,10 @@ export function FinancialChartWidget() {
   const hasData  = salesM > 0 || purchM > 0 || cashbox > 0
 
   const chartData = [
-    { label: 'مبيعات',   value: salesM,  color: '#10b981', key: 'sales'  },
-    { label: 'مشتريات', value: purchM,  color: '#cc2118', key: 'purch'  },
-    { label: 'الربح',   value: profitM, color: '#d4a44c', key: 'profit' },
-    { label: 'الصندوق', value: cashbox, color: '#22d3ee', key: 'cashbox'},
+    { label: 'مبيعات',   value: salesM,  color: '#10b981', gradient: 'salesGradient', key: 'sales' },
+    { label: 'مشتريات', value: purchM,  color: '#f43f5e', gradient: 'purchaseGradient', key: 'purch' },
+    { label: 'الربح',   value: profitM, color: profitM >= 0 ? '#fbbf24' : '#fb7185', gradient: profitM >= 0 ? 'profitGradient' : 'lossGradient', key: 'profit' },
+    { label: 'الصندوق', value: cashbox, color: '#22d3ee', gradient: 'cashGradient', key: 'cashbox' },
   ]
 
   const profitBadge = profitM !== 0 ? (
@@ -74,16 +72,36 @@ export function FinancialChartWidget() {
         </div>
       ) : (
         <>
-          <div className="h-44 mb-4">
+          <div className="relative mb-4 h-52 overflow-hidden rounded-xl border border-white/[0.05] bg-gradient-to-b from-white/[0.025] to-transparent px-1 pt-3">
+            <div className="pointer-events-none absolute -left-10 top-4 h-24 w-24 rounded-full bg-cyan-400/10 blur-3xl" />
+            <div className="pointer-events-none absolute -right-8 bottom-0 h-24 w-24 rounded-full bg-emerald-400/10 blur-3xl" />
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top:4, right:4, left:4, bottom:4 }} barCategoryGap="30%">
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="label" tick={{ fill:'rgba(255,255,255,0.3)', fontSize:10, fontFamily:'Tajawal' }} axisLine={false} tickLine={false} />
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }} barCategoryGap="24%">
+                <defs>
+                  <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34d399" /><stop offset="100%" stopColor="#059669" stopOpacity={0.38} /></linearGradient>
+                  <linearGradient id="purchaseGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fb7185" /><stop offset="100%" stopColor="#be123c" stopOpacity={0.38} /></linearGradient>
+                  <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fde68a" /><stop offset="100%" stopColor="#d97706" stopOpacity={0.42} /></linearGradient>
+                  <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fda4af" /><stop offset="100%" stopColor="#e11d48" stopOpacity={0.42} /></linearGradient>
+                  <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#67e8f9" /><stop offset="100%" stopColor="#0891b2" stopOpacity={0.38} /></linearGradient>
+                  <filter id="barGlow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                </defs>
+                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.055)" strokeDasharray="4 6" />
+                <XAxis dataKey="label" tick={{ fill:'rgba(255,255,255,0.42)', fontSize:10, fontFamily:'Tajawal' }} axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill:'rgba(255,255,255,0.04)', radius:4 }} />
-                <ReferenceLine y={0} stroke="rgba(255,255,255,0.06)" />
-                <Bar dataKey="value" radius={[5,5,0,0]} maxBarSize={52}>
-                  {chartData.map((e) => <Cell key={e.key} fill={e.color} fillOpacity={0.85} />)}
+                <Tooltip content={<ChartTooltip />} cursor={{ fill:'rgba(255,255,255,0.035)', radius:8 }} />
+                <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" />
+                <Bar
+                  dataKey="value"
+                  radius={[8, 8, 3, 3]}
+                  maxBarSize={58}
+                  isAnimationActive={!reduceMotion}
+                  animationBegin={120}
+                  animationDuration={900}
+                  animationEasing="ease-out"
+                >
+                  {chartData.map((entry) => (
+                    <Cell key={entry.key} fill={`url(#${entry.gradient})`} stroke={entry.color} strokeOpacity={0.3} style={{ filter: 'url(#barGlow)' }} />
+                  ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -95,11 +113,25 @@ export function FinancialChartWidget() {
               { label:'مبيعات',   value:salesM,  color:'text-emerald-400' },
               { label:'مشتريات', value:purchM,  color:'text-red-400'     },
               { label:'الربح',   value:profitM, color: profitM >= 0 ? 'text-amber-400' : 'text-red-400' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="text-center py-2 rounded-lg" style={{ background:'var(--s2)' }}>
+            ].map(({ label, value, color }, index) => (
+              <motion.div
+                key={label}
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18 + index * 0.08, duration: 0.35 }}
+                whileHover={reduceMotion ? undefined : { y: -3, scale: 1.015 }}
+                className="group relative overflow-hidden rounded-lg border border-white/[0.04] py-2.5 text-center"
+                style={{ background:'var(--s2)' }}
+              >
+                <div className="absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 <p className="text-[10px] text-muted-foreground/60 mb-1">{label}</p>
-                <p className={cn('text-[11px] font-bold money truncate px-1', color)}>{formatMoney(value,'IQD')}</p>
-              </div>
+                <div className="flex items-center justify-center gap-1">
+                  {label === 'الربح' && (value >= 0
+                    ? <TrendingUp className="h-3 w-3 text-emerald-400" />
+                    : <TrendingDown className="h-3 w-3 text-rose-400" />)}
+                  <p className={cn('text-[11px] font-bold money truncate px-1', color)}>{formatMoney(value,'IQD')}</p>
+                </div>
+              </motion.div>
             ))}
           </div>
         </>

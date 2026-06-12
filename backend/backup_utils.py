@@ -139,50 +139,55 @@ def _restore_db_from_json(temp_root):
     topo_order.extend(t for t in all_tables if t not in topo_order)
 
     with engine.connect() as conn:
-        if _IS_PG:
-            tables_list = ', '.join(f'"{t}"' for t in topo_order if t in db_data)
-            if tables_list:
-                conn.execute(text(f'TRUNCATE {tables_list}'))
-        else:
-            conn.execute(text('PRAGMA foreign_keys = OFF'))
-            for t in reversed(topo_order):
-                if t in meta.tables:
-                    conn.execute(meta.tables[t].delete())
+        trans = conn.begin()
+        try:
+            if _IS_PG:
+                tables_list = ', '.join(f'"{t}"' for t in topo_order if t in db_data)
+                if tables_list:
+                    conn.execute(text(f'TRUNCATE {tables_list}'))
+            else:
+                conn.execute(text('PRAGMA foreign_keys = OFF'))
+                for t in reversed(topo_order):
+                    if t in meta.tables:
+                        conn.execute(meta.tables[t].delete())
 
-        for table_name in topo_order:
-            if table_name not in db_data or table_name not in meta.tables:
-                continue
-            rows = db_data[table_name]
-            if not rows:
-                continue
-            table = meta.tables[table_name]
-            conn.execute(table.insert(), rows)
-
-        if _IS_PG:
             for table_name in topo_order:
-                if table_name not in meta.tables:
+                if table_name not in db_data or table_name not in meta.tables:
                     continue
-                tbl = meta.tables[table_name]
-                for col in tbl.primary_key.columns:
-                    try:
-                        seq = conn.execute(
-                            text('SELECT pg_get_serial_sequence(:t, :c)'),
-                            {'t': table_name, 'c': col.name}
-                        ).scalar()
-                        if seq:
-                            max_id = conn.execute(
-                                text(f'SELECT COALESCE(MAX("{col.name}"), 1) FROM "{table_name}"')
-                            ).scalar()
-                            conn.execute(
-                                text('SELECT setval(:seq, :v, true)'),
-                                {'seq': seq, 'v': int(max_id)}
-                            )
-                    except Exception:
-                        pass
-        else:
-            conn.execute(text('PRAGMA foreign_keys = ON'))
+                rows = db_data[table_name]
+                if not rows:
+                    continue
+                table = meta.tables[table_name]
+                conn.execute(table.insert(), rows)
 
-        conn.commit()
+            if _IS_PG:
+                for table_name in topo_order:
+                    if table_name not in meta.tables:
+                        continue
+                    tbl = meta.tables[table_name]
+                    for col in tbl.primary_key.columns:
+                        try:
+                            seq = conn.execute(
+                                text('SELECT pg_get_serial_sequence(:t, :c)'),
+                                {'t': table_name, 'c': col.name}
+                            ).scalar()
+                            if seq:
+                                max_id = conn.execute(
+                                    text(f'SELECT COALESCE(MAX("{col.name}"), 1) FROM "{table_name}"')
+                                ).scalar()
+                                conn.execute(
+                                    text('SELECT setval(:seq, :v, true)'),
+                                    {'seq': seq, 'v': int(max_id)}
+                                )
+                        except Exception:
+                            pass
+            else:
+                conn.execute(text('PRAGMA foreign_keys = ON'))
+
+            trans.commit()
+        except Exception as e:
+            trans.rollback()
+            raise ValueError(f'فشلت عملية استعادة قاعدة البيانات وتم التراجع عن كافة التغييرات: {e}')
 
 
 def create_backup_archive(created_by='system', reason='manual'):
@@ -273,20 +278,59 @@ def _replace_directory_from_backup(temp_root, archive_relative_path, target_path
         os.makedirs(target_abs, exist_ok=True)
 
 
+def _verify_backup_integrity(zip_file):
+    """Validate that a backup ZIP contains expected structure, valid sizes, and a valid manifest."""
+    MAX_RESTORE_UNCOMPRESSED_SIZE = 100 * 1024 * 1024  # 100 MB
+    MAX_RESTORE_FILE_COUNT = 10000
+    MAX_COMPRESSION_RATIO = 10.0  # 10x
+
+    names = set(zip_file.namelist())
+    for name in names:
+        normalized = os.path.normpath(name)
+        if os.path.isabs(name) or normalized.startswith('..') or '..' + os.sep in normalized:
+            raise ValueError('Backup contains unsafe paths')
+
+    # فحص قنبلة الضغط (Zip Bomb)
+    uncompressed_total = 0
+    compressed_total = 0
+    file_count = 0
+    for info in zip_file.infolist():
+        if not info.is_dir():
+            file_count += 1
+            uncompressed_total += info.file_size
+            compressed_total += info.compress_size
+
+    if file_count > MAX_RESTORE_FILE_COUNT:
+        raise ValueError(f'تجاوز الأرشيف عدد الملفات الأقصى المسموح به ({MAX_RESTORE_FILE_COUNT} ملفاً).')
+
+    if uncompressed_total > MAX_RESTORE_UNCOMPRESSED_SIZE:
+        raise ValueError(f'تجاوز الأرشيف الحجم غير المضغوط الأقصى المسموح به ({MAX_RESTORE_UNCOMPRESSED_SIZE // (1024*1024)} ميجابايت).')
+
+    if compressed_total > 0:
+        ratio = uncompressed_total / compressed_total
+        if ratio > MAX_COMPRESSION_RATIO:
+            raise ValueError(f'تجاوز الأرشيف نسبة الضغط الآمنة المسموح بها (نسبة الضغط الفعلية: {ratio:.1f}x).')
+
+    if 'metadata.json' not in names:
+        raise ValueError('Invalid backup: missing metadata.json')
+    try:
+        metadata = json.loads(zip_file.read('metadata.json').decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f'Invalid backup: malformed metadata.json ({exc})')
+    if not isinstance(metadata, dict) or 'created_at' not in metadata:
+        raise ValueError('Invalid backup: metadata.json missing required fields')
+    has_json = 'database/data.json' in names
+    has_sqlite = 'database/showroom.db' in names
+    if not has_json and not has_sqlite:
+        raise ValueError('Backup does not contain database/data.json or database/showroom.db')
+    return names, has_json, has_sqlite
+
+
 def restore_backup_archive(backup_path):
     if not backup_path or not os.path.exists(backup_path):
         raise FileNotFoundError('Backup file not found')
     with zipfile.ZipFile(backup_path, 'r') as zip_file:
-        names = set(zip_file.namelist())
-        for name in names:
-            normalized = os.path.normpath(name)
-            if os.path.isabs(name) or normalized.startswith('..') or '..' + os.sep in normalized:
-                raise ValueError('Backup contains unsafe paths')
-        # Support both new JSON-based backups and legacy SQLite backups
-        has_json = 'database/data.json' in names
-        has_sqlite = 'database/showroom.db' in names
-        if not has_json and not has_sqlite:
-            raise ValueError('Backup does not contain database/data.json or database/showroom.db')
+        names, has_json, has_sqlite = _verify_backup_integrity(zip_file)
         with tempfile.TemporaryDirectory() as temp_root:
             zip_file.extractall(temp_root)
             if has_json:

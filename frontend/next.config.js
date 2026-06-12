@@ -3,7 +3,7 @@
 // FLASK_BACKEND_URL: override to point Next.js proxy at a different Flask host.
 // Defaults to localhost:5000 (desktop mode).
 // For Cloudflare Tunnel / VPS: this stays localhost:5000 since Next.js and
-// Flask run on the same machine — the tunnel only exposes Next.js to the internet.
+// Flask run on the same machine â€” the tunnel only exposes Next.js to the internet.
 const FLASK = process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
 
 const nextConfig = {
@@ -11,7 +11,7 @@ const nextConfig = {
   output: 'standalone',
   async redirects() {
     return [
-      // أي رابط قديم لـ /accounting-integrity يُحوَّل للصفحة الجديدة في Next.js
+      // Ø£ÙŠ Ø±Ø§Ø¨Ø· Ù‚Ø¯ÙŠÙ… Ù„Ù€ /accounting-integrity ÙŠÙØ­ÙˆÙŽÙ‘Ù„ Ù„Ù„ØµÙØ­Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© ÙÙŠ Next.js
       {
         source: '/accounting-integrity',
         destination: '/reports/accounting-rules',
@@ -48,3 +48,5 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+
+

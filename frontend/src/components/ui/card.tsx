@@ -1,11 +1,16 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  interactive?: boolean
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive = false, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('app-card text-card-foreground', className)}
+      data-interactive={interactive ? 'true' : undefined}
+      className={cn('dash-card text-card-foreground', className)}
       {...props}
     />
   )

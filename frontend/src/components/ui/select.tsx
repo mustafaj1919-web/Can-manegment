@@ -14,9 +14,8 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'app-field flex h-9 w-full items-center justify-between px-3 py-2 text-sm shadow-sm',
+      'app-field group flex h-9 w-full items-center justify-between px-3 py-2 text-sm',
       'placeholder:text-muted-foreground',
-      'disabled:cursor-not-allowed disabled:opacity-50',
       '[&>span]:line-clamp-1',
       className
     )}
@@ -24,7 +23,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+      <ChevronDown className="h-4 w-4 shrink-0 opacity-50 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -113,8 +112,8 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pe-2 ps-8 text-sm outline-none',
-      'focus:bg-secondary focus:text-foreground',
+      'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pe-2 ps-8 text-sm outline-none transition-colors duration-100',
+      'focus:bg-primary/[0.08] focus:text-foreground data-[state=checked]:bg-primary/[0.06]',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className
     )}

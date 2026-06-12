@@ -19,13 +19,13 @@ function CarTile({ car, index }: { car: any; index: number }) {
       style={{ background:'var(--s2)', border:'1px solid var(--border-card)' }}>
 
       {/* Photo */}
-      <div className="relative h-24 overflow-hidden" style={{ background:'var(--s3)' }}>
+      <div className="relative h-24 overflow-hidden glare-effect" style={{ background:'var(--s3)' }}>
         {car.cover_photo
           ? <img src={photoUrl(car.cover_photo.filename, car.cover_photo.subfolder ?? 'vehicles')}
               alt={`${car.brand} ${car.model}`}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-          : <div className="h-full w-full flex items-center justify-center">
-              <Car className="h-8 w-8 text-muted-foreground/15" />
+          : <div className="h-full w-full flex items-center justify-center p-2 bg-[radial-gradient(circle_at_50%_110%,rgba(239,27,45,0.08),transparent_46%)]">
+              <img src="/fallback_car.png" alt="Showroom Car" className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-[0_8px_16px_rgba(239,27,45,0.2)]" />
             </div>
         }
         {/* Status pip */}

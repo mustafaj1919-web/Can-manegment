@@ -113,6 +113,7 @@ export interface ChartAccountNode {
   type_label: string
   classification: AccountClassification
   classification_label: string
+  is_active: boolean
   level: 'رئيسي' | 'فرعي' | 'تفصيلي'
   depth: number
   parent_id: number | null
@@ -217,6 +218,7 @@ export interface AccountPayload {
   type: 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Expense'
   classification?: AccountClassification
   parent_id?: number | null
+  is_active?: boolean
 }
 
 export interface AccountItem {
@@ -229,6 +231,7 @@ export interface AccountItem {
   parent_code: string | null
   balance: number
   children_count: number
+  is_active: boolean
 }
 
 export async function createAccount(payload: AccountPayload): Promise<AccountItem> {
@@ -239,8 +242,8 @@ export async function updateAccount(id: number, payload: Partial<AccountPayload>
   return put<AccountItem>(`/accounts/${id}`, payload)
 }
 
-export async function deleteAccount(id: number): Promise<{ success: boolean }> {
-  return del<{ success: boolean }>(`/accounts/${id}`)
+export async function deleteAccount(id: number): Promise<{ success: boolean; is_active: boolean }> {
+  return del<{ success: boolean; is_active: boolean }>(`/accounts/${id}`)
 }
 
 export async function recomputeAccountBalances(): Promise<{ success: boolean; message: string }> {

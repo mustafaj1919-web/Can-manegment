@@ -7,6 +7,30 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
   timeout: 15_000,
+  // Read the XSRF-TOKEN cookie set by Flask and send it as X-XSRF-TOKEN on
+  // every state-changing request. Flask validates header == session token.
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN',
+})
+
+export function getXsrfToken(): string {
+  if (typeof document === 'undefined') return ''
+
+  const prefix = 'XSRF-TOKEN='
+  const cookie = document.cookie
+    .split('; ')
+    .find((item) => item.startsWith(prefix))
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : ''
+}
+
+// FormData must set its own multipart boundary. The shared JSON header causes
+// Flask to receive an empty request.files collection.
+apiClient.interceptors.request.use((config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type')
+  }
+  return config
 })
 
 /* ─── Response Error Interceptor ─────────────────────────────────────────── */

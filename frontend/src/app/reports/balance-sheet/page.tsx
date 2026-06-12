@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2, Scale, TrendingDown, TrendingUp, XCircle } from 'lucide-react'
 import { getBalanceSheet } from '@/lib/api/accounting'
-import { formatMoney } from '@/lib/utils'
+import { cn, formatMoney } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 /* ─── Helpers ───────────────────────────────────────────────────────────── */
@@ -23,28 +25,44 @@ interface SectionItem {
   children: Array<{ id: number; code: string; name: string; balance: number; classification: string }>
 }
 
-function SectionGroup({ group }: { group: SectionItem }) {
+function SectionGroup({ group, isLocalLight }: { group: SectionItem; isLocalLight?: boolean }) {
   const hasChildren = group.children.length > 0
   return (
-    <div className="border-b border-white/[0.03] last:border-0">
-      <div className="flex items-center justify-between px-5 py-3 bg-white/[0.02]">
+    <div className={cn(
+      "border-b last:border-0 transition-colors",
+      isLocalLight ? "border-slate-200" : "border-white/[0.03]"
+    )}>
+      <div className={cn(
+        "flex items-center justify-between px-5 py-3 transition-colors",
+        isLocalLight ? "bg-slate-50" : "bg-white/[0.02]"
+      )}>
         <div className="flex items-center gap-2.5">
-          <span className="font-numeric text-xs text-cyan-300/70">{group.code}</span>
-          <span className="text-sm font-semibold text-foreground">{group.name}</span>
+          <span className={cn("font-numeric text-xs transition-colors", isLocalLight ? "text-cyan-800 font-bold" : "text-cyan-300/70")}>{group.code}</span>
+          <span className={cn("text-sm font-semibold transition-colors", isLocalLight ? "text-slate-800" : "text-foreground")}>{group.name}</span>
         </div>
-        <span className={`font-numeric text-sm font-bold ${group.balance < 0 ? 'text-rose-400' : 'text-foreground'}`}>
+        <span className={cn(
+          "font-numeric text-sm font-bold transition-colors",
+          group.balance < 0 
+            ? (isLocalLight ? 'text-rose-600' : 'text-rose-400')
+            : (isLocalLight ? 'text-slate-900' : 'text-foreground')
+        )}>
           {money(group.balance)}
         </span>
       </div>
       {hasChildren && (
-        <div className="divide-y divide-white/[0.03]">
+        <div className={cn("divide-y transition-colors", isLocalLight ? "divide-slate-100 bg-white" : "divide-white/[0.03]")}>
           {group.children.map(child => (
             <div key={child.id} className="flex items-center justify-between px-5 py-2 ps-12">
               <div className="flex items-center gap-2">
-                <span className="font-numeric text-xs text-muted-foreground/60">{child.code}</span>
-                <span className="text-xs text-foreground/80">{child.name}</span>
+                <span className={cn("font-numeric text-xs transition-colors", isLocalLight ? "text-slate-400" : "text-muted-foreground/60")}>{child.code}</span>
+                <span className={cn("text-xs transition-colors", isLocalLight ? "text-slate-600" : "text-foreground/80")}>{child.name}</span>
               </div>
-              <span className={`font-numeric text-xs ${child.balance < 0 ? 'text-rose-400' : 'text-foreground/80'}`}>
+              <span className={cn(
+                "font-numeric text-xs transition-colors",
+                child.balance < 0 
+                  ? (isLocalLight ? 'text-rose-600' : 'text-rose-400')
+                  : (isLocalLight ? 'text-slate-700' : 'text-foreground/80')
+              )}>
                 {money(child.balance)}
               </span>
             </div>
@@ -55,28 +73,11 @@ function SectionGroup({ group }: { group: SectionItem }) {
   )
 }
 
-function BalanceSection({
-  title, groups, total, type,
-}: {
-  title: string; groups: SectionItem[]; total: number; type: 'Asset' | 'Liability' | 'Equity'
-}) {
-  const tone = CLF_SECTION_TONE[type]
-  return (
-    <div className="glass overflow-hidden rounded-lg">
-      <div className={`flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5 ${tone.split(' ')[0]}`}>
-        <h2 className={`text-sm font-bold ${tone.split(' ').at(-1)}`}>{title}</h2>
-        <span className={`font-numeric text-base font-black ${tone.split(' ').at(-1)}`}>{money(total)}</span>
-      </div>
-      <div className="divide-y divide-white/[0.03]">
-        {groups.map(g => <SectionGroup key={g.id} group={g} />)}
-      </div>
-    </div>
-  )
-}
-
 /* ─── Main Page ─────────────────────────────────────────────────────────── */
 
 export default function BalanceSheetPage() {
+  const [isLocalLight, setIsLocalLight] = useState(false)
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['balance-sheet'],
     queryFn: getBalanceSheet,
@@ -88,13 +89,25 @@ export default function BalanceSheetPage() {
     <div className="space-y-5" dir="rtl">
 
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10">
-          <Scale className="h-5 w-5 text-violet-300" />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10">
+            <Scale className="h-5 w-5 text-violet-300" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-foreground">الميزانية العمومية</h1>
+            <p className="text-xs text-muted-foreground">قائمة المركز المالي — الأصول = المطلوبات + حقوق الملكية</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-bold text-foreground">الميزانية العمومية</h1>
-          <p className="text-xs text-muted-foreground">قائمة المركز المالي — الأصول = المطلوبات + حقوق الملكية</p>
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsLocalLight(p => !p)}
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-white/5 bg-white/[0.02]"
+          >
+            {isLocalLight ? 'عرض الجداول داكنة' : 'عرض الجداول فاتحة'}
+          </Button>
         </div>
       </div>
 
@@ -168,62 +181,104 @@ export default function BalanceSheetPage() {
           {/* Two-column layout: Assets | Liabilities + Equity */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {/* Assets */}
-            <div className="space-y-0 overflow-hidden rounded-lg glass">
-              <div className="border-b border-white/[0.06] px-5 py-4 bg-cyan-500/[0.04]">
+            <div className={cn(
+              "space-y-0 overflow-hidden rounded-lg transition-colors duration-200",
+              isLocalLight ? "bg-white border border-slate-200 shadow-sm" : "glass"
+            )}>
+              <div className={cn(
+                "border-b px-5 py-4 transition-colors",
+                isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06] bg-cyan-50/[0.04]"
+              )}>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-base font-bold text-cyan-300">الأصول (الموجودات)</h2>
-                  <span className="font-numeric text-xl font-black text-cyan-300">{money(data.total_assets)}</span>
+                  <h2 className={cn("text-base font-bold transition-colors", isLocalLight ? "text-cyan-800" : "text-cyan-300")}>الأصول (الموجودات)</h2>
+                  <span className={cn("font-numeric text-xl font-black transition-colors", isLocalLight ? "text-cyan-900" : "text-cyan-300")}>{money(data.total_assets)}</span>
                 </div>
               </div>
-              {data.assets.map(g => <SectionGroup key={g.id} group={g} />)}
-              <div className="flex items-center justify-between bg-cyan-500/[0.06] px-5 py-3.5 border-t border-cyan-500/10">
-                <span className="text-sm font-bold text-cyan-300">إجمالي الأصول</span>
-                <span className="font-numeric text-base font-black text-cyan-300">{money(data.total_assets)}</span>
+              {data.assets.map(g => <SectionGroup key={g.id} group={g} isLocalLight={isLocalLight} />)}
+              <div className={cn(
+                "flex items-center justify-between px-5 py-3.5 border-t transition-colors",
+                isLocalLight ? "border-slate-200 bg-slate-100" : "border-cyan-50/10 bg-cyan-50/[0.06]"
+              )}>
+                <span className={cn("text-sm font-bold transition-colors", isLocalLight ? "text-cyan-800" : "text-cyan-300")}>إجمالي الأصول</span>
+                <span className={cn("font-numeric text-base font-black transition-colors", isLocalLight ? "text-cyan-900" : "text-cyan-300")}>{money(data.total_assets)}</span>
               </div>
             </div>
 
             {/* Liabilities + Equity */}
             <div className="space-y-4">
-              <div className="overflow-hidden rounded-lg glass">
-                <div className="border-b border-white/[0.06] px-5 py-4 bg-rose-500/[0.04]">
+              <div className={cn(
+                "overflow-hidden rounded-lg transition-colors duration-200",
+                isLocalLight ? "bg-white border border-slate-200 shadow-sm" : "glass"
+              )}>
+                <div className={cn(
+                  "border-b px-5 py-4 transition-colors",
+                  isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06] bg-rose-50/[0.04]"
+                )}>
                   <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-rose-300">المطلوبات</h2>
-                    <span className="font-numeric text-xl font-black text-rose-300">{money(data.total_liabilities)}</span>
+                    <h2 className={cn("text-base font-bold transition-colors", isLocalLight ? "text-rose-800" : "text-rose-300")}>المطلوبات</h2>
+                    <span className={cn("font-numeric text-xl font-black transition-colors", isLocalLight ? "text-rose-900" : "text-rose-300")}>{money(data.total_liabilities)}</span>
                   </div>
                 </div>
-                {data.liabilities.map(g => <SectionGroup key={g.id} group={g} />)}
-                <div className="flex items-center justify-between bg-rose-500/[0.06] px-5 py-3.5 border-t border-rose-500/10">
-                  <span className="text-sm font-bold text-rose-300">إجمالي المطلوبات</span>
-                  <span className="font-numeric text-base font-black text-rose-300">{money(data.total_liabilities)}</span>
+                {data.liabilities.map(g => <SectionGroup key={g.id} group={g} isLocalLight={isLocalLight} />)}
+                <div className={cn(
+                  "flex items-center justify-between px-5 py-3.5 border-t transition-colors",
+                  isLocalLight ? "border-slate-200 bg-slate-100" : "border-rose-50/10 bg-rose-50/[0.06]"
+                )}>
+                  <span className={cn("text-sm font-bold transition-colors", isLocalLight ? "text-rose-800" : "text-rose-300")}>إجمالي المطلوبات</span>
+                  <span className={cn("font-numeric text-base font-black transition-colors", isLocalLight ? "text-rose-900" : "text-rose-300")}>{money(data.total_liabilities)}</span>
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-lg glass">
-                <div className="border-b border-white/[0.06] px-5 py-4 bg-violet-500/[0.04]">
+              <div className={cn(
+                "overflow-hidden rounded-lg transition-colors duration-200",
+                isLocalLight ? "bg-white border border-slate-200 shadow-sm" : "glass"
+              )}>
+                <div className={cn(
+                  "border-b px-5 py-4 transition-colors",
+                  isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-white/[0.06] bg-violet-50/[0.04]"
+                )}>
                   <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-violet-300">حقوق الملكية</h2>
-                    <span className="font-numeric text-xl font-black text-violet-300">{money(data.total_equity)}</span>
+                    <h2 className={cn("text-base font-bold transition-colors", isLocalLight ? "text-violet-800" : "text-violet-300")}>حقوق الملكية</h2>
+                    <span className={cn("font-numeric text-xl font-black transition-colors", isLocalLight ? "text-violet-900" : "text-violet-300")}>{money(data.total_equity)}</span>
                   </div>
                 </div>
-                {data.equity.map(g => <SectionGroup key={g.id} group={g} />)}
-                <div className="flex items-center justify-between bg-violet-500/[0.06] px-5 py-3.5 border-t border-violet-500/10">
-                  <span className="text-sm font-bold text-violet-300">إجمالي حقوق الملكية</span>
-                  <span className="font-numeric text-base font-black text-violet-300">{money(data.total_equity)}</span>
+                {data.equity.map(g => <SectionGroup key={g.id} group={g} isLocalLight={isLocalLight} />)}
+                <div className={cn(
+                  "flex items-center justify-between px-5 py-3.5 border-t transition-colors",
+                  isLocalLight ? "border-slate-200 bg-slate-100" : "border-violet-50/10 bg-violet-50/[0.06]"
+                )}>
+                  <span className={cn("text-sm font-bold transition-colors", isLocalLight ? "text-violet-800" : "text-violet-300")}>إجمالي حقوق الملكية</span>
+                  <span className={cn("font-numeric text-base font-black transition-colors", isLocalLight ? "text-violet-900" : "text-violet-300")}>{money(data.total_equity)}</span>
                 </div>
               </div>
 
               {/* Total liabilities + equity */}
-              <div className={`rounded-lg border p-4 ${data.is_balanced ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-rose-500/20 bg-rose-500/5'}`}>
+              <div className={cn(
+                "rounded-lg border p-4 transition-colors duration-200",
+                data.is_balanced
+                  ? (isLocalLight ? 'border-emerald-200 bg-emerald-50/30' : 'border-emerald-500/20 bg-emerald-50/5')
+                  : (isLocalLight ? 'border-rose-200 bg-rose-50/30' : 'border-rose-500/20 bg-rose-50/5')
+              )}>
                 <div className="flex items-center justify-between">
-                  <span className={`text-sm font-bold ${data.is_balanced ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  <span className={cn(
+                    "text-sm font-bold transition-colors",
+                    data.is_balanced 
+                      ? (isLocalLight ? 'text-emerald-800' : 'text-emerald-300') 
+                      : (isLocalLight ? 'text-rose-800' : 'text-rose-300')
+                  )}>
                     إجمالي المطلوبات + حقوق الملكية
                   </span>
-                  <span className={`font-numeric text-xl font-black ${data.is_balanced ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  <span className={cn(
+                    "font-numeric text-xl font-black transition-colors",
+                    data.is_balanced 
+                      ? (isLocalLight ? 'text-emerald-900' : 'text-emerald-300') 
+                      : (isLocalLight ? 'text-rose-900' : 'text-rose-300')
+                  )}>
                     {money(data.total_liabilities_equity)}
                   </span>
                 </div>
                 {!data.is_balanced && (
-                  <p className="mt-1.5 text-xs text-rose-400/70">
+                  <p className={cn("mt-1.5 text-xs transition-colors", isLocalLight ? "text-rose-700" : "text-rose-400/70")}>
                     الفرق مع إجمالي الأصول: {money(Math.abs(data.difference))} — يجب مراجعة القيود المحاسبية
                   </p>
                 )}

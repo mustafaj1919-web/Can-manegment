@@ -1,12 +1,12 @@
 'use client'
 
-import { useMemo, useState, useRef, type ElementType, type ReactNode } from 'react'
+import { useMemo, useState, type ElementType, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet,
   GitBranch, Layers3, ListTree, Plus, RefreshCw, Scale, Search,
-  TrendingDown, TrendingUp, Trash2, Pencil, XCircle, Check, X,
+  TrendingDown, TrendingUp, Archive, ArchiveRestore, Pencil, XCircle, Check, X,
 } from 'lucide-react'
 import {
   getChartOfAccounts, getTrialBalance, createAccount, updateAccount,
@@ -220,10 +220,11 @@ interface TreeRowProps {
   onToggle: (id: number) => void
   onEdit: (node: ChartAccountNode) => void
   onDelete: (node: ChartAccountNode) => void
+  onReactivate: (node: ChartAccountNode) => void
   onAddChild: (node: ChartAccountNode) => void
 }
 
-function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, onAddChild }: TreeRowProps) {
+function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, onReactivate, onAddChild }: TreeRowProps) {
   const hasChildren = node.children.length > 0
   const isExpanded  = expanded.has(node.id)
   const query       = search.trim().toLowerCase()
@@ -242,7 +243,7 @@ function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, on
     <>
       <tr
         className={`border-b border-white/[0.035] transition-colors ${
-          isMatch ? 'bg-cyan-500/[0.06]' : 'hover:bg-white/[0.025]'
+          !node.is_active ? 'bg-slate-500/[0.06] opacity-65' : isMatch ? 'bg-cyan-500/[0.06]' : 'hover:bg-white/[0.025]'
         }`}
       >
         {/* Code */}
@@ -264,6 +265,11 @@ function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, on
             <span className={`text-sm font-medium ${depth === 0 ? 'text-foreground' : 'text-foreground/85'}`}>
               {node.name}
             </span>
+            {!node.is_active && (
+              <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-0.5 text-[10px] text-slate-300">
+                مؤرشف
+              </span>
+            )}
             {hasChildren && (
               <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground shrink-0">
                 {node.children_count}
@@ -307,15 +313,24 @@ function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, on
         {/* Actions */}
         <td className="px-3 py-2.5 whitespace-nowrap">
           <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity [tr:hover_&]:opacity-100">
-            <button onClick={() => onAddChild(node)} title="إضافة حساب فرعي" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-cyan-400 hover:bg-cyan-400/10 transition-colors">
-              <Plus className="h-3 w-3" />
-            </button>
-            <button onClick={() => onEdit(node)} title="تعديل" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-amber-400 hover:bg-amber-400/10 transition-colors">
-              <Pencil className="h-3 w-3" />
-            </button>
-            {!hasChildren && (
-              <button onClick={() => onDelete(node)} title="حذف" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-rose-400 hover:bg-rose-400/10 transition-colors">
-                <Trash2 className="h-3 w-3" />
+            {node.is_active && (
+              <button onClick={() => onAddChild(node)} title="إضافة حساب فرعي" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-cyan-400 hover:bg-cyan-400/10 transition-colors">
+                <Plus className="h-3 w-3" />
+              </button>
+            )}
+            {node.is_active && (
+              <button onClick={() => onEdit(node)} title="تعديل" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-amber-400 hover:bg-amber-400/10 transition-colors">
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
+            {!hasChildren && node.is_active && (
+              <button onClick={() => onDelete(node)} title="أرشفة" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-rose-400 hover:bg-rose-400/10 transition-colors">
+                <Archive className="h-3 w-3" />
+              </button>
+            )}
+            {!node.is_active && (
+              <button onClick={() => onReactivate(node)} title="إعادة تفعيل" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors">
+                <ArchiveRestore className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -334,6 +349,7 @@ function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, on
             onToggle={onToggle}
             onEdit={onEdit}
             onDelete={onDelete}
+            onReactivate={onReactivate}
             onAddChild={onAddChild}
           />
         ))}
@@ -357,7 +373,13 @@ export default function ChartOfAccountsPage() {
 
   const deleteMut = useMutation({
     mutationFn: deleteAccount,
-    onSuccess: () => { toast.success('تم حذف الحساب بنجاح'); setDeleteTarget(null); qc.invalidateQueries({ queryKey: ['chart-of-accounts'] }); qc.invalidateQueries({ queryKey: ['trial-balance'] }) },
+    onSuccess: () => { toast.success('تمت أرشفة الحساب بنجاح'); setDeleteTarget(null); qc.invalidateQueries({ queryKey: ['chart-of-accounts'] }); qc.invalidateQueries({ queryKey: ['trial-balance'] }) },
+    onError: (e) => toast.error(extractApiError(e)),
+  })
+
+  const reactivateMut = useMutation({
+    mutationFn: (id: number) => updateAccount(id, { is_active: true }),
+    onSuccess: () => { toast.success('تمت إعادة تفعيل الحساب'); qc.invalidateQueries({ queryKey: ['chart-of-accounts'] }) },
     onError: (e) => toast.error(extractApiError(e)),
   })
 
@@ -367,7 +389,10 @@ export default function ChartOfAccountsPage() {
     onError: (e) => toast.error(extractApiError(e)),
   })
 
-  const allFlatAccounts = useMemo(() => (data?.flat ?? []).map(a => ({ id: a.id, code: a.code, name: a.name })), [data?.flat])
+  const allFlatAccounts = useMemo(
+    () => (data?.flat ?? []).filter(a => a.is_active).map(a => ({ id: a.id, code: a.code, name: a.name })),
+    [data?.flat],
+  )
 
   function toggleExpand(id: number) {
     setExpanded(prev => {
@@ -550,6 +575,7 @@ export default function ChartOfAccountsPage() {
                       onToggle={toggleExpand}
                       onEdit={(n) => setDialog({ mode: 'edit', initial: { id: n.id, code: n.code, name: n.name, type: n.type, classification: n.classification, parent_id: n.parent_id } })}
                       onDelete={setDeleteTarget}
+                      onReactivate={(n) => reactivateMut.mutate(n.id)}
                       onAddChild={(n) => setDialog({ mode: 'add', initial: { parent_id: n.id, type: n.type } })}
                     />
                   ))}
@@ -576,19 +602,19 @@ export default function ChartOfAccountsPage() {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirm Dialog */}
+      {/* Archive Confirm Dialog */}
       <AnimatePresence>
         {deleteTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={(e) => e.target === e.currentTarget && setDeleteTarget(null)}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="glass w-full max-w-sm rounded-xl border border-white/10 p-6 shadow-2xl">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10">
-                <Trash2 className="h-6 w-6 text-rose-400" />
+                <Archive className="h-6 w-6 text-rose-400" />
               </div>
-              <h3 className="mb-1.5 text-sm font-bold text-foreground">حذف الحساب</h3>
-              <p className="mb-5 text-xs text-muted-foreground">هل تريد حذف الحساب <span className="font-semibold text-foreground">{deleteTarget.code} — {deleteTarget.name}</span>؟ لا يمكن التراجع عن هذه العملية.</p>
+              <h3 className="mb-1.5 text-sm font-bold text-foreground">أرشفة الحساب</h3>
+              <p className="mb-5 text-xs text-muted-foreground">هل تريد أرشفة الحساب <span className="font-semibold text-foreground">{deleteTarget.code} — {deleteTarget.name}</span>؟ سيبقى الحساب وسجله المحاسبي محفوظين ويمكن إعادة تفعيله لاحقاً.</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="destructive" disabled={deleteMut.isPending} onClick={() => deleteMut.mutate(deleteTarget.id)} className="flex-1">
-                  {deleteMut.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'حذف'}
+                  {deleteMut.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'أرشفة'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(null)} className="flex-1 border border-white/10">إلغاء</Button>
               </div>

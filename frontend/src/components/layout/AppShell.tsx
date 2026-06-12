@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
+import { CommandPalette } from '../shared/CommandPalette'
 import { getCurrentUser } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
@@ -17,8 +18,9 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const pathname    = usePathname()
-  const router      = useRouter()
+  const pathname            = usePathname()
+  const router              = useRouter()
+  const prefersReducedMotion = useReducedMotion()
   const { isAuthenticated, isLoading, setAuth, clearAuth, setLoading } = useAuthStore()
   const { setBranches, setActiveBranch }        = useBranchStore()
 
@@ -74,6 +76,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="app-shell-root relative min-h-screen bg-background">
+      <CommandPalette />
       {/* Mobile backdrop */}
       <AnimatePresence>
         {mobileOpen && (
@@ -98,22 +101,31 @@ export function AppShell({ children }: AppShellProps) {
       />
 
       {/* Main */}
-      <motion.div
-        className="app-shell-main flex min-h-screen flex-col"
-        animate={{ marginInlineStart: collapsed ? COLLAPSED_W : EXPANDED_W }}
-        transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-      >
+      <div className="app-shell-root flex min-h-screen flex-col w-full">
         <TopNav
           collapsed={collapsed}
           onToggleSidebar={toggle}
           onToggleMobile={toggleMobile}
         />
         <main className="app-shell-content flex-1 overflow-auto">
-          <div className="page-container" style={{ paddingTop: 16 }}>
-            {children}
+          <div className="page-container pt-4">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -6 }}
+                transition={{
+                  duration: prefersReducedMotion ? 0 : 0.22,
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
-      </motion.div>
+      </div>
     </div>
   )
 }

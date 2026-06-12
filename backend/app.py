@@ -1,15 +1,18 @@
+import hmac
 import logging
 import logging.handlers
 import os
 import calendar
 import hashlib
 import json
+import secrets
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
 from collections import defaultdict, deque
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from uuid import uuid4
 
 APP_VERSION  = '1.0.0'
@@ -29,8 +32,10 @@ from .database import db
 from .backup_utils import BACKUP_FOLDER, create_backup_archive, ensure_backup_folder, ensure_daily_backup, get_backup_path, list_backup_archives, restore_backup_archive
 from .models import (
     Account,
+    AccountingPeriod,
     AuditLog,
     Branch,
+    LoginAttempt,
     Car,
     CarPhoto,
     Customer,
@@ -58,7 +63,14 @@ from .models import (
     Voucher,
     CashboxClose,
 )
-from .accounting import get_trial_balance
+from .accounting import check_period_lock, get_trial_balance
+from .account_map import (
+    AR_ACCOUNT, AP_ACCOUNT, CASH_ACCOUNT, BANK_ACCOUNT,
+    INVENTORY_NEW, REVENUE_NEW_CAR, COGS_ACCOUNT,
+    EXPENSE_SHIPPING, EXPENSE_MISC,
+    acct_cash, acct_sale_revenue, acct_sale_cogs, acct_inventory,
+    acct_expense_category, acct_vehicle_cost,
+)
 
 
 ALLOWED_PHOTO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
@@ -101,6 +113,27 @@ CLASSIFICATION_LABELS = {
     'operating_expense':   'المصاريف التشغيلية',
     'admin_expense':       'المصاريف الإدارية',
 }
+
+MONEY_QUANTUM = Decimal('0.01')
+RATE_QUANTUM = Decimal('0.000001')
+ZERO_MONEY = Decimal('0.00')
+
+
+def decimal_value(value, default=ZERO_MONEY):
+    if value is None or value == '':
+        return default
+    result = value if isinstance(value, Decimal) else Decimal(str(value))
+    if not result.is_finite():
+        raise InvalidOperation('non-finite decimal value')
+    return result
+
+
+def money_value(value, default=ZERO_MONEY):
+    return decimal_value(value, default).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def rate_decimal(value):
+    return decimal_value(value).quantize(RATE_QUANTUM, rounding=ROUND_HALF_UP)
 
 ROLE_LABELS = {
     'Owner':      'مالك المعرض',
@@ -408,10 +441,10 @@ def format_money(value):
     if value is None or value == '':
         return '0'
     try:
-        number = float(value)
-    except (TypeError, ValueError):
+        number = decimal_value(value)
+    except (InvalidOperation, TypeError, ValueError):
         return str(value)
-    if number.is_integer():
+    if number == number.to_integral_value():
         return f'{int(number):,}'
     return f'{number:,.2f}'.rstrip('0').rstrip('.')
 
@@ -428,21 +461,27 @@ def get_current_exchange_rate():
 
 def exchange_rate_value():
     current_rate = get_current_exchange_rate()
-    return current_rate.rate if current_rate else None
+    return rate_decimal(current_rate.rate) if current_rate else None
 
 
 def convert_money(amount, from_currency, to_currency, rate=None):
     from_currency = normalize_currency(from_currency)
     to_currency = normalize_currency(to_currency)
     if amount is None:
-        return 0.0
+        return ZERO_MONEY
     if from_currency == to_currency:
-        return float(amount)
+        return money_value(amount)
     rate = rate if rate is not None else exchange_rate_value()
     if not rate:
         return None
-    amount = float(amount)
-    return amount * rate if from_currency == 'USD' and to_currency == 'IQD' else amount / rate
+    amount_decimal = decimal_value(amount)
+    rate_value = rate_decimal(rate)
+    converted = (
+        amount_decimal * rate_value
+        if from_currency == 'USD' and to_currency == 'IQD'
+        else amount_decimal / rate_value
+    )
+    return converted.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
 
 
 def format_currency_pair(amount, currency='USD', rate=None):
@@ -457,7 +496,7 @@ def format_currency_pair(amount, currency='USD', rate=None):
 
 def to_iqd(amount, currency='USD'):
     converted = convert_money(amount, currency, 'IQD')
-    return converted if converted is not None else float(amount or 0)
+    return converted if converted is not None else money_value(amount or 0)
 
 
 def record_amount_iqd(record, field_name):
@@ -470,7 +509,7 @@ def fetch_online_exchange_rate():
     rate = payload.get('rates', {}).get('IQD')
     if not rate:
         raise ValueError('IQD rate is not available from the online source')
-    return float(rate)
+    return rate_decimal(rate)
 
 
 def allowed_photo(filename):
@@ -541,7 +580,7 @@ def refresh_installment_status(schedule):
     if schedule.status == 'Cancelled':
         return  # حالة الإلغاء لا تُعدَّل تلقائياً
     if schedule.remaining_amount <= 0:
-        schedule.remaining_amount = 0.0
+        schedule.remaining_amount = ZERO_MONEY
         schedule.status = 'Paid'
         if not schedule.payment_date:
             schedule.payment_date = datetime.utcnow()
@@ -556,8 +595,8 @@ def refresh_installment_status(schedule):
 def refresh_installment_plan(plan):
     for schedule in plan.schedules:
         refresh_installment_status(schedule)
-    plan.paid_amount = sum(item.paid_amount for item in plan.schedules)
-    plan.remaining_amount = max(plan.total_amount - plan.paid_amount, 0.0)
+    plan.paid_amount = sum((decimal_value(item.paid_amount) for item in plan.schedules), ZERO_MONEY)
+    plan.remaining_amount = max(decimal_value(plan.total_amount) - plan.paid_amount, ZERO_MONEY)
     plan.status = 'Paid' if plan.remaining_amount <= 0 else 'Active'
 
 
@@ -773,7 +812,9 @@ def ensure_database_schema():
     db.session.execute(text('UPDATE "user" SET is_active_user = TRUE WHERE is_active_user IS NULL'))
     ensure_table_columns('account', {
         'classification': "ALTER TABLE account ADD COLUMN classification VARCHAR(64)",
+        'is_active': "ALTER TABLE account ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true",
     })
+    db.session.execute(text("UPDATE account SET is_active = TRUE WHERE is_active IS NULL"))
     db.session.commit()
     if seed_defaults:
         ensure_branches()
@@ -858,8 +899,8 @@ def _run_startup_checks() -> None:
     tolerance = 0.01
     unbalanced = []
     for je in JournalEntry.query.all():
-        debit  = sum(float(l.debit  or 0) for l in je.lines)
-        credit = sum(float(l.credit or 0) for l in je.lines)
+        debit = sum((decimal_value(line.debit) for line in je.lines), ZERO_MONEY)
+        credit = sum((decimal_value(line.credit) for line in je.lines), ZERO_MONEY)
         if abs(debit - credit) > tolerance:
             unbalanced.append(je.id)
     if unbalanced:
@@ -874,8 +915,8 @@ def _run_startup_checks() -> None:
     try:
         from .accounting import get_trial_balance
         _, totals = get_trial_balance()
-        td = float(totals.get('total_debit', 0) or 0)
-        tc = float(totals.get('total_credit', 0) or 0)
+        td = decimal_value(totals.get('total_debit', 0))
+        tc = decimal_value(totals.get('total_credit', 0))
         if abs(td - tc) > tolerance:
             logger.warning('STARTUP: Trial balance is UNBALANCED (Δ %.2f IQD).', td - tc)
         else:
@@ -1037,11 +1078,11 @@ def branch_allowed(entity):
     return True
 
 
-def _parse_float(value, field_name='القيمة'):
-    """Parse a float from user input; return (float, None) or (None, error_response)."""
+def _parse_money(value, field_name='القيمة'):
+    """Parse and quantize a monetary input; return (Decimal, None) or an error response."""
     try:
-        return float(value), None
-    except (TypeError, ValueError):
+        return money_value(value), None
+    except (InvalidOperation, TypeError, ValueError):
         return None, (jsonify({'error': f'{field_name}: قيمة رقمية غير صحيحة'}), 400)
 
 
@@ -1130,88 +1171,66 @@ def permission_required(permission):
     return decorator
 
 
-def _acct_cash(payment_method: str | None) -> str:
-    return '112001' if (payment_method and 'bank' in (payment_method or '').lower()) else '111001'
-
-def _acct_sale_revenue(car) -> str:
-    return '410002' if (getattr(car, 'condition', '') or '').lower() == 'used' else '410001'
-
-def _acct_sale_cogs(car) -> str:
-    # 360001: تكلفة سيارات مباعة — الحساب الموحّد لجميع المبيعات (جديدة ومستعملة)
-    return '360001'
-
-def _acct_inventory(car) -> str:
-    return '115002' if (getattr(car, 'condition', '') or '').lower() == 'used' else '115001'
-
-def _acct_expense_category(category: str | None) -> str:
-    mapping = {
-        'salary': '310001', 'rent': '320001', 'electricity': '320002',
-        'water': '320003', 'internet': '320004', 'phone': '320005',
-        'fuel': '350001', 'hosting': '350002', 'stationery': '350003',
-        'maintenance': '350004', 'device_maintenance': '350005',
-        'government': '350006', 'banking': '350007', 'advertising': '340001',
-        'commission': '340004', 'shipping': '330003', 'clearance': '330004',
-        'inspection': '330005', 'preparation': '330006',
-    }
-    return mapping.get((category or '').lower(), '350009')
+# تم نقل دوال _acct_* إلى backend/account_map.py — استخدم acct_* من هناك مباشرة.
 
 
 def _post_sale_journal_entries(sale, car, initial_payment=None) -> None:
     """ينشر قيدي الإيراد + تكلفة البضاعة المباعة لفاتورة بيع (بالدينار العراقي)."""
     from .accounting import create_journal_entry
-    revenue_iqd = round(float(to_iqd(
-        float(sale.selling_price or 0) - float(sale.discount or 0), sale.currency
-    ) or 0), 2)
+    revenue_iqd = to_iqd(
+        decimal_value(sale.selling_price) - decimal_value(sale.discount),
+        sale.currency,
+    )
     je_lines: list = []
     if revenue_iqd > 0:
-        je_lines.append({'account_code': '113002', 'debit': revenue_iqd, 'credit': 0})
-        je_lines.append({'account_code': _acct_sale_revenue(car), 'debit': 0, 'credit': revenue_iqd})
+        je_lines.append({'account_code': AR_ACCOUNT, 'debit': revenue_iqd, 'credit': 0})
+        je_lines.append({'account_code': acct_sale_revenue(car), 'debit': 0, 'credit': revenue_iqd})
     if je_lines:
         create_journal_entry(entry_date=sale.sale_date, description=f'بيع سيارة #{sale.id} — {sale.invoice_number}',
                              branch_id=sale.branch_id, reference_type='Sale', reference_id=sale.id, lines=je_lines)
-    if initial_payment and float(initial_payment.amount or 0) > 0:
-        paid_iqd = round(float(to_iqd(float(initial_payment.amount or 0), initial_payment.currency) or 0), 2)
+    if initial_payment and decimal_value(initial_payment.amount) > 0:
+        paid_iqd = to_iqd(initial_payment.amount, initial_payment.currency)
         if paid_iqd > 0:
             create_journal_entry(entry_date=initial_payment.payment_date, description=f'قبض دفعة بيع #{sale.id}',
                                  branch_id=initial_payment.branch_id, reference_type='Payment', reference_id=initial_payment.id, lines=[
-                                     {'account_code': _acct_cash(initial_payment.payment_method), 'debit': paid_iqd, 'credit': 0},
-                                     {'account_code': '113002', 'debit': 0, 'credit': paid_iqd},
+                                     {'account_code': acct_cash(initial_payment.payment_method), 'debit': paid_iqd, 'credit': 0},
+                                     {'account_code': AR_ACCOUNT, 'debit': 0, 'credit': paid_iqd},
                                  ])
-    cost_iqd = round(float(to_iqd(float(car.purchase_price or 0), car.currency) or 0), 2)
+    cost_iqd = to_iqd(car.purchase_price, car.currency)
     if cost_iqd > 0:
         create_journal_entry(entry_date=sale.sale_date, description=f'تكلفة بيع سيارة #{sale.id}',
                              branch_id=sale.branch_id, reference_type='Sale', reference_id=sale.id, lines=[
-                                 {'account_code': _acct_sale_cogs(car),  'debit': cost_iqd, 'credit': 0},
-                                 {'account_code': _acct_inventory(car),  'debit': 0,        'credit': cost_iqd},
+                                 {'account_code': acct_sale_cogs(car),  'debit': cost_iqd, 'credit': 0},
+                                 {'account_code': acct_inventory(car),  'debit': 0,        'credit': cost_iqd},
                              ])
 
 
 def _post_purchase_journal_entries(purchase, car, initial_payment=None) -> None:
     """ينشر قيد شراء السيارة (مخزون + ذمم دائنة + دفعة) بالدينار العراقي."""
     from .accounting import create_journal_entry
-    price_iqd = round(float(to_iqd(float(purchase.purchase_price or 0), purchase.currency) or 0), 2)
+    price_iqd = to_iqd(purchase.purchase_price, purchase.currency)
     if price_iqd <= 0:
         return
-    inv_code = _acct_inventory(car)
+    inv_code = acct_inventory(car)
     create_journal_entry(
         entry_date=purchase.purchase_date,
         description=f'شراء سيارة #{purchase.id} — {purchase.invoice_number}',
         branch_id=purchase.branch_id, reference_type='Purchase', reference_id=purchase.id,
         lines=[
-            {'account_code': inv_code,  'debit': price_iqd, 'credit': 0},
-            {'account_code': '211001',  'debit': 0,         'credit': price_iqd},
+            {'account_code': inv_code,   'debit': price_iqd, 'credit': 0},
+            {'account_code': AP_ACCOUNT, 'debit': 0,         'credit': price_iqd},
         ],
     )
-    if initial_payment and float(initial_payment.amount or 0) > 0:
-        paid_iqd = round(float(to_iqd(float(initial_payment.amount or 0), initial_payment.currency) or 0), 2)
+    if initial_payment and decimal_value(initial_payment.amount) > 0:
+        paid_iqd = to_iqd(initial_payment.amount, initial_payment.currency)
         if paid_iqd > 0:
             create_journal_entry(
                 entry_date=initial_payment.payment_date,
                 description=f'دفع مستحقات شراء #{purchase.id}',
                 branch_id=initial_payment.branch_id, reference_type='Payment', reference_id=initial_payment.id,
                 lines=[
-                    {'account_code': '211001',                                   'debit': paid_iqd, 'credit': 0},
-                    {'account_code': _acct_cash(initial_payment.payment_method), 'debit': 0,        'credit': paid_iqd},
+                    {'account_code': AP_ACCOUNT,                              'debit': paid_iqd, 'credit': 0},
+                    {'account_code': acct_cash(initial_payment.payment_method), 'debit': 0,      'credit': paid_iqd},
                 ],
             )
 
@@ -1219,17 +1238,17 @@ def _post_purchase_journal_entries(purchase, car, initial_payment=None) -> None:
 def _post_expense_journal_entry(expense, payment_method: str | None = None) -> None:
     """ينشر قيد مصروف."""
     from .accounting import create_journal_entry
-    amount_iqd = round(float(to_iqd(expense.amount, expense.currency) or 0), 2)
+    amount_iqd = to_iqd(expense.amount, expense.currency)
     if amount_iqd <= 0:
         return
-    acct_code = _acct_expense_category(expense.category)
+    acct_code = acct_expense_category(expense.category)
     create_journal_entry(
         entry_date=expense.expense_date,
         description=f'مصروف: {expense.title}',
         branch_id=expense.branch_id, reference_type='Expense', reference_id=expense.id,
         lines=[
-            {'account_code': acct_code,                      'debit': amount_iqd, 'credit': 0},
-            {'account_code': _acct_cash(payment_method),     'debit': 0,          'credit': amount_iqd},
+            {'account_code': acct_code,               'debit': amount_iqd, 'credit': 0},
+            {'account_code': acct_cash(payment_method), 'debit': 0,        'credit': amount_iqd},
         ],
     )
 
@@ -1237,7 +1256,7 @@ def _post_expense_journal_entry(expense, payment_method: str | None = None) -> N
 def _post_installment_payment_journal_entry(payment, schedule, plan) -> None:
     """ينشر قيد استلام دفعة قسط."""
     from .accounting import create_journal_entry
-    amount_iqd = round(float(to_iqd(payment.amount, payment.currency) or 0), 2)
+    amount_iqd = to_iqd(payment.amount, payment.currency)
     if amount_iqd <= 0:
         return
     create_journal_entry(
@@ -1245,8 +1264,8 @@ def _post_installment_payment_journal_entry(payment, schedule, plan) -> None:
         description=f'استلام قسط #{schedule.installment_number} — {plan.sale.invoice_number}',
         branch_id=payment.branch_id, reference_type='Payment', reference_id=payment.id,
         lines=[
-            {'account_code': _acct_cash(payment.payment_method), 'debit': amount_iqd, 'credit': 0},
-            {'account_code': '113002',                            'debit': 0,           'credit': amount_iqd},
+            {'account_code': acct_cash(payment.payment_method), 'debit': amount_iqd, 'credit': 0},
+            {'account_code': AR_ACCOUNT,                        'debit': 0,           'credit': amount_iqd},
         ],
     )
 
@@ -1459,9 +1478,9 @@ def build_accounting_integrity_report():
 
     entries = JournalEntry.query.order_by(JournalEntry.id.asc()).all()
     for entry in entries:
-        total_debit = round(sum(float(line.debit or 0) for line in entry.lines), 2)
-        total_credit = round(sum(float(line.credit or 0) for line in entry.lines), 2)
-        difference = round(total_debit - total_credit, 2)
+        total_debit = money_value(sum((decimal_value(line.debit) for line in entry.lines), ZERO_MONEY))
+        total_credit = money_value(sum((decimal_value(line.credit) for line in entry.lines), ZERO_MONEY))
+        difference = money_value(total_debit - total_credit)
         if abs(difference) > tolerance:
             issues['unbalanced_journal_entries'].append({
                 'id': entry.id,
@@ -1690,16 +1709,44 @@ _lo_ban_minutes  = 15
 _lo_state: dict  = {}   # username → {'count': int, 'locked_until': datetime|None}
 
 def _is_locked_out(username: str):
-    """Return (locked: bool, seconds_remaining: int)."""
+    """Return (locked: bool, seconds_remaining: int).
+
+    Checks in-memory state first (fast path), then falls back to the DB
+    so lockouts survive server restarts.
+    """
     now = datetime.utcnow()
     with _lo_lock:
         s = _lo_state.get(username)
-        if not s:
+        if s:
+            until = s.get('locked_until')
+            if until and now < until:
+                return True, int((until - now).total_seconds())
             return False, 0
-        until = s.get('locked_until')
-        if until and now < until:
-            return True, int((until - now).total_seconds())
-        return False, 0
+    # In-memory has no record — check DB for recent failures (post-restart recovery)
+    try:
+        window = now - timedelta(minutes=_lo_ban_minutes)
+        recent_failures = LoginAttempt.query.filter(
+            LoginAttempt.username == username,
+            LoginAttempt.success.is_(False),
+            LoginAttempt.attempted_at >= window,
+        ).count()
+        if recent_failures >= _lo_max_failures:
+            # Find the most recent failure to compute remaining lockout time
+            latest = LoginAttempt.query.filter(
+                LoginAttempt.username == username,
+                LoginAttempt.success.is_(False),
+            ).order_by(LoginAttempt.attempted_at.desc()).first()
+            if latest:
+                lock_until = latest.attempted_at + timedelta(minutes=_lo_ban_minutes)
+                if now < lock_until:
+                    secs = int((lock_until - now).total_seconds())
+                    # Restore in-memory state so subsequent calls are fast
+                    with _lo_lock:
+                        _lo_state[username] = {'count': recent_failures, 'locked_until': lock_until}
+                    return True, secs
+    except Exception:
+        pass
+    return False, 0
 
 def _record_failure(username: str):
     now = datetime.utcnow()
@@ -1712,10 +1759,37 @@ def _record_failure(username: str):
         s['count'] += 1
         if s['count'] >= _lo_max_failures:
             s['locked_until'] = now + timedelta(minutes=_lo_ban_minutes)
+    # Persist to DB so lockout state survives server restarts
+    try:
+        from flask import request as _req
+        ip = (_req.remote_addr or '127.0.0.1') if _req else '127.0.0.1'
+        db.session.add(LoginAttempt(ip_address=ip, username=username, success=False))
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 def _record_success(username: str):
     with _lo_lock:
         _lo_state.pop(username, None)
+    # Mark success in DB and clean old failures for this username
+    try:
+        from flask import request as _req
+        ip = (_req.remote_addr or '127.0.0.1') if _req else '127.0.0.1'
+        db.session.add(LoginAttempt(ip_address=ip, username=username, success=True))
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+        LoginAttempt.query.filter(
+            LoginAttempt.username == username,
+            LoginAttempt.attempted_at < cutoff,
+        ).delete()
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _configure_file_logging(app: 'Flask') -> None:
@@ -1727,7 +1801,25 @@ def _configure_file_logging(app: 'Flask') -> None:
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, 'app.log')
 
-    fmt = logging.Formatter('[%(asctime)s] %(levelname)s %(name)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    # Custom JSON formatter for Cloud / Production mode
+    class _JSONFormatter(logging.Formatter):
+        def format(self, record):
+            log_record = {
+                'timestamp': self.formatTime(record, '%Y-%m-%d %H:%M:%S'),
+                'level':     record.levelname,
+                'logger':    record.name,
+                'message':   record.getMessage(),
+                'filename':  record.filename,
+                'line':      record.lineno,
+            }
+            if record.exc_info:
+                log_record['exception'] = self.formatException(record.exc_info)
+            return json.dumps(log_record, ensure_ascii=False)
+
+    if Config.CLOUD_MODE:
+        fmt = _JSONFormatter()
+    else:
+        fmt = logging.Formatter('[%(asctime)s] %(levelname)s %(name)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
     # Rotating file handler — max 1 MB, keep 3 backups
     file_handler = logging.handlers.RotatingFileHandler(
@@ -1757,6 +1849,19 @@ def _configure_file_logging(app: 'Flask') -> None:
 def create_app():
     app = Flask(__name__, template_folder='../templates', static_folder=Config.STATIC_FOLDER)
     app.config.from_object(Config)
+
+    # Serialize Decimal values (from NUMERIC columns) as floats in JSON responses.
+    from flask.json.provider import DefaultJSONProvider
+
+    class _DecimalJSONProvider(DefaultJSONProvider):
+        def default(self, o):
+            if isinstance(o, Decimal):
+                return float(o)
+            return super().default(o)
+
+    app.json_provider_class = _DecimalJSONProvider
+    app.json = _DecimalJSONProvider(app)
+
     db.init_app(app)
     _configure_file_logging(app)
 
@@ -1774,6 +1879,33 @@ def create_app():
     def request_too_large(_e):
         return jsonify({'error': 'حجم الملف تجاوز الحد المسموح به (10 ميغابايت)'}), 413
 
+    # ── CSRF protection ───────────────────────────────────────────────────────
+    # Paths that must be reachable before a CSRF token can exist in the session.
+    _CSRF_EXEMPT = frozenset({'/api/auth/login'})
+
+    @app.before_request
+    def _csrf_ensure_token():
+        """Seed a CSRF token into every new session on GET requests."""
+        if request.method == 'GET' and 'csrf_token' not in session:
+            session['csrf_token'] = secrets.token_hex(32)
+
+    @app.before_request
+    def _csrf_validate():
+        """Reject state-changing requests whose CSRF token doesn't match the session."""
+        if app.config.get('TESTING'):
+            return
+        if request.method not in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            return
+        if request.path in _CSRF_EXEMPT:
+            return
+        session_token = session.get('csrf_token', '')
+        if not session_token:
+            # No session yet — auth layer will return 401; don't double-error here.
+            return
+        submitted = request.headers.get('X-XSRF-TOKEN', '')
+        if not submitted or not hmac.compare_digest(session_token, submitted):
+            return jsonify({'error': 'طلب غير مصرح به'}), 403
+
     @app.after_request
     def add_local_cors_headers(response):
         origin = request.headers.get('Origin')
@@ -1786,7 +1918,9 @@ def create_app():
         if origin and origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Headers'] = (
+                'Content-Type, Authorization, X-XSRF-TOKEN'
+            )
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
 
         # Security hardening headers
@@ -1798,6 +1932,27 @@ def create_app():
             'Permissions-Policy',
             'camera=(), microphone=(), geolocation=()',
         )
+        response.headers.setdefault(
+            'Content-Security-Policy',
+            "default-src 'none'; frame-ancestors 'none'",
+        )
+        if Config.CLOUD_MODE:
+            response.headers.setdefault(
+                'Strict-Transport-Security',
+                'max-age=31536000; includeSubDomains',
+            )
+
+        # Set XSRF-TOKEN cookie so the frontend (Axios) can read and echo it back
+        csrf_token = session.get('csrf_token')
+        if csrf_token:
+            response.set_cookie(
+                'XSRF-TOKEN',
+                csrf_token,
+                httponly=False,      # JS must be able to read this cookie
+                samesite='Lax',
+                secure=Config.CLOUD_MODE,
+                path='/',
+            )
         return response
 
     @app.route('/__cors/<path:_cors_path>', methods=['OPTIONS'])
@@ -1854,12 +2009,16 @@ def create_app():
         year_start = today.replace(month=1, day=1)
 
         # سعر الصرف مرة واحدة فقط
-        rate = exchange_rate_value() or 1.0
+        rate = exchange_rate_value() or Decimal('1')
 
         def _iqd(amount, currency):
             if not amount:
-                return 0.0
-            return float(amount) if (currency or 'USD') == 'IQD' else float(amount) * rate
+                return ZERO_MONEY
+            return (
+                money_value(amount)
+                if (currency or 'USD') == 'IQD'
+                else money_value(decimal_value(amount) * rate)
+            )
 
         def _sum_rows(rows):
             return sum(_iqd(amt, cur) for cur, amt in rows)
@@ -2055,7 +2214,7 @@ def create_app():
     def api_inventory():
         # pagination
         page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 25))
+        per_page = min(int(request.args.get('per_page', 25)), 100)
         status = request.args.get('status')
         search = request.args.get('search')
 
@@ -2101,7 +2260,7 @@ def create_app():
     @api_permission_required('manage_customers')
     def api_customers():
         page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 25))
+        per_page = min(int(request.args.get('per_page', 25)), 100)
         search = request.args.get('search')
         customer_type = request.args.get('customer_type')
 
@@ -2140,7 +2299,7 @@ def create_app():
     @api_permission_required('manage_sales')
     def api_sales():
         page      = int(request.args.get('page', 1))
-        per_page  = int(request.args.get('per_page', 25))
+        per_page  = min(int(request.args.get('per_page', 25)), 100)
         status    = request.args.get('status')
         search    = request.args.get('search')
         date_from = request.args.get('date_from')
@@ -2208,7 +2367,7 @@ def create_app():
     @api_permission_required('manage_purchases')
     def api_purchases():
         page      = int(request.args.get('page', 1))
-        per_page  = int(request.args.get('per_page', 25))
+        per_page  = min(int(request.args.get('per_page', 25)), 100)
         search    = request.args.get('search')
         status    = request.args.get('status')
         date_from = request.args.get('date_from')
@@ -2344,7 +2503,7 @@ def create_app():
             ).all():
                 try:
                     rev_lines = [
-                        {'account_code': l.account.code, 'debit': float(l.credit or 0), 'credit': float(l.debit or 0)}
+                        {'account_code': l.account.code, 'debit': decimal_value(l.credit), 'credit': decimal_value(l.debit)}
                         for l in je.lines if l.account
                     ]
                     if rev_lines:
@@ -2357,6 +2516,7 @@ def create_app():
                             lines=rev_lines,
                             auto_post=True,
                             posted_by_id=current_user.id,
+                            allow_inactive_accounts=True,
                         )
                         rev.reversal_of_id = je.id
                         je.status = 'reversed'
@@ -2385,12 +2545,14 @@ def create_app():
         if purchase.status == 'Cancelled':
             return jsonify({'error': 'لا يمكن إضافة دفعة لفاتورة ملغاة'}), 400
         data = request.get_json(silent=True) or {}
-        amount = float(data.get('amount') or 0)
+        amount, amount_err = _parse_money(data.get('amount') or 0, 'المبلغ')
+        if amount_err:
+            return amount_err
         payment_method = (data.get('payment_method') or 'Cash').strip()
         notes = (data.get('notes') or '').strip() or None
         if amount <= 0:
             return jsonify({'error': 'المبلغ يجب أن يكون أكبر من صفر'}), 400
-        if round(amount, 6) > round(float(purchase.remaining_amount or 0), 6):
+        if amount > decimal_value(purchase.remaining_amount):
             return jsonify({'error': f'المبلغ ({amount}) يتجاوز المتبقي ({purchase.remaining_amount})'}), 400
         payment = Payment(
             payment_type='purchase', branch_id=purchase.branch_id, purchase_id=purchase.id,
@@ -2398,14 +2560,15 @@ def create_app():
             payment_method=payment_method, notes=notes,
             payment_date=datetime.utcnow(),
         )
-        purchase.paid_amount = round(float(purchase.paid_amount or 0) + amount, 6)
+        purchase.paid_amount = money_value(decimal_value(purchase.paid_amount) + amount)
         purchase.remaining_amount = max(
-            round(float(purchase.purchase_price or 0) - purchase.paid_amount, 6), 0.0
+            money_value(decimal_value(purchase.purchase_price) - purchase.paid_amount),
+            ZERO_MONEY,
         )
         db.session.add(payment)
         db.session.flush()
         try:
-            paid_iqd = round(float(to_iqd(amount, purchase.currency) or 0), 2)
+            paid_iqd = to_iqd(amount, purchase.currency)
             if paid_iqd > 0:
                 create_journal_entry(
                     entry_date=payment.payment_date,
@@ -2413,8 +2576,8 @@ def create_app():
                     branch_id=payment.branch_id,
                     reference_type='Payment', reference_id=payment.id,
                     lines=[
-                        {'account_code': '211001',                       'debit': paid_iqd, 'credit': 0},
-                        {'account_code': _acct_cash(payment_method),     'debit': 0,        'credit': paid_iqd},
+                        {'account_code': AP_ACCOUNT,              'debit': paid_iqd, 'credit': 0},
+                        {'account_code': acct_cash(payment_method), 'debit': 0,      'credit': paid_iqd},
                     ],
                 )
         except Exception as _je_err:
@@ -2456,18 +2619,18 @@ def create_app():
         year_val, year_err = _validate_year(data.get('manufacturing_year'))
         if year_err:
             return year_err
-        purchase_price, pp_err = _parse_float(data.get('purchase_price'), 'سعر الشراء')
+        purchase_price, pp_err = _parse_money(data.get('purchase_price'), 'سعر الشراء')
         if pp_err:
             return pp_err
         if purchase_price <= 0:
             return jsonify({'error': 'سعر الشراء يجب أن يكون أكبر من صفر'}), 400
-        paid_amount_raw, pa_err = _parse_float(data.get('paid_amount') or 0, 'المبلغ المدفوع')
+        paid_amount_raw, pa_err = _parse_money(data.get('paid_amount') or 0, 'المبلغ المدفوع')
         if pa_err:
             return pa_err
-        paid_amount = max(paid_amount_raw, 0.0)
+        paid_amount = max(paid_amount_raw, ZERO_MONEY)
         if paid_amount > purchase_price:
             return jsonify({'error': 'المبلغ المدفوع لا يمكن أن يتجاوز سعر الشراء'}), 400
-        remaining_amount = round(purchase_price - paid_amount, 6)
+        remaining_amount = money_value(purchase_price - paid_amount)
         currency = normalize_currency(data.get('currency'))
         try:
             purchase_date = datetime.strptime(data.get('purchase_date'), '%Y-%m-%d')
@@ -2540,7 +2703,7 @@ def create_app():
     @api_permission_required('manage_installments')
     def api_installments():
         page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 25))
+        per_page = min(int(request.args.get('per_page', 25)), 100)
         filter_param = request.args.get('filter', 'all')
 
         today = datetime.utcnow().date()
@@ -2556,13 +2719,13 @@ def create_app():
             'total_plans': len(all_plans),
             'active_plans': 0,
             'paid_plans': 0,
-            'total_receivables': 0.0,
-            'total_paid_amount': 0.0,
-            'overdue_amount': 0.0,
-            'due_today_amount': 0.0,
-            'due_tomorrow_amount': 0.0,
-            'due_in_2_days_amount': 0.0,
-            'due_in_7_days_amount': 0.0,
+            'total_receivables': Decimal('0.0'),
+            'total_paid_amount': Decimal('0.0'),
+            'overdue_amount': Decimal('0.0'),
+            'due_today_amount': Decimal('0.0'),
+            'due_tomorrow_amount': Decimal('0.0'),
+            'due_in_2_days_amount': Decimal('0.0'),
+            'due_in_7_days_amount': Decimal('0.0'),
             'overdue_count': 0,
             'due_today_count': 0,
             'due_tomorrow_count': 0,
@@ -2776,12 +2939,18 @@ def create_app():
         def node(account, depth=0):
             trial = trial_by_code.get(account.code or '', {})
             children = [node(child, depth + 1) for child in children_by_parent.get(account.id, [])]
-            own_debit = float(trial.get('debit', 0) or 0)
-            own_credit = float(trial.get('credit', 0) or 0)
-            own_balance = float(trial.get('balance', 0) or 0)
-            subtree_debit = round(own_debit + sum(child['subtree_debit'] for child in children), 2)
-            subtree_credit = round(own_credit + sum(child['subtree_credit'] for child in children), 2)
-            subtree_balance = round(own_balance + sum(child['subtree_balance'] for child in children), 2)
+            own_debit = money_value(trial.get('debit', 0))
+            own_credit = money_value(trial.get('credit', 0))
+            own_balance = money_value(trial.get('balance', 0))
+            subtree_debit = money_value(
+                own_debit + sum((child['subtree_debit'] for child in children), ZERO_MONEY)
+            )
+            subtree_credit = money_value(
+                own_credit + sum((child['subtree_credit'] for child in children), ZERO_MONEY)
+            )
+            subtree_balance = money_value(
+                own_balance + sum((child['subtree_balance'] for child in children), ZERO_MONEY)
+            )
             clf = account.classification or ''
             return {
                 'id': account.id,
@@ -2791,6 +2960,7 @@ def create_app():
                 'type_label': type_label(account.type),
                 'classification': clf,
                 'classification_label': CLASSIFICATION_LABELS.get(clf, ''),
+                'is_active': bool(account.is_active),
                 'level': level_for(account),
                 'depth': depth,
                 'parent_id': account.parent_id,
@@ -2824,9 +2994,9 @@ def create_app():
             bucket = type_summary.setdefault(item['type'], {
                 'label': item['type_label'],
                 'count': 0,
-                'debit': 0.0,
-                'credit': 0.0,
-                'balance': 0.0,
+                'debit': ZERO_MONEY,
+                'credit': ZERO_MONEY,
+                'balance': ZERO_MONEY,
             })
             bucket['count'] += 1
             bucket['debit'] = round(bucket['debit'] + item['own_debit'], 2)
@@ -2839,18 +3009,18 @@ def create_app():
                     'label': CLASSIFICATION_LABELS.get(clf, clf),
                     'type': item['type'],
                     'count': 0,
-                    'debit': 0.0,
-                    'credit': 0.0,
-                    'balance': 0.0,
+                    'debit': ZERO_MONEY,
+                    'credit': ZERO_MONEY,
+                    'balance': ZERO_MONEY,
                 })
                 cbucket['count'] += 1
                 cbucket['debit'] = round(cbucket['debit'] + item['own_debit'], 2)
                 cbucket['credit'] = round(cbucket['credit'] + item['own_credit'], 2)
                 cbucket['balance'] = round(cbucket['balance'] + item['own_balance'], 2)
 
-        total_debit = round(sum(item['own_debit'] for item in flat), 2)
-        total_credit = round(sum(item['own_credit'] for item in flat), 2)
-        difference = round(total_debit - total_credit, 2)
+        total_debit = money_value(sum((item['own_debit'] for item in flat), ZERO_MONEY))
+        total_credit = money_value(sum((item['own_credit'] for item in flat), ZERO_MONEY))
+        difference = money_value(total_debit - total_credit)
 
         return jsonify({
             'total': len(flat),
@@ -2902,6 +3072,7 @@ def create_app():
             'parent_id':            account.parent_id,
             'parent_code':          account.parent.code if account.parent else None,
             'balance':              float(account.balance or 0),
+            'is_active':            bool(account.is_active),
             'children_count':       Account.query.filter_by(parent_id=account.id).count(),
         }
 
@@ -2932,6 +3103,8 @@ def create_app():
             parent = Account.query.get(int(parent_id))
             if not parent:
                 return jsonify({'error': 'الحساب الأب غير موجود'}), 400
+            if not parent.is_active:
+                return jsonify({'error': 'لا يمكن إضافة حساب فرعي تحت حساب مؤرشف'}), 409
 
         acct = Account(code=code, name=name, type=acct_type, classification=classification,
                        parent_id=parent.id if parent else None, balance=0.0)
@@ -2946,14 +3119,26 @@ def create_app():
     def api_update_account(account_id):
         acct = Account.query.get_or_404(account_id)
         data = request.get_json(silent=True) or {}
+        requested_active = data.get('is_active') if 'is_active' in data else None
+        structural_fields = {'code', 'name', 'type', 'classification', 'parent_id'}
+        if requested_active is not None and not isinstance(requested_active, bool):
+            return jsonify({'error': 'حالة الحساب يجب أن تكون true أو false'}), 400
+        if requested_active is False and Account.query.filter_by(parent_id=acct.id).first():
+            return jsonify({'error': 'لا يمكن أرشفة حساب له حسابات فرعية'}), 409
+        if requested_active is True and acct.parent and not acct.parent.is_active:
+            return jsonify({'error': 'لا يمكن تفعيل حساب أبوه مؤرشف'}), 409
 
-        if JournalEntryLine.query.filter_by(account_id=acct.id).first():
+        if structural_fields.intersection(data) and JournalEntryLine.query.filter_by(account_id=acct.id).first():
             return jsonify({'error': 'لا يمكن تعديل حساب مستخدم في القيود المحاسبية'}), 409
 
         new_code = (data.get('code') or '').strip() or acct.code
         new_name = (data.get('name') or '').strip() or acct.name
         new_type = (data.get('type') or '').strip() or acct.type
-        new_clf  = (data.get('classification') or '').strip() or None
+        new_clf = (
+            (data.get('classification') or '').strip() or None
+            if 'classification' in data
+            else acct.classification
+        )
         new_parent_id = data.get('parent_id')
 
         if new_type not in VALID_ACCOUNT_TYPES:
@@ -2968,10 +3153,16 @@ def create_app():
         acct.type = new_type
         acct.classification = new_clf
         if new_parent_id is not None:
-            acct.parent_id = int(new_parent_id) if new_parent_id else None
+            parent = Account.query.get(int(new_parent_id)) if new_parent_id else None
+            if parent and not parent.is_active:
+                return jsonify({'error': 'لا يمكن نقل الحساب تحت حساب مؤرشف'}), 409
+            acct.parent_id = parent.id if parent else None
+        if requested_active is not None:
+            acct.is_active = bool(requested_active)
 
+        action = 'enable account' if requested_active is True else 'disable account' if requested_active is False else 'edit account'
+        log_action(action, 'Account', acct.id, f'{new_code} — {new_name}')
         db.session.commit()
-        log_action('edit account', 'Account', acct.id, f'{new_code} — {new_name}')
         return jsonify(_account_to_dict(acct))
 
     @app.route('/api/accounts/<int:account_id>', methods=['DELETE'])
@@ -2981,20 +3172,12 @@ def create_app():
         acct = Account.query.get_or_404(account_id)
 
         if Account.query.filter_by(parent_id=acct.id).first():
-            return jsonify({'error': 'لا يمكن حذف حساب له حسابات فرعية'}), 409
-        if JournalEntryLine.query.filter_by(account_id=acct.id).first():
-            return jsonify({'error': 'لا يمكن حذف حساب مستخدم في القيود المحاسبية'}), 409
+            return jsonify({'error': 'لا يمكن أرشفة حساب له حسابات فرعية'}), 409
 
-        from .models import Voucher
-        if Voucher.query.filter(
-            (Voucher.debit_account_id == acct.id) | (Voucher.credit_account_id == acct.id)
-        ).first():
-            return jsonify({'error': 'لا يمكن حذف حساب مرتبط بسندات مالية'}), 409
-
-        log_action('delete account', 'Account', acct.id, f'{acct.code} — {acct.name}')
-        db.session.delete(acct)
+        acct.is_active = False
+        log_action('archive account', 'Account', acct.id, f'{acct.code} — {acct.name}')
         db.session.commit()
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'is_active': False})
 
     @app.route('/api/accounts/recompute-balances', methods=['POST'])
     @api_login_required
@@ -3014,8 +3197,10 @@ def create_app():
         trial_by_code = {r['code']: r for r in trial_rows}
 
         def _subtree_balance(account):
-            direct = float(trial_by_code.get(account.code or '', {}).get('balance', 0) or 0)
-            return round(direct + sum(_subtree_balance(c) for c in account.children), 2)
+            direct = money_value(trial_by_code.get(account.code or '', {}).get('balance', 0))
+            return money_value(
+                direct + sum((_subtree_balance(child) for child in account.children), ZERO_MONEY)
+            )
 
         def _section(type_filter, negate=False):
             query = Account.query.filter(Account.type == type_filter, Account.parent_id.is_(None))
@@ -3052,7 +3237,7 @@ def create_app():
 
         # صافي الدخل يُضاف إلى حقوق الملكية لإغلاق المعادلة:
         # الأصول = المطلوبات + حقوق الملكية + صافي الدخل
-        total_equity_with_ni = round(total_equity + net_income, 2)
+        total_equity_with_ni = round(total_equity + decimal_value(net_income), 2)
         difference = round(total_assets - (total_liabilities + total_equity_with_ni), 2)
 
         return jsonify({
@@ -3075,6 +3260,7 @@ def create_app():
 
     @app.route('/api/smart-alerts')
     @api_login_required
+    @api_permission_required('manage_reports')
     def api_smart_alerts():
         """مركز التنبيهات الذكية — يجمع كل تنبيهات النظام في طلب واحد."""
         today     = datetime.utcnow().date()
@@ -3155,8 +3341,8 @@ def create_app():
         # 4. قيود غير متوازنة
         unbalanced = []
         for je in scoped_query(JournalEntry).all():
-            td = sum(float(l.debit or 0) for l in je.lines)
-            tc = sum(float(l.credit or 0) for l in je.lines)
+            td = sum((decimal_value(line.debit) for line in je.lines), ZERO_MONEY)
+            tc = sum((decimal_value(line.credit) for line in je.lines), ZERO_MONEY)
             if abs(td - tc) > 0.01:
                 unbalanced.append(je.id)
         if unbalanced:
@@ -3172,8 +3358,8 @@ def create_app():
         # 5. ميزانية غير متوازنة
         try:
             _, trial_totals = get_trial_balance(selected_branch_scope_id())
-            td = float(trial_totals.get('total_debit', 0) or 0)
-            tc = float(trial_totals.get('total_credit', 0) or 0)
+            td = decimal_value(trial_totals.get('total_debit', 0))
+            tc = decimal_value(trial_totals.get('total_credit', 0))
             if abs(td - tc) > 0.01:
                 alerts.append({
                     'type': 'unbalanced_trial_balance',
@@ -3264,6 +3450,7 @@ def create_app():
 
     @app.route('/api/reports/smart-summary')
     @api_login_required
+    @api_permission_required('manage_reports')
     def api_smart_summary():
         """ملخص ذكي يومي — ما الذي حصل اليوم؟ وما الذي يحتاج انتباهاً؟"""
         today      = datetime.utcnow().date()
@@ -3322,8 +3509,8 @@ def create_app():
         # حالة الميزان
         try:
             _, trial_totals = get_trial_balance(selected_branch_scope_id())
-            td = float(trial_totals.get('total_debit', 0) or 0)
-            tc = float(trial_totals.get('total_credit', 0) or 0)
+            td = decimal_value(trial_totals.get('total_debit', 0))
+            tc = decimal_value(trial_totals.get('total_credit', 0))
             trial_balanced = abs(td - tc) < 0.01
         except Exception:
             trial_balanced = None
@@ -3370,6 +3557,7 @@ def create_app():
 
     @app.route('/api/reports/cash-flow-forecast')
     @api_login_required
+    @api_permission_required('manage_reports')
     def api_cash_flow_forecast():
         """توقع التدفق النقدي للـ 60 يوم القادمة أسبوعياً."""
         today = datetime.utcnow().date()
@@ -3444,6 +3632,7 @@ def create_app():
 
     @app.route('/api/reports/mom-comparison')
     @api_login_required
+    @api_permission_required('manage_reports')
     def api_mom_comparison():
         """مقارنة الشهر الحالي بالشهر الماضي — مبيعات، مصاريف، ربح."""
         today       = datetime.utcnow().date()
@@ -3510,10 +3699,76 @@ def create_app():
             },
         })
 
+    # ── Monthly Profit Report ─────────────────────────────────────────────
+
+    @app.route('/api/reports/monthly-profit')
+    @api_login_required
+    @api_permission_required('manage_reports')
+    def api_monthly_profit():
+        """تقرير الأرباح الشهرية — آخر N شهر."""
+        import calendar as _cal
+        months_count = min(int(request.args.get('months', 12)), 24)
+        today = datetime.utcnow().date()
+        rows = []
+        ARABIC_MONTHS = [
+            '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+            'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+        ]
+        for i in range(months_count - 1, -1, -1):
+            # احسب بداية الشهر
+            year  = today.year
+            month = today.month - i
+            while month <= 0:
+                month += 12
+                year  -= 1
+            start = datetime(year, month, 1).date()
+            end   = datetime(year, month, _cal.monthrange(year, month)[1]).date()
+
+            sales = Sale.query.filter(
+                func.date(Sale.sale_date) >= start.isoformat(),
+                func.date(Sale.sale_date) <= end.isoformat(),
+                Sale.status != 'Cancelled',
+            ).all()
+            purchases = Purchase.query.filter(
+                func.date(Purchase.purchase_date) >= start.isoformat(),
+                func.date(Purchase.purchase_date) <= end.isoformat(),
+                Purchase.status != 'Cancelled',
+            ).all()
+            expenses = Expense.query.filter(
+                func.date(Expense.expense_date) >= start.isoformat(),
+                func.date(Expense.expense_date) <= end.isoformat(),
+            ).all()
+
+            revenue   = sum(to_iqd(s.selling_price - (s.discount or 0), s.currency) or 0 for s in sales)
+            cost      = sum(to_iqd(p.purchase_price, p.currency) or 0 for p in purchases)
+            exp_total = sum(to_iqd(e.amount, e.currency) or 0 for e in expenses)
+
+            rows.append({
+                'month':        f'{year:04d}-{month:02d}',
+                'label':        f'{ARABIC_MONTHS[month]} {year}',
+                'sales_count':  len(sales),
+                'revenue':      round(revenue, 2),
+                'cost':         round(cost, 2),
+                'expenses':     round(exp_total, 2),
+                'gross_profit': round(revenue - cost, 2),
+                'net_profit':   round(revenue - cost - exp_total, 2),
+            })
+
+        totals = {
+            'revenue':      round(sum(r['revenue']      for r in rows), 2),
+            'cost':         round(sum(r['cost']         for r in rows), 2),
+            'expenses':     round(sum(r['expenses']     for r in rows), 2),
+            'gross_profit': round(sum(r['gross_profit'] for r in rows), 2),
+            'net_profit':   round(sum(r['net_profit']   for r in rows), 2),
+            'sales_count':  sum(r['sales_count']        for r in rows),
+        }
+        return jsonify({'months': rows, 'totals': totals})
+
     # ── Anomaly Detection ─────────────────────────────────────────────────
 
     @app.route('/api/reports/anomalies')
     @api_login_required
+    @api_permission_required('manage_reports')
     def api_anomalies():
         """كشف الشذوذ في المعاملات — مبيعات منخفضة الثمن، مصاريف مرتفعة، أخطاء."""
         today      = datetime.utcnow().date()
@@ -3587,7 +3842,7 @@ def create_app():
             Payment.payment_type == 'installment',
         ).all()
         for p in recent_payments:
-            if p.installment_schedule and p.amount > (p.installment_schedule.amount * 1.05):
+            if p.installment_schedule and p.amount > (p.installment_schedule.amount * Decimal('1.05')):
                 anomalies.append({
                     'type':     'overpayment',
                     'severity': 'info',
@@ -3622,6 +3877,7 @@ def create_app():
 
     @app.route('/api/search')
     @api_login_required
+    @api_permission_required('manage_customers')
     def api_global_search():
         """بحث شامل في كل السجلات — عملاء، سيارات، مبيعات، أقساط."""
         q = (request.args.get('q') or '').strip()
@@ -3738,7 +3994,7 @@ def create_app():
     def api_crm_interactions():
         customer_id = request.args.get('customer_id', type=int)
         page        = int(request.args.get('page', 1))
-        per_page    = int(request.args.get('per_page', 30))
+        per_page    = min(int(request.args.get('per_page', 30)), 100)
         itype       = request.args.get('type')
         outcome     = request.args.get('outcome')
 
@@ -3761,11 +4017,16 @@ def create_app():
 
         # أقرب متابعات
         today = datetime.utcnow().date()
-        due_soon = CustomerInteraction.query.filter(
+        due_soon_q = CustomerInteraction.query.filter(
             CustomerInteraction.follow_up_date.isnot(None),
             func.date(CustomerInteraction.follow_up_date) >= today.isoformat(),
             func.date(CustomerInteraction.follow_up_date) <= (today + timedelta(days=3)).isoformat(),
-        ).order_by(CustomerInteraction.follow_up_date.asc()).limit(10).all()
+        )
+        if not can_access_all_branches():
+            bid = active_branch_id()
+            if bid:
+                due_soon_q = due_soon_q.filter(CustomerInteraction.branch_id == bid)
+        due_soon = due_soon_q.order_by(CustomerInteraction.follow_up_date.asc()).limit(10).all()
 
         return jsonify({
             'total':    total,
@@ -3786,6 +4047,8 @@ def create_app():
         if not customer_id:
             return jsonify({'error': 'customer_id مطلوب'}), 400
         customer = Customer.query.get_or_404(int(customer_id))
+        if not branch_allowed(customer):
+            return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل في فرع آخر'}), 403
 
         itype = (data.get('interaction_type') or 'call').strip()
         if itype not in INTERACTION_TYPES:
@@ -3819,6 +4082,8 @@ def create_app():
     @api_permission_required('manage_customers')
     def api_crm_update_interaction(iid):
         inter = CustomerInteraction.query.get_or_404(iid)
+        if not branch_allowed(inter):
+            return jsonify({'error': 'لا يمكنك الوصول إلى تفاعلات فرع آخر'}), 403
         data  = request.get_json(silent=True) or {}
         if 'interaction_type' in data and data['interaction_type'] in INTERACTION_TYPES:
             inter.interaction_type = data['interaction_type']
@@ -3836,6 +4101,8 @@ def create_app():
     @api_permission_required('manage_customers')
     def api_crm_delete_interaction(iid):
         inter = CustomerInteraction.query.get_or_404(iid)
+        if not branch_allowed(inter):
+            return jsonify({'error': 'لا يمكنك الوصول إلى تفاعلات فرع آخر'}), 403
         db.session.delete(inter)
         db.session.commit()
         return jsonify({'success': True})
@@ -3849,17 +4116,20 @@ def create_app():
         week_ago  = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
 
-        total_customers   = Customer.query.count()
-        new_this_month    = Customer.query.filter(func.date(Customer.created_at) >= month_ago.isoformat()).count()
-        interactions_week = CustomerInteraction.query.filter(func.date(CustomerInteraction.interaction_date) >= week_ago.isoformat()).count()
-        follow_ups_due    = CustomerInteraction.query.filter(
+        total_customers   = scoped_query(Customer).count()
+        new_this_month    = scoped_query(Customer).filter(func.date(Customer.created_at) >= month_ago.isoformat()).count()
+        interactions_week = scoped_query(CustomerInteraction).filter(func.date(CustomerInteraction.interaction_date) >= week_ago.isoformat()).count()
+        follow_ups_due_q  = scoped_query(CustomerInteraction).filter(
             CustomerInteraction.follow_up_date.isnot(None),
             func.date(CustomerInteraction.follow_up_date) <= today.isoformat(),
             CustomerInteraction.outcome.in_([None, 'follow_up']),
-        ).count()
+        )
+        follow_ups_due    = follow_ups_due_q.count()
 
         by_type = {}
-        for row in db.session.query(CustomerInteraction.interaction_type, func.count()).group_by(CustomerInteraction.interaction_type).all():
+        by_type_q = db.session.query(CustomerInteraction.interaction_type, func.count())
+        by_type_q = branch_filter(by_type_q, CustomerInteraction)
+        for row in by_type_q.group_by(CustomerInteraction.interaction_type).all():
             by_type[row[0]] = {'count': row[1], 'label': INTERACTION_LABELS.get(row[0], row[0])}
 
         by_outcome = {}
@@ -3978,6 +4248,20 @@ def create_app():
         if not customer_id:
             return jsonify({'error': 'customer_id مطلوب'}), 400
         customer = Customer.query.get_or_404(int(customer_id))
+        if not branch_allowed(customer):
+            return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل في فرع آخر'}), 403
+
+        car_id = data.get('car_id')
+        if car_id:
+            car = Car.query.get_or_404(int(car_id))
+            if not branch_allowed(car):
+                return jsonify({'error': 'السيارة المحددة تابعة لفرع آخر'}), 403
+
+        emp_id = data.get('assigned_to_id')
+        if emp_id:
+            emp = Employee.query.get_or_404(int(emp_id))
+            if not branch_allowed(emp):
+                return jsonify({'error': 'الموظف المحدد تابع لفرع آخر'}), 403
 
         stage = (data.get('stage') or 'lead').strip()
         if stage not in PIPELINE_STAGES:
@@ -3986,11 +4270,11 @@ def create_app():
         deal = SalePipeline(
             branch_id      = customer.branch_id,
             customer_id    = customer.id,
-            car_id         = int(data['car_id']) if data.get('car_id') else None,
-            assigned_to_id = int(data['assigned_to_id']) if data.get('assigned_to_id') else None,
+            car_id         = int(car_id) if car_id else None,
+            assigned_to_id = int(emp_id) if emp_id else None,
             created_by_id  = current_user.id if current_user.is_authenticated else None,
             stage          = stage,
-            expected_price = float(data['expected_price']) if data.get('expected_price') else None,
+            expected_price = money_value(data['expected_price']) if data.get('expected_price') else None,
             currency       = normalize_currency(data.get('currency')),
             notes          = (data.get('notes') or '').strip() or None,
         )
@@ -4005,6 +4289,8 @@ def create_app():
     def api_pipeline_move_stage(deal_id):
         """تحريك الصفقة إلى مرحلة أخرى."""
         deal  = SalePipeline.query.get_or_404(deal_id)
+        if not branch_allowed(deal):
+            return jsonify({'error': 'لا يمكنك الوصول إلى صفقات فرع آخر'}), 403
         data  = request.get_json(silent=True) or {}
         stage = (data.get('stage') or '').strip()
         if stage not in PIPELINE_STAGES:
@@ -4027,13 +4313,25 @@ def create_app():
     @api_permission_required('manage_sales')
     def api_pipeline_update(deal_id):
         deal = SalePipeline.query.get_or_404(deal_id)
+        if not branch_allowed(deal):
+            return jsonify({'error': 'لا يمكنك الوصول إلى صفقات فرع آخر'}), 403
         data = request.get_json(silent=True) or {}
         if 'car_id' in data:
-            deal.car_id = int(data['car_id']) if data['car_id'] else None
+            car_id = int(data['car_id']) if data['car_id'] else None
+            if car_id:
+                car = Car.query.get_or_404(car_id)
+                if not branch_allowed(car):
+                    return jsonify({'error': 'السيارة المحددة تابعة لفرع آخر'}), 403
+            deal.car_id = car_id
         if 'assigned_to_id' in data:
-            deal.assigned_to_id = int(data['assigned_to_id']) if data['assigned_to_id'] else None
+            emp_id = int(data['assigned_to_id']) if data['assigned_to_id'] else None
+            if emp_id:
+                emp = Employee.query.get_or_404(emp_id)
+                if not branch_allowed(emp):
+                    return jsonify({'error': 'الموظف المحدد تابع لفرع آخر'}), 403
+            deal.assigned_to_id = emp_id
         if 'expected_price' in data:
-            deal.expected_price = float(data['expected_price']) if data['expected_price'] else None
+            deal.expected_price = money_value(data['expected_price']) if data['expected_price'] else None
         if 'notes' in data:
             deal.notes = (data['notes'] or '').strip() or None
         if 'currency' in data:
@@ -4046,6 +4344,8 @@ def create_app():
     @api_permission_required('manage_sales')
     def api_pipeline_delete(deal_id):
         deal = SalePipeline.query.get_or_404(deal_id)
+        if not branch_allowed(deal):
+            return jsonify({'error': 'لا يمكنك الوصول إلى صفقات فرع آخر'}), 403
         db.session.delete(deal)
         db.session.commit()
         return jsonify({'success': True})
@@ -4205,8 +4505,8 @@ def create_app():
             db.session.add(target)
 
         target.target_sales_count = int(data.get('target_sales_count', 0))
-        target.target_revenue     = float(data.get('target_revenue', 0))
-        target.target_profit      = float(data.get('target_profit', 0))
+        target.target_revenue = money_value(data.get('target_revenue', 0))
+        target.target_profit = money_value(data.get('target_profit', 0))
         target.currency           = normalize_currency(data.get('currency'))
         db.session.commit()
         return jsonify({'success': True, 'period': period, 'employee_id': emp.id})
@@ -4253,11 +4553,16 @@ def create_app():
         emp  = Employee.query.get_or_404(int(emp_id))
         sale = Sale.query.get_or_404(int(sale_id))
 
-        rate   = float(data.get('commission_rate', 0))
-        amount = float(data.get('commission_amount', 0))
+        try:
+            rate = decimal_value(data.get('commission_rate', 0))
+        except (InvalidOperation, TypeError, ValueError):
+            return jsonify({'error': 'نسبة العمولة غير صحيحة'}), 400
+        amount, amount_err = _parse_money(data.get('commission_amount', 0), 'مبلغ العمولة')
+        if amount_err:
+            return amount_err
         if amount <= 0 and rate > 0:
-            net = float(sale.selling_price or 0) - float(sale.discount or 0)
-            amount = round(net * rate / 100, 2)
+            net = decimal_value(sale.selling_price) - decimal_value(sale.discount)
+            amount = money_value(net * rate / Decimal('100'))
 
         commission = EmployeeCommission(
             employee_id=emp.id, sale_id=sale.id, branch_id=sale.branch_id,
@@ -4292,7 +4597,7 @@ def create_app():
 
         # تكاليف إضافية (VehicleCost)
         extra_costs = []
-        extra_total_iqd = 0.0
+        extra_total_iqd = ZERO_MONEY
         for vc in car.costs:
             amt_iqd = to_iqd(vc.amount, vc.currency) or 0
             extra_costs.append({
@@ -4308,7 +4613,7 @@ def create_app():
 
         # مبيعات
         active_sales = [s for s in car.sales if s.status != 'Cancelled']
-        revenue_iqd = 0.0
+        revenue_iqd = ZERO_MONEY
         sale_info = None
         if active_sales:
             s = active_sales[0]
@@ -4362,7 +4667,7 @@ def create_app():
             for e in expenses:
                 cat = e.category or 'other'
                 amt = to_iqd(e.amount, e.currency) or 0
-                cats.setdefault(cat, {'count': 0, 'total': 0.0, 'items': []})
+                cats.setdefault(cat, {'count': 0, 'total': Decimal('0.0'), 'items': []})
                 cats[cat]['count']  += 1
                 cats[cat]['total']  = round(cats[cat]['total'] + amt, 2)
                 cats[cat]['items'].append({'id': e.id, 'title': e.title, 'amount_iqd': round(amt, 2)})
@@ -4424,8 +4729,8 @@ def create_app():
     @api_permission_required('manage_accounting')
     def api_trial_balance():
         accounts, totals = get_trial_balance(selected_branch_scope_id())
-        total_debit = float(totals.get('total_debit', 0) or 0)
-        total_credit = float(totals.get('total_credit', 0) or 0)
+        total_debit = decimal_value(totals.get('total_debit', 0))
+        total_credit = decimal_value(totals.get('total_credit', 0))
         difference = round(total_debit - total_credit, 2)
         return jsonify({
             'accounts': accounts,
@@ -4452,7 +4757,7 @@ def create_app():
     @api_permission_required('manage_accounting')
     def api_journal_entries():
         page      = int(request.args.get('page', 1))
-        per_page  = int(request.args.get('per_page', 30))
+        per_page  = min(int(request.args.get('per_page', 30)), 100)
         date_from = request.args.get('date_from')
         date_to   = request.args.get('date_to')
         ref_type  = request.args.get('ref_type')
@@ -4481,8 +4786,8 @@ def create_app():
         entries = query.offset((page - 1) * per_page).limit(per_page).all()
         results = []
         for e in entries:
-            total_debit  = sum(float(l.debit or 0) for l in e.lines)
-            total_credit = sum(float(l.credit or 0) for l in e.lines)
+            total_debit = sum((decimal_value(line.debit) for line in e.lines), ZERO_MONEY)
+            total_credit = sum((decimal_value(line.credit) for line in e.lines), ZERO_MONEY)
             results.append({
                 'id':               e.id,
                 'reference_number': e.reference_number,
@@ -4553,6 +4858,10 @@ def create_app():
             return jsonify({'error': 'لا يمكنك الوصول إلى بيانات فرع آخر'}), 403
         if je.status != 'draft':
             return jsonify({'error': 'القيد ليس في حالة مسودة'}), 400
+        try:
+            check_period_lock(je.entry_date)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
         je.status = 'posted'
         je.posted_by_id = current_user.id
         je.posted_at = datetime.utcnow()
@@ -4578,7 +4887,7 @@ def create_app():
         try:
             from .accounting import create_journal_entry
             rev_lines = [
-                {'account_code': l.account.code, 'debit': float(l.credit or 0), 'credit': float(l.debit or 0)}
+                {'account_code': l.account.code, 'debit': decimal_value(l.credit), 'credit': decimal_value(l.debit)}
                 for l in je.lines if l.account
             ]
             rev = create_journal_entry(
@@ -4590,6 +4899,7 @@ def create_app():
                 lines=rev_lines,
                 auto_post=True,
                 posted_by_id=current_user.id,
+                allow_inactive_accounts=True,
             )
             rev.reversal_of_id = je.id
             je.status = 'reversed'
@@ -4614,8 +4924,8 @@ def create_app():
         missing_ref = []
 
         for je in JournalEntry.query.order_by(JournalEntry.id.desc()).limit(500).all():
-            total_d = sum(float(l.debit or 0) for l in je.lines)
-            total_c = sum(float(l.credit or 0) for l in je.lines)
+            total_d = sum((decimal_value(line.debit) for line in je.lines), ZERO_MONEY)
+            total_c = sum((decimal_value(line.credit) for line in je.lines), ZERO_MONEY)
             if abs(total_d - total_c) > 0.01:
                 unbalanced.append({'id': je.id, 'ref': je.reference_number, 'description': je.description,
                                    'debit': round(total_d, 2), 'credit': round(total_c, 2)})
@@ -4634,6 +4944,90 @@ def create_app():
             'unbalanced_entries': unbalanced,
             'missing_reference_number': missing_ref,
         })
+
+    # ─── Accounting Periods ───────────────────────────────────────────────────
+
+    def _period_to_dict(period):
+        return {
+            'id':           period.id,
+            'name':         period.name,
+            'start_date':   period.start_date.isoformat() if period.start_date else None,
+            'end_date':     period.end_date.isoformat() if period.end_date else None,
+            'status':       period.status,
+            'closed_at':    period.closed_at.isoformat() if period.closed_at else None,
+            'closed_by_id': period.closed_by_id,
+        }
+
+    @app.route('/api/accounting-periods')
+    @api_login_required
+    @api_permission_required('manage_accounting')
+    def api_accounting_periods():
+        periods = AccountingPeriod.query.order_by(AccountingPeriod.start_date.desc()).all()
+        return jsonify([_period_to_dict(p) for p in periods])
+
+    @app.route('/api/accounting-periods', methods=['POST'])
+    @api_login_required
+    @api_permission_required('manage_accounting')
+    def api_accounting_periods_create():
+        data = request.get_json(force=True) or {}
+        name = (data.get('name') or '').strip()
+        start_str = (data.get('start_date') or '').strip()
+        end_str   = (data.get('end_date')   or '').strip()
+        if not name:
+            return jsonify({'error': 'اسم الفترة مطلوب'}), 400
+        if not start_str or not end_str:
+            return jsonify({'error': 'تاريخ البداية والنهاية مطلوبان'}), 400
+        try:
+            from datetime import date as _date
+            start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+            end_date   = datetime.strptime(end_str,   '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'صيغة التاريخ غير صحيحة (YYYY-MM-DD)'}), 400
+        if start_date > end_date:
+            return jsonify({'error': 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية'}), 400
+        overlap = AccountingPeriod.query.filter(
+            AccountingPeriod.start_date <= end_date,
+            AccountingPeriod.end_date   >= start_date,
+        ).first()
+        if overlap:
+            return jsonify({'error': f'الفترة تتداخل مع فترة موجودة: {overlap.name}'}), 400
+        period = AccountingPeriod(name=name, start_date=start_date, end_date=end_date, status='open')
+        db.session.add(period)
+        db.session.commit()
+        log_action('create_accounting_period', 'accounting_period', period.id,
+                   details=f'name={name} {start_date}→{end_date}')
+        db.session.commit()
+        return jsonify(_period_to_dict(period)), 201
+
+    @app.route('/api/accounting-periods/<int:period_id>/close', methods=['POST'])
+    @api_login_required
+    @api_permission_required('manage_accounting')
+    def api_accounting_period_close(period_id):
+        period = AccountingPeriod.query.get_or_404(period_id)
+        if period.status == 'closed':
+            return jsonify({'error': 'الفترة مغلقة مسبقاً'}), 400
+        period.status     = 'closed'
+        period.closed_at  = datetime.utcnow()
+        period.closed_by_id = current_user.id
+        log_action('close_accounting_period', 'accounting_period', period.id,
+                   details=f'name={period.name}')
+        db.session.commit()
+        return jsonify(_period_to_dict(period))
+
+    @app.route('/api/accounting-periods/<int:period_id>/reopen', methods=['POST'])
+    @api_login_required
+    @api_permission_required('manage_accounting')
+    def api_accounting_period_reopen(period_id):
+        period = AccountingPeriod.query.get_or_404(period_id)
+        if period.status == 'open':
+            return jsonify({'error': 'الفترة مفتوحة مسبقاً'}), 400
+        period.status       = 'open'
+        period.closed_at    = None
+        period.closed_by_id = None
+        log_action('reopen_accounting_period', 'accounting_period', period.id,
+                   details=f'name={period.name}')
+        db.session.commit()
+        return jsonify(_period_to_dict(period))
 
     # ─── Cost Centers ─────────────────────────────────────────────────────────
 
@@ -4663,15 +5057,15 @@ def create_app():
     def _car_profitability(car, rate=None):
         """احسب ربحية سيارة واحدة بالدينار العراقي."""
         if rate is None:
-            rate = exchange_rate_value() or 1300.0
+            rate = exchange_rate_value() or Decimal('1300')
         purchase = Purchase.query.filter_by(car_id=car.id, status='Active').first()
         sale = Sale.query.filter_by(car_id=car.id, status='Active').first()
         purchase_price_iqd = to_iqd(purchase.purchase_price, purchase.currency) if purchase else to_iqd(car.purchase_price, car.currency)
         costs_breakdown = {}
-        costs_total_iqd = 0.0
+        costs_total_iqd = ZERO_MONEY
         for vc in car.costs:
             vc_iqd = to_iqd(vc.amount, vc.currency)
-            costs_breakdown[vc.cost_type] = costs_breakdown.get(vc.cost_type, 0.0) + vc_iqd
+            costs_breakdown[vc.cost_type] = costs_breakdown.get(vc.cost_type, ZERO_MONEY) + vc_iqd
             costs_total_iqd += vc_iqd
         total_cost_iqd = purchase_price_iqd + costs_total_iqd
         selling_price_iqd = to_iqd(sale.selling_price, sale.currency) if sale else None
@@ -4701,15 +5095,6 @@ def create_app():
         rate = exchange_rate_value()
         return jsonify(_car_profitability(car, rate))
 
-    # خريطة تصنيف تكلفة السيارة → رمز حساب المصروف
-    _VEHICLE_COST_ACCOUNT: dict = {
-        'shipping':    '330003',   # شحن السيارات
-        'clearance':   '330004',   # تخليص كمركي
-        'inspection':  '330005',   # فحص السيارات
-        'preparation': '330006',   # تجهيز السيارات
-        'other':       '350009',   # مصاريف متنوعة
-    }
-
     @app.route('/api/vehicles/<int:car_id>/costs', methods=['POST'])
     @api_login_required
     @api_permission_required('manage_cars')
@@ -4718,7 +5103,9 @@ def create_app():
         car = Car.query.get_or_404(car_id)
         data = request.get_json(force=True) or {}
         cost_type  = (data.get('cost_type') or '').strip()
-        amount     = float(data.get('amount') or 0)
+        amount, amount_err = _parse_money(data.get('amount') or 0, 'المبلغ')
+        if amount_err:
+            return amount_err
         currency   = (data.get('currency') or 'USD').upper()
         description = (data.get('description') or '').strip() or None
         if not cost_type or amount <= 0:
@@ -4734,9 +5121,9 @@ def create_app():
         db.session.flush()
 
         # قيد محاسبي تلقائي: مصروف تكلفة السيارة
-        expense_code = _VEHICLE_COST_ACCOUNT.get(cost_type, '350009')
+        expense_code = acct_vehicle_cost(cost_type)
         expense_acct = Account.query.filter_by(code=expense_code).first()
-        cashbox_acct = Account.query.filter_by(code='111001').first()
+        cashbox_acct = Account.query.filter_by(code=CASH_ACCOUNT).first()
 
         if expense_acct and cashbox_acct and amount_iqd:
             try:
@@ -4749,13 +5136,15 @@ def create_app():
                     reference_type='VehicleCost',
                     reference_id=vc.id,
                     lines=[
-                        {'account_code': expense_code, 'debit': round(amount_iqd, 2), 'credit': 0},
-                        {'account_code': '111001',     'debit': 0,                    'credit': round(amount_iqd, 2)},
+                        {'account_code': expense_code, 'debit': amount_iqd, 'credit': 0},
+                        {'account_code': CASH_ACCOUNT, 'debit': 0,          'credit': amount_iqd},
                     ],
                     auto_post=True,
                 )
             except Exception as je_err:
+                db.session.rollback()
                 app.logger.warning('VehicleCost JE failed: %s', je_err)
+                return jsonify({'error': 'فشل إنشاء القيد المحاسبي لتكلفة السيارة، لم يتم حفظ العملية'}), 500
 
         log_action('add_vehicle_cost', 'vehicle_cost', vc.id,
                    details=f'car={car_id} type={cost_type} amount={amount}{currency}')
@@ -4775,7 +5164,7 @@ def create_app():
         if orig_je:
             try:
                 rev_lines = [
-                    {'account_code': l.account.code, 'debit': float(l.credit or 0), 'credit': float(l.debit or 0)}
+                    {'account_code': l.account.code, 'debit': decimal_value(l.credit), 'credit': decimal_value(l.debit)}
                     for l in orig_je.lines if l.account
                 ]
                 if rev_lines:
@@ -4788,6 +5177,7 @@ def create_app():
                         lines=rev_lines,
                         auto_post=True,
                         posted_by_id=current_user.id,
+                        allow_inactive_accounts=True,
                     )
                     rev.reversal_of_id = orig_je.id
                     orig_je.status = 'reversed'
@@ -4842,10 +5232,10 @@ def create_app():
             query = query.filter(JournalEntry.entry_date <= end_date + ' 23:59:59')
         entries = query.all()
         centers = {cc.id: {'id': cc.id, 'name': cc.name, 'code': cc.code,
-                            'revenue_iqd': 0.0, 'expense_iqd': 0.0, 'entry_count': 0}
+                            'revenue_iqd': Decimal('0.0'), 'expense_iqd': Decimal('0.0'), 'entry_count': 0}
                    for cc in CostCenter.query.all()}
         unassigned = {'id': None, 'name': 'غير مُعيَّن', 'code': None,
-                      'revenue_iqd': 0.0, 'expense_iqd': 0.0, 'entry_count': 0}
+                      'revenue_iqd': Decimal('0.0'), 'expense_iqd': Decimal('0.0'), 'entry_count': 0}
         income_types = {'Income', 'Equity'}
         for je in entries:
             bucket = centers.get(je.cost_center_id, unassigned) if je.cost_center_id else unassigned
@@ -4854,8 +5244,8 @@ def create_app():
                 if not line.account:
                     continue
                 acct_type = line.account.type
-                credit_iqd = float(line.credit or 0)
-                debit_iqd  = float(line.debit  or 0)
+                credit_iqd = decimal_value(line.credit)
+                debit_iqd = decimal_value(line.debit)
                 if acct_type in income_types:
                     bucket['revenue_iqd'] += credit_iqd - debit_iqd
                 elif acct_type == 'Expense':
@@ -4888,19 +5278,25 @@ def create_app():
         debit_query = (
             db.session.query(sqlfunc.sum(JournalEntryLine.debit))
             .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.id)
-            .filter(JournalEntryLine.account_id.in_(account_ids), JournalEntry.status == 'posted')
+            .filter(
+                JournalEntryLine.account_id.in_(account_ids),
+                JournalEntry.status.in_(('posted', 'reversed')),
+            )
         )
         credit_query = (
             db.session.query(sqlfunc.sum(JournalEntryLine.credit))
             .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.id)
-            .filter(JournalEntryLine.account_id.in_(account_ids), JournalEntry.status == 'posted')
+            .filter(
+                JournalEntryLine.account_id.in_(account_ids),
+                JournalEntry.status.in_(('posted', 'reversed')),
+            )
         )
         if branch_id is not None:
             debit_query = debit_query.filter(JournalEntry.branch_id == branch_id)
             credit_query = credit_query.filter(JournalEntry.branch_id == branch_id)
-        total_debit = debit_query.scalar() or 0.0
-        total_credit = credit_query.scalar() or 0.0
-        return round(float(total_debit) - float(total_credit), 2)
+        total_debit = decimal_value(debit_query.scalar())
+        total_credit = decimal_value(credit_query.scalar())
+        return money_value(total_debit - total_credit)
 
     def _voucher_to_dict(v: Voucher) -> dict:
         return {
@@ -4928,7 +5324,7 @@ def create_app():
     def api_vouchers():
         voucher_type = request.args.get('type')
         page     = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 30))
+        per_page = min(int(request.args.get('per_page', 30)), 100)
         query = scoped_query(Voucher).order_by(Voucher.voucher_date.desc(), Voucher.id.desc())
         if voucher_type:
             query = query.filter(Voucher.voucher_type == voucher_type)
@@ -4954,7 +5350,9 @@ def create_app():
         voucher_type = data.get('voucher_type', '')
         if voucher_type not in ('receipt', 'payment', 'transfer'):
             return jsonify({'error': 'نوع السند غير صحيح'}), 400
-        amount = float(data.get('amount') or 0)
+        amount, amount_err = _parse_money(data.get('amount') or 0, 'المبلغ')
+        if amount_err:
+            return amount_err
         if amount <= 0:
             return jsonify({'error': 'المبلغ يجب أن يكون أكبر من الصفر'}), 400
         currency = (data.get('currency') or 'IQD').upper()
@@ -5043,6 +5441,7 @@ def create_app():
                 ],
                 auto_post=True,
                 posted_by_id=current_user.id,
+                allow_inactive_accounts=True,
             )
             db.session.flush()
             cancel_v = Voucher(
@@ -5077,7 +5476,7 @@ def create_app():
     @api_login_required
     @api_permission_required('manage_cashbox')
     def api_cashbox_movement():
-        account_code = request.args.get('account_code', '111001')
+        account_code = request.args.get('account_code', CASH_ACCOUNT)
         start_date   = request.args.get('start_date')
         end_date     = request.args.get('end_date')
         return _movement_report(account_code, start_date, end_date)
@@ -5086,7 +5485,7 @@ def create_app():
     @api_login_required
     @api_permission_required('manage_bank')
     def api_bank_movement():
-        account_code = request.args.get('account_code', '112001')
+        account_code = request.args.get('account_code', BANK_ACCOUNT)
         start_date   = request.args.get('start_date')
         end_date     = request.args.get('end_date')
         return _movement_report(account_code, start_date, end_date)
@@ -5099,7 +5498,7 @@ def create_app():
             db.session.query(JournalEntryLine, JournalEntry)
             .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.id)
             .filter(JournalEntryLine.account_id == acct.id)
-            .filter(JournalEntry.status == 'posted')
+            .filter(JournalEntry.status.in_(('posted', 'reversed')))
         )
         branch_id = selected_branch_scope_id()
         if branch_id is not None:
@@ -5114,13 +5513,13 @@ def create_app():
             v.journal_entry_id: v.voucher_number
             for v in voucher_query.all()
         }
-        balance = 0.0
+        balance = ZERO_MONEY
         rows = []
-        total_inflow = 0.0
-        total_outflow = 0.0
+        total_inflow = ZERO_MONEY
+        total_outflow = ZERO_MONEY
         for line, je in query.all():
-            inflow  = float(line.debit  or 0)
-            outflow = float(line.credit or 0)
+            inflow = decimal_value(line.debit)
+            outflow = decimal_value(line.credit)
             balance += inflow - outflow
             total_inflow  += inflow
             total_outflow += outflow
@@ -5148,7 +5547,7 @@ def create_app():
     @api_login_required
     @api_permission_required('manage_cashbox')
     def api_cashbox_current_balance():
-        account_code = request.args.get('account_code', '111001')
+        account_code = request.args.get('account_code', CASH_ACCOUNT)
         acct = Account.query.filter_by(code=account_code).first()
         if not acct:
             return jsonify({'error': 'الحساب غير موجود'}), 404
@@ -5184,12 +5583,16 @@ def create_app():
     @api_permission_required('manage_cashbox')
     def api_cashbox_closes_create():
         data = request.get_json(force=True) or {}
-        account_code   = str(data.get('account_code') or '111001').strip()
-        actual_balance = float(data.get('actual_balance') or 0)
+        account_code   = str(data.get('account_code') or CASH_ACCOUNT).strip()
+        actual_balance, balance_err = _parse_money(data.get('actual_balance') or 0, 'الرصيد الفعلي')
+        if balance_err:
+            return balance_err
         note           = (data.get('note') or '').strip() or None
         acct = Account.query.filter_by(code=account_code).first()
         if not acct:
             return jsonify({'error': f'الحساب {account_code} غير موجود'}), 404
+        if not acct.is_active:
+            return jsonify({'error': 'لا يمكن استخدام حساب مؤرشف في إغلاق صندوق جديد'}), 409
         creation_branch_id, branch_error = require_creation_branch_id()
         if branch_error:
             return branch_error
@@ -5224,9 +5627,9 @@ def create_app():
     def api_cash_dashboard():
         today_str = datetime.utcnow().date().isoformat()
         # حسابات الصندوق والبنك
-        cash_accounts = Account.query.filter(Account.code.like('111%')).filter(
+        cash_accounts = Account.query.filter(Account.code.like('111%'), Account.is_active.is_(True)).filter(
             ~Account.children.any()).all()
-        bank_accounts = Account.query.filter(Account.code.like('112%')).filter(
+        bank_accounts = Account.query.filter(Account.code.like('112%'), Account.is_active.is_(True)).filter(
             ~Account.children.any()).all()
         cash_ids = [a.id for a in cash_accounts]
         bank_ids = [a.id for a in bank_accounts]
@@ -5246,8 +5649,8 @@ def create_app():
         if branch_id is not None:
             today_lines = today_lines.filter(JournalEntry.branch_id == branch_id)
         today_lines = today_lines.all()
-        today_inflow  = sum(float(l.debit  or 0) for l in today_lines)
-        today_outflow = sum(float(l.credit or 0) for l in today_lines)
+        today_inflow = sum((decimal_value(line.debit) for line in today_lines), ZERO_MONEY)
+        today_outflow = sum((decimal_value(line.credit) for line in today_lines), ZERO_MONEY)
         # آخر إقفال
         last_close = scoped_query(CashboxClose).order_by(CashboxClose.id.desc()).first()
         last_close_data = None
@@ -5286,7 +5689,7 @@ def create_app():
             ('90_plus', '90+ يوم', 91, None),
         ]
         buckets = {
-            key: {'bucket': key, 'label': label, 'count': 0, 'total_iqd': 0.0, 'customers': set(), 'items': []}
+            key: {'bucket': key, 'label': label, 'count': 0, 'total_iqd': ZERO_MONEY, 'customers': set(), 'items': []}
             for key, label, _min_days, _max_days in bucket_defs
         }
         customer_totals = {}
@@ -5303,7 +5706,7 @@ def create_app():
             return '90_plus'
 
         def add_item(*, customer, sale, due_date, amount, currency, source, schedule=None):
-            amount_iqd = to_iqd(amount, currency) or 0.0
+            amount_iqd = to_iqd(amount, currency) or ZERO_MONEY
             if amount_iqd <= 0:
                 return
             due = due_date.date() if hasattr(due_date, 'date') else due_date
@@ -5529,10 +5932,10 @@ def create_app():
             .all()
         )
         buckets = {
-            '1_30':  {'label': '1-30 يوم',  'min': 1,  'max': 30,  'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
-            '31_60': {'label': '31-60 يوم', 'min': 31, 'max': 60,  'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
-            '61_90': {'label': '61-90 يوم', 'min': 61, 'max': 90,  'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
-            '90p':   {'label': '90+ يوم',   'min': 91, 'max': None,'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
+            '1_30':  {'label': '1-30 يوم',  'min': 1,  'max': 30,  'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
+            '31_60': {'label': '31-60 يوم', 'min': 31, 'max': 60,  'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
+            '61_90': {'label': '61-90 يوم', 'min': 61, 'max': 90,  'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
+            '90p':   {'label': '90+ يوم',   'min': 91, 'max': None,'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
         }
         for sch in overdue_schedules:
             days = (today - sch.due_date.date()).days
@@ -5812,7 +6215,9 @@ def create_app():
     def api_create_expense():
         data = request.get_json(silent=True) or {}
         title = str(data.get('title') or '').strip()
-        amount = float(data.get('amount') or 0)
+        amount, amount_err = _parse_money(data.get('amount') or 0, 'المبلغ')
+        if amount_err:
+            return amount_err
         currency = normalize_currency(data.get('currency'))
         category = str(data.get('category') or '').strip() or None
         notes = str(data.get('notes') or '').strip() or None
@@ -6056,7 +6461,8 @@ def create_app():
     @api_login_required
     @api_permission_required('manage_backups')
     def api_download_backup(filename):
-        backup_path = get_backup_path(filename)
+        safe_name = os.path.basename(filename)
+        backup_path = get_backup_path(safe_name)
         if not backup_path:
             return jsonify({'error': 'النسخة الاحتياطية غير موجودة'}), 404
         return send_from_directory(BACKUP_FOLDER, os.path.basename(backup_path), as_attachment=True)
@@ -6065,7 +6471,8 @@ def create_app():
     @api_login_required
     @api_permission_required('manage_backups')
     def api_restore_backup(filename):
-        backup_path = get_backup_path(filename)
+        safe_name = os.path.basename(filename)
+        backup_path = get_backup_path(safe_name)
         if not backup_path:
             return jsonify({'error': 'النسخة الاحتياطية غير موجودة'}), 404
         safety_backup = create_backup_archive(current_user.username, 'pre_restore_safety')
@@ -6112,6 +6519,7 @@ def create_app():
     @api_login_required
     @api_permission_required('manage_backups')
     def api_delete_backup(filename):
+        _ = os.path.basename(filename)  # sanitize — delete is disabled anyway
         return jsonify({'error': 'حذف النسخ الاحتياطية معطل حالياً'}), 405
 
     @app.route('/api/admin/financial-consistency', methods=['GET'])
@@ -6119,7 +6527,7 @@ def create_app():
     @api_permission_required('manage_reports')
     def api_financial_consistency():
         """Check that stored paid_amount/remaining_amount match sums from Payment records."""
-        TOLERANCE = 0.02  # accept up to 2 fils/cents floating-point drift
+        TOLERANCE = Decimal('0.02')  # accept up to 2 fils/cents drift
 
         issues = []
 
@@ -6128,7 +6536,7 @@ def create_app():
             actual_paid = db.session.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
                 Payment.sale_id == sale.id,
             ).scalar()
-            expected_remaining = max(sale.selling_price - sale.discount - actual_paid, 0.0)
+            expected_remaining = max(sale.selling_price - sale.discount - actual_paid, 0)
             if abs(sale.paid_amount - actual_paid) > TOLERANCE:
                 issues.append({
                     'type': 'sale',
@@ -6155,7 +6563,7 @@ def create_app():
             actual_paid = db.session.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
                 Payment.purchase_id == purchase.id,
             ).scalar()
-            expected_remaining = max(purchase.purchase_price - actual_paid, 0.0)
+            expected_remaining = max(purchase.purchase_price - actual_paid, 0)
             if abs(purchase.paid_amount - actual_paid) > TOLERANCE:
                 issues.append({
                     'type': 'purchase',
@@ -6243,40 +6651,40 @@ def create_app():
         from .accounting import create_journal_entry
 
         # ── ثوابت الاختبار ───────────────────────────────────────────────
-        PURCHASE_PRICE  = 10_000.0
-        SUPPLIER_PAID   = 4_000.0
-        VEHICLE_COST    = 500.0
-        SELLING_PRICE   = 13_000.0
-        CASH_COLLECTED  = 5_000.0
+        PURCHASE_PRICE = Decimal('10000.00')
+        SUPPLIER_PAID = Decimal('4000.00')
+        VEHICLE_COST = Decimal('500.00')
+        SELLING_PRICE = Decimal('13000.00')
+        CASH_COLLECTED = Decimal('5000.00')
         AR_AMOUNT       = SELLING_PRICE - CASH_COLLECTED       # 8,000
-        INSTALLMENT_PAY = 1_000.0
-        EXPENSE_AMOUNT  = 200.0
+        INSTALLMENT_PAY = Decimal('1000.00')
+        EXPENSE_AMOUNT = Decimal('200.00')
 
         EXPECTED = {
-            '111001': CASH_COLLECTED + INSTALLMENT_PAY - SUPPLIER_PAID - VEHICLE_COST - EXPENSE_AMOUNT,  # +1,300
-            '113002': AR_AMOUNT - INSTALLMENT_PAY,                                                        # +7,000
-            '115001': 0.0,                                                                                  # ∅ (خرج بالبيع)
-            '211001': SUPPLIER_PAID - PURCHASE_PRICE,                                                      # −6,000 (دائن)
-            '410001': -SELLING_PRICE,                                                                       # −13,000 (دائن)
-            '360001': PURCHASE_PRICE,                                                                       # +10,000
-            '330003': VEHICLE_COST,                                                                         # +500
-            '350009': EXPENSE_AMOUNT,                                                                       # +200
+            CASH_ACCOUNT:    CASH_COLLECTED + INSTALLMENT_PAY - SUPPLIER_PAID - VEHICLE_COST - EXPENSE_AMOUNT,  # +1,300
+            AR_ACCOUNT:      AR_AMOUNT - INSTALLMENT_PAY,                                                        # +7,000
+            INVENTORY_NEW:   0.0,                                                                                 # ∅ (خرج بالبيع)
+            AP_ACCOUNT:      SUPPLIER_PAID - PURCHASE_PRICE,                                                     # −6,000 (دائن)
+            REVENUE_NEW_CAR: -SELLING_PRICE,                                                                     # −13,000 (دائن)
+            COGS_ACCOUNT:    PURCHASE_PRICE,                                                                     # +10,000
+            EXPENSE_SHIPPING: VEHICLE_COST,                                                                      # +500
+            EXPENSE_MISC:    EXPENSE_AMOUNT,                                                                     # +200
         }
         LABELS = {
-            '111001': 'الصندوق الرئيسي',
-            '113002': 'الذمم المدينة (تقسيط)',
-            '115001': 'مخزون سيارات جديدة',
-            '211001': 'موردو السيارات',
-            '410001': 'إيرادات بيع سيارات',
-            '360001': 'تكلفة سيارات مباعة (COGS)',
-            '330003': 'تكلفة شحن السيارات',
-            '350009': 'مصاريف متنوعة',
+            CASH_ACCOUNT:    'الصندوق الرئيسي',
+            AR_ACCOUNT:      'الذمم المدينة (تقسيط)',
+            INVENTORY_NEW:   'مخزون سيارات جديدة',
+            AP_ACCOUNT:      'موردو السيارات',
+            REVENUE_NEW_CAR: 'إيرادات بيع سيارات',
+            COGS_ACCOUNT:    'تكلفة سيارات مباعة (COGS)',
+            EXPENSE_SHIPPING: 'تكلفة شحن السيارات',
+            EXPENSE_MISC:    'مصاريف متنوعة',
         }
         TYPES = {
-            '111001': 'asset', '113002': 'asset', '115001': 'asset',
-            '211001': 'liability',
-            '410001': 'revenue',
-            '360001': 'expense', '330003': 'expense', '350009': 'expense',
+            CASH_ACCOUNT: 'asset', AR_ACCOUNT: 'asset', INVENTORY_NEW: 'asset',
+            AP_ACCOUNT: 'liability',
+            REVENUE_NEW_CAR: 'revenue',
+            COGS_ACCOUNT: 'expense', EXPENSE_SHIPPING: 'expense', EXPENSE_MISC: 'expense',
         }
 
         test_je_ids: list[int] = []
@@ -6288,8 +6696,8 @@ def create_app():
             je1 = create_journal_entry(
                 description='[TEST] شراء سيارة تجريبي',
                 lines=[
-                    {'account_code': '115001', 'debit': PURCHASE_PRICE, 'credit': 0},
-                    {'account_code': '211001', 'debit': 0, 'credit': PURCHASE_PRICE},
+                    {'account_code': INVENTORY_NEW, 'debit': PURCHASE_PRICE, 'credit': 0},
+                    {'account_code': AP_ACCOUNT,    'debit': 0, 'credit': PURCHASE_PRICE},
                 ],
             )
             test_je_ids.append(je1.id)
@@ -6298,8 +6706,8 @@ def create_app():
             je2 = create_journal_entry(
                 description='[TEST] دفع للمورد',
                 lines=[
-                    {'account_code': '211001', 'debit': SUPPLIER_PAID, 'credit': 0},
-                    {'account_code': '111001', 'debit': 0, 'credit': SUPPLIER_PAID},
+                    {'account_code': AP_ACCOUNT,   'debit': SUPPLIER_PAID, 'credit': 0},
+                    {'account_code': CASH_ACCOUNT, 'debit': 0, 'credit': SUPPLIER_PAID},
                 ],
             )
             test_je_ids.append(je2.id)
@@ -6308,8 +6716,8 @@ def create_app():
             je3 = create_journal_entry(
                 description='[TEST] تكلفة شحن السيارة',
                 lines=[
-                    {'account_code': '330003', 'debit': VEHICLE_COST, 'credit': 0},
-                    {'account_code': '111001', 'debit': 0, 'credit': VEHICLE_COST},
+                    {'account_code': EXPENSE_SHIPPING, 'debit': VEHICLE_COST, 'credit': 0},
+                    {'account_code': CASH_ACCOUNT,     'debit': 0, 'credit': VEHICLE_COST},
                 ],
             )
             test_je_ids.append(je3.id)
@@ -6318,9 +6726,9 @@ def create_app():
             je4 = create_journal_entry(
                 description='[TEST] إيراد بيع السيارة',
                 lines=[
-                    {'account_code': '111001', 'debit': CASH_COLLECTED, 'credit': 0},
-                    {'account_code': '113002', 'debit': AR_AMOUNT, 'credit': 0},
-                    {'account_code': '410001', 'debit': 0, 'credit': SELLING_PRICE},
+                    {'account_code': CASH_ACCOUNT,   'debit': CASH_COLLECTED, 'credit': 0},
+                    {'account_code': AR_ACCOUNT,     'debit': AR_AMOUNT,      'credit': 0},
+                    {'account_code': REVENUE_NEW_CAR,'debit': 0, 'credit': SELLING_PRICE},
                 ],
             )
             test_je_ids.append(je4.id)
@@ -6329,8 +6737,8 @@ def create_app():
             je5 = create_journal_entry(
                 description='[TEST] تكلفة البضاعة المباعة',
                 lines=[
-                    {'account_code': '360001', 'debit': PURCHASE_PRICE, 'credit': 0},
-                    {'account_code': '115001', 'debit': 0, 'credit': PURCHASE_PRICE},
+                    {'account_code': COGS_ACCOUNT, 'debit': PURCHASE_PRICE,  'credit': 0},
+                    {'account_code': INVENTORY_NEW,'debit': 0, 'credit': PURCHASE_PRICE},
                 ],
             )
             test_je_ids.append(je5.id)
@@ -6339,8 +6747,8 @@ def create_app():
             je6 = create_journal_entry(
                 description='[TEST] استلام دفعة قسط',
                 lines=[
-                    {'account_code': '111001', 'debit': INSTALLMENT_PAY, 'credit': 0},
-                    {'account_code': '113002', 'debit': 0, 'credit': INSTALLMENT_PAY},
+                    {'account_code': CASH_ACCOUNT, 'debit': INSTALLMENT_PAY, 'credit': 0},
+                    {'account_code': AR_ACCOUNT,   'debit': 0, 'credit': INSTALLMENT_PAY},
                 ],
             )
             test_je_ids.append(je6.id)
@@ -6349,40 +6757,42 @@ def create_app():
             je7 = create_journal_entry(
                 description='[TEST] مصروف عام',
                 lines=[
-                    {'account_code': '350009', 'debit': EXPENSE_AMOUNT, 'credit': 0},
-                    {'account_code': '111001', 'debit': 0, 'credit': EXPENSE_AMOUNT},
+                    {'account_code': EXPENSE_MISC, 'debit': EXPENSE_AMOUNT, 'credit': 0},
+                    {'account_code': CASH_ACCOUNT, 'debit': 0, 'credit': EXPENSE_AMOUNT},
                 ],
             )
             test_je_ids.append(je7.id)
 
             # ── حساب الأرصدة الفعلية من القيود التجريبية فقط ──────────
-            actual: dict[str, float] = {}
+            actual: dict[str, Decimal] = {}
             for je_id in test_je_ids:
                 lines_q = JournalEntryLine.query.filter_by(journal_entry_id=je_id).all()
                 for ln in lines_q:
                     code = ln.account.code if ln.account else None
                     if code:
-                        actual[code] = round(
-                            actual.get(code, 0.0) + float(ln.debit or 0) - float(ln.credit or 0), 6
+                        actual[code] = (
+                            actual.get(code, ZERO_MONEY)
+                            + decimal_value(ln.debit)
+                            - decimal_value(ln.credit)
                         )
 
             # ── ميزان المراجعة للقيود التجريبية ────────────────────────
-            total_d = total_c = 0.0
+            total_d = total_c = ZERO_MONEY
             for je_id in test_je_ids:
                 for ln in JournalEntryLine.query.filter_by(journal_entry_id=je_id).all():
-                    total_d += float(ln.debit  or 0)
-                    total_c += float(ln.credit or 0)
-            trial_diff     = round(total_d - total_c, 2)
-            trial_balanced = abs(trial_diff) < 0.01
+                    total_d += decimal_value(ln.debit)
+                    total_c += decimal_value(ln.credit)
+            trial_diff = money_value(total_d - total_c)
+            trial_balanced = abs(trial_diff) < MONEY_QUANTUM
 
             # ── بناء نتائج المقارنة ─────────────────────────────────────
             checks: list[dict] = []
             all_pass = True
 
             for code, exp_val in EXPECTED.items():
-                act_val  = round(actual.get(code, 0.0), 2)
-                exp_val  = round(exp_val, 2)
-                passed   = abs(act_val - exp_val) < 0.01
+                act_val = money_value(actual.get(code, ZERO_MONEY))
+                exp_val = money_value(exp_val)
+                passed = abs(act_val - exp_val) < MONEY_QUANTUM
                 if not passed:
                     all_pass = False
 
@@ -6412,12 +6822,12 @@ def create_app():
 
             # ── فحص صافي الربح ─────────────────────────────────────────
             exp_profit = SELLING_PRICE - PURCHASE_PRICE - VEHICLE_COST - EXPENSE_AMOUNT  # 2,300
-            act_revenue  = abs(actual.get('410001', 0.0))
-            act_cogs     = actual.get('360001', 0.0)
-            act_vc       = actual.get('330003', 0.0)
-            act_exp      = actual.get('350009', 0.0)
-            act_profit   = round(act_revenue - act_cogs - act_vc - act_exp, 2)
-            profit_pass  = abs(act_profit - exp_profit) < 0.01
+            act_revenue = abs(actual.get(REVENUE_NEW_CAR, ZERO_MONEY))
+            act_cogs = actual.get(COGS_ACCOUNT, ZERO_MONEY)
+            act_vc = actual.get(EXPENSE_SHIPPING, ZERO_MONEY)
+            act_exp = actual.get(EXPENSE_MISC, ZERO_MONEY)
+            act_profit = money_value(act_revenue - act_cogs - act_vc - act_exp)
+            profit_pass = abs(act_profit - exp_profit) < MONEY_QUANTUM
             if not profit_pass:
                 all_pass = False
 
@@ -6478,7 +6888,7 @@ def create_app():
 
     @app.route('/api/admin/system-health', methods=['GET'])
     @api_login_required
-    @api_permission_required('manage_reports')
+    @api_permission_required('manage_database')
     def api_system_health():
         """Return a compact operational health snapshot for administrators."""
         is_pg = _is_postgres()
@@ -6547,8 +6957,8 @@ def create_app():
         try:
             from .accounting import get_trial_balance as _gtb
             _, tb_totals = _gtb()
-            td = float(tb_totals.get('total_debit', 0) or 0)
-            tc = float(tb_totals.get('total_credit', 0) or 0)
+            td = decimal_value(tb_totals.get('total_debit', 0))
+            tc = decimal_value(tb_totals.get('total_credit', 0))
             trial_difference = round(td - tc, 2)
             trial_status = 'balanced' if abs(trial_difference) <= 0.01 else 'unbalanced'
         except Exception as exc:
@@ -6562,8 +6972,8 @@ def create_app():
         tolerance = 0.01
         unbalanced_je_count = 0
         for je in JournalEntry.query.all():
-            d = sum(float(l.debit  or 0) for l in je.lines)
-            c = sum(float(l.credit or 0) for l in je.lines)
+            d = sum((decimal_value(line.debit) for line in je.lines), ZERO_MONEY)
+            c = sum((decimal_value(line.credit) for line in je.lines), ZERO_MONEY)
             if abs(d - c) > tolerance:
                 unbalanced_je_count += 1
 
@@ -6583,7 +6993,7 @@ def create_app():
         if unbalanced_je_count > 0:
             warnings.append(f'unbalanced_journal_entries_{unbalanced_je_count}')
 
-        return jsonify({
+        payload = {
             'checked_at': datetime.utcnow().isoformat(timespec='seconds'),
             'version':    APP_VERSION,
             'status': 'ok' if not warnings else 'attention',
@@ -6617,7 +7027,11 @@ def create_app():
                 'session_lifetime_hours': Config.PERMANENT_SESSION_LIFETIME.total_seconds() / 3600,
                 'secure_cookie': bool(Config.SESSION_COOKIE_SECURE),
             },
-        })
+        }
+        if current_user.role != 'Owner':
+            payload.pop('runtime', None)
+            payload.pop('error_log', None)
+        return jsonify(payload)
 
     # ── Public health-check (no auth) ──────────────────────────────────────────
     @app.route('/api/health', methods=['GET'])
@@ -6639,6 +7053,7 @@ def create_app():
         }), code
 
     @app.route('/api/version', methods=['GET'])
+    @api_login_required
     def api_version():
         return jsonify({'version': APP_VERSION, 'app': APP_NAME})
 
@@ -6727,7 +7142,6 @@ def create_app():
         return jsonify({
             'buffer':    list(_error_log_buffer),
             'file_tail': file_tail,
-            'log_path':  log_path,
         })
 
     # --- Sales / Installments JSON CRUD ---
@@ -6741,8 +7155,12 @@ def create_app():
         car_id          = data.get('car_id')
         buyer_id        = data.get('buyer_id')
         selling_price   = data.get('selling_price')
-        discount        = float(data.get('discount') or 0)
-        paid_amount     = float(data.get('paid_amount') or 0)
+        discount, discount_err = _parse_money(data.get('discount') or 0, 'الخصم')
+        if discount_err:
+            return discount_err
+        paid_amount, paid_err = _parse_money(data.get('paid_amount') or 0, 'المبلغ المدفوع')
+        if paid_err:
+            return paid_err
         payment_method  = data.get('payment_method')
         sale_date_str   = data.get('sale_date')
         currency        = normalize_currency(data.get('currency') or 'USD')
@@ -6750,7 +7168,7 @@ def create_app():
         if not all([car_id, buyer_id, selling_price, payment_method, sale_date_str]):
             return jsonify({'error': 'الحقول المطلوبة: car_id, buyer_id, selling_price, payment_method, sale_date'}), 400
 
-        sp_val, sp_err = _parse_float(selling_price, 'سعر البيع')
+        sp_val, sp_err = _parse_money(selling_price, 'سعر البيع')
         if sp_err:
             return sp_err
         if sp_val <= 0:
@@ -6766,7 +7184,7 @@ def create_app():
             datetime.strptime(sale_date_str, '%Y-%m-%d')
         except (TypeError, ValueError):
             return jsonify({'error': 'صيغة تاريخ البيع غير صحيحة (YYYY-MM-DD)'}), 400
-        remaining_amount = max(selling_price - discount - paid_amount, 0.0)
+        remaining_amount = max(selling_price - discount - paid_amount, ZERO_MONEY)
 
         car   = Car.query.get(int(car_id))
         buyer = Customer.query.get(int(buyer_id))
@@ -6849,12 +7267,16 @@ def create_app():
             db.session.flush()
 
         if enable_installment and remaining_amount > 0:
-            installment_amount = round(remaining_amount / months, 2) if months else remaining_amount
+            installment_amount = (
+                money_value(remaining_amount / Decimal(months))
+                if months
+                else remaining_amount
+            )
             plan = InstallmentPlan(
                 branch_id=creation_branch_id,
                 sale_id=sale.id,
                 total_amount=remaining_amount,
-                paid_amount=0.0,
+                paid_amount=ZERO_MONEY,
                 remaining_amount=remaining_amount,
                 currency=currency,
                 number_of_months=months,
@@ -6868,15 +7290,15 @@ def create_app():
             if months:
                 remaining_to_schedule = remaining_amount
                 for index in range(months):
-                    amt = installment_amount if index < months - 1 else round(remaining_to_schedule, 2)
-                    remaining_to_schedule = round(remaining_to_schedule - amt, 2)
+                    amt = installment_amount if index < months - 1 else money_value(remaining_to_schedule)
+                    remaining_to_schedule = money_value(remaining_to_schedule - amt)
                     db.session.add(InstallmentSchedule(
                         branch_id=creation_branch_id,
                         installment_plan_id=plan.id,
                         installment_number=index + 1,
                         due_date=due_date_for_month(start_date, due_day, index),
                         amount=amt,
-                        paid_amount=0.0,
+                        paid_amount=ZERO_MONEY,
                         remaining_amount=amt,
                         currency=currency,
                         status='Pending',
@@ -7006,7 +7428,7 @@ def create_app():
             ).all():
                 try:
                     rev_lines = [
-                        {'account_code': l.account.code, 'debit': float(l.credit or 0), 'credit': float(l.debit or 0)}
+                        {'account_code': l.account.code, 'debit': decimal_value(l.credit), 'credit': decimal_value(l.debit)}
                         for l in je.lines if l.account
                     ]
                     if rev_lines:
@@ -7019,11 +7441,16 @@ def create_app():
                             lines=rev_lines,
                             auto_post=True,
                             posted_by_id=current_user.id,
+                            allow_inactive_accounts=True,
                         )
                         rev.reversal_of_id = je.id
                         je.status = 'reversed'
                 except Exception as _rev_err:
+                    db.session.rollback()
                     app.logger.warning('Sale cancel JE reversal failed je=%s: %s', je.id, _rev_err)
+                    return jsonify({
+                        'error': 'فشل عكس القيد المحاسبي، لم يتم إلغاء فاتورة البيع'
+                    }), 500
         sale.status = 'Cancelled'
         sale.cancelled_at = datetime.utcnow()
         sale.cancel_reason = cancel_reason
@@ -7049,12 +7476,14 @@ def create_app():
         if sale.status == 'Cancelled':
             return jsonify({'error': 'لا يمكن إضافة دفعة لفاتورة ملغاة'}), 400
         data = request.get_json(silent=True) or {}
-        amount = float(data.get('amount') or 0)
+        amount, amount_err = _parse_money(data.get('amount') or 0, 'المبلغ')
+        if amount_err:
+            return amount_err
         payment_method = (data.get('payment_method') or 'Cash').strip()
         notes = (data.get('notes') or '').strip() or None
         if amount <= 0:
             return jsonify({'error': 'المبلغ يجب أن يكون أكبر من صفر'}), 400
-        if round(amount, 6) > round(float(sale.remaining_amount or 0), 6):
+        if amount > decimal_value(sale.remaining_amount):
             return jsonify({'error': f'المبلغ ({amount}) يتجاوز المتبقي ({sale.remaining_amount})'}), 400
         payment = Payment(
             payment_type='sale', branch_id=sale.branch_id, sale_id=sale.id,
@@ -7062,14 +7491,19 @@ def create_app():
             payment_method=payment_method, notes=notes,
             payment_date=datetime.utcnow(),
         )
-        sale.paid_amount = round(float(sale.paid_amount or 0) + amount, 6)
+        sale.paid_amount = money_value(decimal_value(sale.paid_amount) + amount)
         sale.remaining_amount = max(
-            round(float(sale.selling_price or 0) - float(sale.discount or 0) - sale.paid_amount, 6), 0.0
+            money_value(
+                decimal_value(sale.selling_price)
+                - decimal_value(sale.discount)
+                - sale.paid_amount
+            ),
+            ZERO_MONEY,
         )
         db.session.add(payment)
         db.session.flush()
         try:
-            paid_iqd = round(float(to_iqd(amount, sale.currency) or 0), 2)
+            paid_iqd = to_iqd(amount, sale.currency)
             if paid_iqd > 0:
                 create_journal_entry(
                     entry_date=payment.payment_date,
@@ -7077,8 +7511,8 @@ def create_app():
                     branch_id=payment.branch_id,
                     reference_type='Payment', reference_id=payment.id,
                     lines=[
-                        {'account_code': _acct_cash(payment_method), 'debit': paid_iqd, 'credit': 0},
-                        {'account_code': '113002', 'debit': 0, 'credit': paid_iqd},
+                        {'account_code': acct_cash(payment_method), 'debit': paid_iqd, 'credit': 0},
+                        {'account_code': AR_ACCOUNT,                'debit': 0,         'credit': paid_iqd},
                     ],
                 )
         except Exception as _je_err:
@@ -7217,7 +7651,9 @@ def create_app():
             return jsonify({'error': 'هذا القسط مدفوع بالكامل بالفعل'}), 409
 
         data           = request.get_json(silent=True) or {}
-        amount         = float(data.get('amount') or 0)
+        amount, amount_err = _parse_money(data.get('amount') or 0, 'المبلغ')
+        if amount_err:
+            return amount_err
         payment_method = data.get('payment_method') or 'Cash'
         notes          = data.get('notes')
 
@@ -7238,14 +7674,22 @@ def create_app():
             payment_date=datetime.utcnow(),
         )
         schedule.paid_amount      += amount
-        schedule.remaining_amount  = max(schedule.amount - schedule.paid_amount, 0.0)
+        schedule.remaining_amount = max(
+            money_value(decimal_value(schedule.amount) - decimal_value(schedule.paid_amount)),
+            ZERO_MONEY,
+        )
         if schedule.remaining_amount <= 0:
             schedule.payment_date = payment.payment_date
         refresh_installment_status(schedule)
         refresh_installment_plan(plan)
         plan.sale.paid_amount      += amount
-        plan.sale.remaining_amount  = max(
-            plan.sale.selling_price - plan.sale.discount - plan.sale.paid_amount, 0.0
+        plan.sale.remaining_amount = max(
+            money_value(
+                decimal_value(plan.sale.selling_price)
+                - decimal_value(plan.sale.discount)
+                - decimal_value(plan.sale.paid_amount)
+            ),
+            ZERO_MONEY,
         )
         db.session.add(payment)
         db.session.flush()
@@ -7278,6 +7722,8 @@ def create_app():
     def api_payment_receipt(payment_id):
         """Return all data needed to render a payment receipt (سند قبض)."""
         payment = Payment.query.get_or_404(payment_id)
+        if not branch_allowed(payment):
+            return jsonify({'error': 'لا يمكنك الوصول إلى إيصال دفع في فرع آخر'}), 403
         plan    = None
         sale    = None
         schedule = None
@@ -7390,10 +7836,10 @@ def create_app():
         sales = Sale.query.filter_by(buyer_id=customer_id).filter(Sale.status != 'Cancelled').all()
 
         sales_data = []
-        total_sales_amount   = 0.0
-        total_paid_amount    = 0.0
-        total_remaining      = 0.0
-        total_overdue        = 0.0
+        total_sales_amount = ZERO_MONEY
+        total_paid_amount = ZERO_MONEY
+        total_remaining = ZERO_MONEY
+        total_overdue = ZERO_MONEY
         last_payment_date    = None
 
         today = datetime.utcnow().date()
@@ -7421,7 +7867,7 @@ def create_app():
 
             # Build schedules if installment plan exists
             schedules_data = []
-            plan_overdue = 0.0
+            plan_overdue = ZERO_MONEY
             if plan:
                 for sch in (plan.schedules or []):
                     refresh_installment_status(sch)
@@ -7605,7 +8051,7 @@ def create_app():
         if document_type in SINGLE_DOC_TYPES:
             existing = CustomerDocument.query.filter_by(customer_id=c.id, document_type=document_type).first()
             if existing:
-                old_path = os.path.join(Config.UPLOAD_FOLDER, 'customers', existing.filename)
+                old_path = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers', existing.filename)
                 try:
                     if os.path.exists(old_path):
                         os.remove(old_path)
@@ -7614,7 +8060,7 @@ def create_app():
                 db.session.delete(existing)
                 db.session.flush()
 
-        upload_folder = os.path.join(Config.UPLOAD_FOLDER, 'customers')
+        upload_folder = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers')
         os.makedirs(upload_folder, exist_ok=True)
         original_name = secure_filename(file_storage.filename)
         extension = original_name.rsplit('.', 1)[1].lower()
@@ -7639,6 +8085,28 @@ def create_app():
             'uploaded_at':       doc.uploaded_at.isoformat() if doc.uploaded_at else None,
         }), 201
 
+    @app.route('/api/customers/<int:customer_id>/documents/<int:doc_id>/download', methods=['GET'])
+    @api_login_required
+    @api_permission_required('manage_customers')
+    def api_download_customer_document(customer_id, doc_id):
+        c = Customer.query.get_or_404(customer_id)
+        if not branch_allowed(c):
+            return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل'}), 403
+
+        doc = CustomerDocument.query.filter_by(id=doc_id, customer_id=customer_id).first_or_404()
+        private_folder = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers')
+        safe_filename = os.path.basename(doc.filename)
+
+        response = send_from_directory(
+            private_folder,
+            safe_filename,
+            as_attachment=True,
+            download_name=doc.original_filename or safe_filename
+        )
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        return response
+
     @app.route('/api/customers/<int:customer_id>/documents/<int:doc_id>', methods=['DELETE'])
     @api_login_required
     @api_permission_required('manage_customers')
@@ -7648,7 +8116,7 @@ def create_app():
             return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل'}), 403
 
         doc = CustomerDocument.query.filter_by(id=doc_id, customer_id=customer_id).first_or_404()
-        file_path = os.path.join(Config.UPLOAD_FOLDER, 'customers', doc.filename)
+        file_path = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers', doc.filename)
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
@@ -7693,7 +8161,7 @@ def create_app():
         Keep scanner payloads small enough for the browser.
         High-DPI WIA scans can be huge; sending them as base64 can freeze the UI.
         """
-        from PIL import Image, ImageOps
+        from PIL import Image, ImageOps  # type: ignore[import-untyped]
         import io
 
         with Image.open(path) as img:
@@ -7778,6 +8246,7 @@ def create_app():
 
     @app.route('/api/scan/preview', methods=['POST'])
     @api_login_required
+    @api_permission_required('manage_customers')
     def api_scan_preview():
         """
         Invoke the Windows WIA scanner dialog and return the scanned image as base64.
@@ -7963,6 +8432,7 @@ def create_app():
 
     @app.route('/api/employees', methods=['GET'])
     @api_login_required
+    @api_permission_required('manage_users')
     def api_list_employees():
         q = Employee.query
         if not current_user.can_access_all_branches and current_user.branch_id:
@@ -7976,7 +8446,7 @@ def create_app():
         if search:
             q = q.filter(Employee.full_name.ilike(f'%{search}%'))
         page     = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 50))
+        per_page = min(int(request.args.get('per_page', 50)), 100)
         total    = q.count()
         items    = q.order_by(Employee.full_name).offset((page - 1) * per_page).limit(per_page).all()
         return jsonify({'total': total, 'page': page, 'per_page': per_page,
@@ -8011,8 +8481,11 @@ def create_app():
 
     @app.route('/api/employees/<int:emp_id>', methods=['GET'])
     @api_login_required
+    @api_permission_required('manage_users')
     def api_employee_detail(emp_id):
         emp = Employee.query.get_or_404(emp_id)
+        if not branch_allowed(emp):
+            return jsonify({'error': 'لا يمكنك الوصول إلى موظف في فرع آخر'}), 403
         return jsonify(_employee_payload(emp))
 
     @app.route('/api/employees/<int:emp_id>', methods=['PUT'])
@@ -8020,6 +8493,8 @@ def create_app():
     @api_permission_required('manage_users')
     def api_update_employee(emp_id):
         emp  = Employee.query.get_or_404(emp_id)
+        if not branch_allowed(emp):
+            return jsonify({'error': 'لا يمكنك الوصول إلى موظف في فرع آخر'}), 403
         data = request.get_json(silent=True) or {}
         full_name = (data.get('full_name') or '').strip()
         phone     = (data.get('phone') or '').strip()
@@ -8040,6 +8515,8 @@ def create_app():
     @api_permission_required('manage_users')
     def api_delete_employee(emp_id):
         emp = Employee.query.get_or_404(emp_id)
+        if not branch_allowed(emp):
+            return jsonify({'error': 'لا يمكنك الوصول إلى موظف في فرع آخر'}), 403
         if emp.sales:
             return jsonify({'error': 'لا يمكن حذف موظف مرتبط بفواتير بيع'}), 409
         log_action('delete employee', 'Employee', emp.id, emp.full_name)
@@ -8054,7 +8531,7 @@ def create_app():
     @api_permission_required('manage_sales')
     def api_contracts():
         page     = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 25))
+        per_page = min(int(request.args.get('per_page', 25)), 100)
         status   = request.args.get('status')
         search   = request.args.get('search')
 
@@ -8182,6 +8659,68 @@ def create_app():
             ],
         }
 
+    def _public_car_payload(c):
+        return {
+            'id':                c.id,
+            'branch_id':         c.branch_id,
+            'branch':            branch_json(c.branch),
+            'brand':             c.brand,
+            'model':             c.model,
+            'manufacturing_year': c.manufacturing_year,
+            'trim':              c.trim,
+            'condition':         c.condition,
+            'color':             c.color,
+            'vin':               c.vin,
+            'plate_number':      c.plate_number,
+            'plate_status':      c.plate_status,
+            'mileage':           c.mileage,
+            'engine_size':       c.engine_size,
+            'cylinders':         c.cylinders,
+            'transmission':      c.transmission,
+            'fuel_type':         c.fuel_type,
+            'import_country':    c.import_country,
+            'seat_count':        c.seat_count,
+            'seat_material':     c.seat_material,
+            'selling_price':     c.selling_price,
+            'currency':          c.currency,
+            'status':            c.status,
+            'created_at':        c.created_at.isoformat() if c.created_at else None,
+            'photos': [
+                {'id': p.id, 'filename': p.filename, 'subfolder': CAR_PHOTO_SUBFOLDER}
+                for p in (c.photos or [])
+            ],
+            'cover_photo': (
+                {'id': c.photos[0].id, 'filename': c.photos[0].filename, 'subfolder': CAR_PHOTO_SUBFOLDER}
+                if c.photos else None
+            ),
+        }
+
+    @app.route('/api/public/inventory', methods=['GET'])
+    def api_public_inventory():
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 25)), 100)
+        search = request.args.get('search')
+
+        query = scoped_query(Car).filter_by(status='Available')
+        if search:
+            q = f"%{search}%"
+            query = query.filter(or_(Car.brand.ilike(q), Car.model.ilike(q), Car.vin.ilike(q)))
+
+        from sqlalchemy.orm import joinedload as _jl, subqueryload as _sl
+        total = query.count()
+        items = query.options(
+            _sl(Car.photos), _jl(Car.branch)
+        ).order_by(Car.created_at.desc()).offset((page-1)*per_page).limit(per_page).all()
+        results = []
+        for c in items:
+            results.append(_public_car_payload(c))
+        return jsonify({'total': total, 'page': page, 'per_page': per_page, 'items': results})
+
+    @app.route('/api/public/inventory/<int:car_id>', methods=['GET'])
+    def api_public_car_detail(car_id):
+        c = Car.query.get_or_404(car_id)
+        return jsonify(_public_car_payload(c))
+
     @app.route('/api/inventory/<int:car_id>', methods=['GET'])
     @api_login_required
     @api_permission_required('manage_cars')
@@ -8211,7 +8750,7 @@ def create_app():
         year_val, year_err = _validate_year(manufacturing_year)
         if year_err:
             return year_err
-        price_val, price_err = _parse_float(purchase_price, 'سعر الشراء')
+        price_val, price_err = _parse_money(purchase_price, 'سعر الشراء')
         if price_err:
             return price_err
         if price_val <= 0:
@@ -8229,7 +8768,7 @@ def create_app():
         selling_price_raw = data.get('selling_price')
         selling_price_val = None
         if selling_price_raw not in (None, ''):
-            sp_val, sp_err = _parse_float(selling_price_raw, 'سعر البيع')
+            sp_val, sp_err = _parse_money(selling_price_raw, 'سعر البيع')
             if sp_err:
                 return sp_err
             if sp_val < 0:
@@ -8288,7 +8827,7 @@ def create_app():
         year_val, year_err = _validate_year(manufacturing_year)
         if year_err:
             return year_err
-        price_val, price_err = _parse_float(purchase_price, 'سعر الشراء')
+        price_val, price_err = _parse_money(purchase_price, 'سعر الشراء')
         if price_err:
             return price_err
         if price_val <= 0:
@@ -8318,7 +8857,11 @@ def create_app():
         car.seat_count     = int(data['seat_count']) if data.get('seat_count') else car.seat_count
         car.seat_material  = data.get('seat_material', car.seat_material)
         car.purchase_price = price_val
-        car.selling_price  = float(data['selling_price']) if data.get('selling_price') else car.selling_price
+        if data.get('selling_price') not in (None, ''):
+            selling_price, selling_price_err = _parse_money(data['selling_price'], 'سعر البيع')
+            if selling_price_err:
+                return selling_price_err
+            car.selling_price = selling_price
         car.currency       = normalize_currency(data.get('currency') or car.currency)
         car.notes          = data.get('notes', car.notes)
         log_action('edit car', 'Car', car.id, f'{car.brand} {car.model}')
@@ -8412,7 +8955,7 @@ def create_app():
                 rate_value = fetch_online_exchange_rate()
                 source     = 'online'
             else:
-                rate_value = float(data.get('rate') or 0)
+                rate_value = rate_decimal(data.get('rate') or 0)
                 source     = 'manual'
             if rate_value <= 0:
                 return jsonify({'error': 'أدخل سعر صرف صحيح أكبر من صفر'}), 400
