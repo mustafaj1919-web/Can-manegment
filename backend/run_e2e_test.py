@@ -18,6 +18,7 @@ def run():
     from .seed_chart_of_accounts import seed_chart_of_accounts
 
     app = create_app()
+    app.config['TESTING'] = True
 
     checks_passed = 0
     checks_total  = 0

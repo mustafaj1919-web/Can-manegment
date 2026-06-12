@@ -254,7 +254,7 @@ export function FeaturedCarsWidget() {
               const hasCover = !!car.cover_photo
               return (
                 <div key={car.id} className="group bg-[#111111] border border-white/5 rounded-xl overflow-hidden hover:border-red-500/30 transition-all duration-300 flex flex-col justify-between">
-                  <div className="relative h-36 bg-[#161616] overflow-hidden flex items-center justify-center p-3">
+                  <div className="relative h-36 bg-[#161616] overflow-hidden flex items-center justify-center p-3 glare-effect">
                     {hasCover ? (
                       <img
                         src={photoUrl(car.cover_photo!.filename, car.cover_photo!.subfolder ?? 'vehicles')}

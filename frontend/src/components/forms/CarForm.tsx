@@ -10,7 +10,7 @@ import { createCar, deleteCarPhoto, updateCar, uploadCarPhotos } from '@/lib/api
 import { extractApiError } from '@/lib/api/client'
 import type { Car as CarType, CarPhoto, CarPayload } from '@/lib/api/inventory'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { ModernInput } from '@/components/ui/ModernInput'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BrandModelSelect, type TrimSpec } from '@/components/forms/BrandModelSelect'
@@ -239,16 +239,23 @@ export function CarForm({ car }: CarFormProps) {
               brandError={errors.brand}
               modelError={errors.model}
             />
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">سنة الصنع *</Label>
-              <Input type="number" min="1990" max="2030" value={year} onChange={(e) => setYear(e.target.value)} className={cn('font-numeric bg-secondary/30 border-border/60', errors.year && 'border-rose-500/60')} />
-              <FieldError msg={errors.year} />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">اللون *</Label>
-              <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="أبيض، أسود، رمادي" className={cn('bg-secondary/30 border-border/60', errors.color && 'border-rose-500/60')} />
-              <FieldError msg={errors.color} />
-            </div>
+            <ModernInput
+              type="number"
+              min="1990"
+              max="2030"
+              label="سنة الصنع *"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              error={errors.year}
+              className="font-numeric"
+            />
+            <ModernInput
+              label="اللون *"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              placeholder="أبيض، أسود، رمادي"
+              error={errors.color}
+            />
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">الحالة</Label>
               <Select value={condition} onValueChange={(value) => setCondition(value as 'New' | 'Used' | 'Damaged' | 'Salvage')}>
@@ -256,27 +263,33 @@ export function CarForm({ car }: CarFormProps) {
                 <SelectContent>{CONDITIONS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">رقم الشاصي *</Label>
-              <div className="flex gap-2">
-                <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="VIN — 17 حرف" className={cn('font-numeric bg-secondary/30 border-border/60', errors.vin && 'border-rose-500/60')} />
+            <ModernInput
+              value={vin}
+              onChange={(e) => setVin(e.target.value)}
+              placeholder="VIN — 17 حرف"
+              label="رقم الشاصي *"
+              error={errors.vin}
+              className="font-numeric"
+              rightIcon={
                 <button
                   type="button"
                   onClick={handleVinDecode}
                   disabled={vinLoading || vin.trim().length !== 17}
                   title="فك شفرة الشاصي"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-secondary/30 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-7 w-7 items-center justify-center rounded bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-primary transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {vinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+                  {vinLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
                 </button>
-              </div>
-              <FieldError msg={errors.vin} />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">رقم اللوحة *</Label>
-              <Input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="رقم اللوحة" className={cn('font-numeric bg-secondary/30 border-border/60', errors.plate && 'border-rose-500/60')} />
-              <FieldError msg={errors.plate} />
-            </div>
+              }
+            />
+            <ModernInput
+              label="رقم اللوحة *"
+              value={plate}
+              onChange={(e) => setPlate(e.target.value)}
+              placeholder="رقم اللوحة"
+              error={errors.plate}
+              className="font-numeric"
+            />
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">حالة اللوحة</Label>
               <Select value={plateStatus} onValueChange={setPlateStatus}>
@@ -287,10 +300,12 @@ export function CarForm({ car }: CarFormProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">بلد الاستيراد</Label>
-              <Input value={importCountry} onChange={(e) => setImportCountry(e.target.value)} placeholder="الإمارات، كوريا، أمريكا" className="bg-secondary/30 border-border/60" />
-            </div>
+            <ModernInput
+              label="بلد الاستيراد"
+              value={importCountry}
+              onChange={(e) => setImportCountry(e.target.value)}
+              placeholder="الإمارات، كوريا، أمريكا"
+            />
           </SectionCard>
 
           {/* ── Section 2: Technical Specs ── */}
@@ -315,18 +330,30 @@ export function CarForm({ car }: CarFormProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">حجم المحرك</Label>
-              <Input value={engineSize} onChange={(e) => setEngineSize(e.target.value)} placeholder="1600, 2000, V6" className="bg-secondary/30 border-border/60" />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">عدد الأسطوانات</Label>
-              <Input type="number" min="1" max="16" value={cylinders} onChange={(e) => setCylinders(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">عدد المقاعد</Label>
-              <Input type="number" min="1" max="20" value={seatCount} onChange={(e) => setSeatCount(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
-            </div>
+            <ModernInput
+              label="حجم المحرك"
+              value={engineSize}
+              onChange={(e) => setEngineSize(e.target.value)}
+              placeholder="1600, 2000, V6"
+            />
+            <ModernInput
+              type="number"
+              min="1"
+              max="16"
+              label="عدد الأسطوانات"
+              value={cylinders}
+              onChange={(e) => setCylinders(e.target.value)}
+              className="font-numeric"
+            />
+            <ModernInput
+              type="number"
+              min="1"
+              max="20"
+              label="عدد المقاعد"
+              value={seatCount}
+              onChange={(e) => setSeatCount(e.target.value)}
+              className="font-numeric"
+            />
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">مادة المقاعد</Label>
               <Select value={seatMaterial} onValueChange={setSeatMaterial}>
@@ -338,8 +365,14 @@ export function CarForm({ car }: CarFormProps) {
               </Select>
             </div>
             <div className="sm:col-span-2">
-              <Label className="mb-1.5 block text-xs text-muted-foreground">المسافة المقطوعة (كم)</Label>
-              <Input type="number" min="0" value={mileage} onChange={(e) => setMileage(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
+              <ModernInput
+                type="number"
+                min="0"
+                label="المسافة المقطوعة (كم)"
+                value={mileage}
+                onChange={(e) => setMileage(e.target.value)}
+                className="font-numeric"
+              />
             </div>
           </SectionCard>
 
@@ -356,15 +389,27 @@ export function CarForm({ car }: CarFormProps) {
               </Select>
             </div>
             <div />
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">سعر الشراء *</Label>
-              <Input type="number" min="0" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0" className={cn('font-numeric bg-secondary/30 border-border/60', errors.purchasePrice && 'border-rose-500/60')} />
-              <FieldError msg={errors.purchasePrice} />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">سعر البيع المقترح</Label>
-              <Input type="number" min="0" step="any" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="اختياري" className="font-numeric bg-secondary/30 border-border/60" />
-            </div>
+            <ModernInput
+              type="number"
+              min="0"
+              step="any"
+              label="سعر الشراء *"
+              value={purchasePrice}
+              onChange={(e) => setPurchasePrice(e.target.value)}
+              placeholder="0"
+              error={errors.purchasePrice}
+              className="font-numeric"
+            />
+            <ModernInput
+              type="number"
+              min="0"
+              step="any"
+              label="سعر البيع المقترح"
+              value={sellingPrice}
+              onChange={(e) => setSellingPrice(e.target.value)}
+              placeholder="اختياري"
+              className="font-numeric"
+            />
           </SectionCard>
 
           {/* ── Section 4: Photos ── */}

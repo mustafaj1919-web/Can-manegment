@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarDays, Plus, ReceiptText, RefreshCw } from 'lucide-react'
 import { getExpenses } from '@/lib/api/accounting'
@@ -9,8 +9,8 @@ import { formatDate, formatMoney } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
-import { EmptyState } from '@/components/ui/empty-state'
+import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
+import { cn } from '@/lib/utils'
 
 function toDateInput(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -40,6 +40,49 @@ export default function ExpensesPage() {
     }
   }, [branches, branchId])
 
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      key: 'title',
+      header: 'العنوان',
+      render: (expense) => <span className="text-xs font-bold text-foreground">{expense.title}</span>,
+      width: 180,
+    },
+    {
+      key: 'expense_date',
+      header: 'التاريخ',
+      render: (expense) => (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/85">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          {formatDate(expense.expense_date)}
+        </div>
+      ),
+      width: 130,
+    },
+    {
+      key: 'category',
+      header: 'التصنيف',
+      render: (expense) => <span className="text-xs text-muted-foreground/80">{expense.category ?? '—'}</span>,
+      width: 140,
+    },
+    {
+      key: 'amount_iqd',
+      header: 'المبلغ',
+      isNumeric: true,
+      render: (expense) => (
+        <span className="font-numeric text-xs font-bold text-orange-600 dark:text-orange-300">
+          {formatMoney(expense.amount_iqd, 'IQD')}
+        </span>
+      ),
+      width: 140,
+    },
+    {
+      key: 'notes',
+      header: 'الملاحظات',
+      render: (expense) => <span className="text-xs text-muted-foreground/75 truncate block max-w-[240px]">{expense.notes ?? '—'}</span>,
+      width: 240,
+    }
+  ], [])
+
   return (
     <div className="space-y-5" dir="rtl">
 
@@ -47,11 +90,11 @@ export default function ExpensesPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-orange-500/20 bg-orange-500/10">
-            <ReceiptText className="h-5 w-5 text-orange-300" />
+            <ReceiptText className="h-5 w-5 text-orange-600 dark:text-orange-300" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground">المصاريف</h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground font-medium">
               {isLoading
                 ? 'جاري التحميل...'
                 : `${data?.total ?? 0} مصروف · ${formatMoney(data?.total_iqd ?? 0, 'IQD')}`}
@@ -67,7 +110,7 @@ export default function ExpensesPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="app-card rounded-xl p-4">
+      <div className="bg-card border border-border/60 rounded-xl p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           <div className="flex items-center gap-2">
             <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
@@ -98,82 +141,24 @@ export default function ExpensesPage() {
           </Select>
           <Button
             type="button" variant="outline" onClick={() => refetch()}
-            disabled={isFetching} className="h-9 gap-2 text-sm"
+            disabled={isFetching} className="h-9 gap-2 text-sm border-border/80 hover:bg-secondary/50 rounded-lg px-3"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
             تحديث
           </Button>
         </div>
       </div>
 
       {/* Table */}
-      <div className="app-card overflow-hidden rounded-xl">
-        {isLoading ? (
-          <div className="space-y-3 p-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 rounded-lg" />
-            ))}
-          </div>
-        ) : isError || !data ? (
-          <EmptyState
-            variant="error"
-            title="تعذّر تحميل المصاريف"
-            description="تحقق من اتصال الخادم ثم أعد المحاولة"
-            action={
-              <Button type="button" variant="ghost" size="sm" onClick={() => refetch()}>
-                إعادة المحاولة
-              </Button>
-            }
-          />
-        ) : data.items.length === 0 ? (
-          <EmptyState
-            variant="default"
-            icon={<ReceiptText className="h-5 w-5" />}
-            title="لا توجد مصاريف"
-            description="لا توجد مصاريف ضمن الفترة المحددة"
-            action={
-              <Button asChild size="sm" className="bg-orange-600 text-white hover:bg-orange-500">
-                <Link href="/expenses/new">
-                  <Plus className="me-1.5 h-3.5 w-3.5" />
-                  مصروف جديد
-                </Link>
-              </Button>
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="app-table">
-              <thead>
-                <tr>
-                  {['العنوان', 'التاريخ', 'التصنيف', 'المبلغ', 'الملاحظات'].map(h => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map(expense => (
-                  <tr key={expense.id}>
-                    <td className="text-xs font-semibold text-foreground">{expense.title}</td>
-                    <td>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <CalendarDays className="h-3 w-3 shrink-0 opacity-60" />
-                        {formatDate(expense.expense_date)}
-                      </div>
-                    </td>
-                    <td className="text-xs text-muted-foreground">{expense.category ?? '—'}</td>
-                    <td className="font-numeric text-xs font-semibold text-orange-300">
-                      {formatMoney(expense.amount_iqd, 'IQD')}
-                    </td>
-                    <td className="max-w-[200px] truncate text-xs text-muted-foreground">
-                      {expense.notes ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <AdvancedTable
+        data={data?.items ?? []}
+        columns={columns}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        exportFilename="المصاريف"
+        searchPlaceholder="بحث بالوصف أو التصنيف..."
+      />
     </div>
   )
 }

@@ -38,7 +38,7 @@ function ShowroomCarCard({ car }) {
       className="group bg-[#0e0e0e] border border-white/[0.05] hover:border-red-500/30 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[0_12px_30px_rgba(239,27,45,0.12)] flex flex-col h-full"
     >
       {/* Photo Container */}
-      <div className="relative h-56 overflow-hidden bg-[#070707] w-full shrink-0">
+      <div className="relative h-56 overflow-hidden bg-[#070707] w-full shrink-0 glare-effect">
         {hasCover ? (
           <img
             src={photoUrl(car.cover_photo.filename, car.cover_photo.subfolder ?? 'vehicles')}

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
+import { CommandPalette } from '../shared/CommandPalette'
 import { getCurrentUser } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
@@ -75,6 +76,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="app-shell-root relative min-h-screen bg-background">
+      <CommandPalette />
       {/* Mobile backdrop */}
       <AnimatePresence>
         {mobileOpen && (

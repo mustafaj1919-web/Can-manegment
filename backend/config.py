@@ -22,6 +22,7 @@ DATABASE_PATH = os.path.join(DATA_DIR, 'database', 'showroom.db')
 STATIC_FOLDER = os.path.join(DATA_DIR, 'static')
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', os.path.join(STATIC_FOLDER, 'uploads'))
 STATIC_IMAGES_FOLDER = os.path.join(STATIC_FOLDER, 'images')
+PRIVATE_STORAGE_FOLDER = os.environ.get('PRIVATE_STORAGE_FOLDER', os.path.join(DATA_DIR, 'storage', 'private'))
 BACKUP_FOLDER = os.environ.get('BACKUP_FOLDER', os.path.join(basedir, 'data', 'backups'))
 
 # ── Cloud / Cloudflare Tunnel mode ─────────────────────────────────────────
@@ -118,6 +119,7 @@ class Config:
     STATIC_FOLDER        = STATIC_FOLDER
     UPLOAD_FOLDER        = UPLOAD_FOLDER
     STATIC_IMAGES_FOLDER = STATIC_IMAGES_FOLDER
+    PRIVATE_STORAGE_FOLDER = PRIVATE_STORAGE_FOLDER
     BACKUP_FOLDER        = BACKUP_FOLDER
     ALLOWED_ORIGINS_EXTRA = ALLOWED_ORIGINS_EXTRA
     CLOUD_MODE           = _CLOUD_MODE

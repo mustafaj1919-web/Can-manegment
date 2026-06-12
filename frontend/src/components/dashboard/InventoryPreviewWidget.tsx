@@ -19,7 +19,7 @@ function CarTile({ car, index }: { car: any; index: number }) {
       style={{ background:'var(--s2)', border:'1px solid var(--border-card)' }}>
 
       {/* Photo */}
-      <div className="relative h-24 overflow-hidden" style={{ background:'var(--s3)' }}>
+      <div className="relative h-24 overflow-hidden glare-effect" style={{ background:'var(--s3)' }}>
         {car.cover_photo
           ? <img src={photoUrl(car.cover_photo.filename, car.cover_photo.subfolder ?? 'vehicles')}
               alt={`${car.brand} ${car.model}`}

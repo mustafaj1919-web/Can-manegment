@@ -128,7 +128,7 @@ function KpiCard({
         <div
           className={cn(
             'h-[3px] w-full shrink-0',
-            alertMode ? 'bg-rose-500' : accentBg,
+            alertMode ? 'bg-rose-600 dark:bg-rose-500' : accentBg,
           )}
         />
 
@@ -140,7 +140,7 @@ function KpiCard({
               'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
               alertMode ? 'border-rose-500/20 bg-rose-500/10' : iconBg,
             )}>
-              <Icon className={cn('h-4 w-4', alertMode ? 'text-rose-400' : iconColor)} />
+              <Icon className={cn('h-4 w-4', alertMode ? 'text-rose-600 dark:text-rose-400' : iconColor)} />
             </div>
             <p className="text-[11px] font-semibold leading-tight text-muted-foreground">
               {label}
@@ -162,7 +162,7 @@ function KpiCard({
             )}
             <p className={cn(
               'font-numeric text-[2rem] font-black leading-none tracking-tight',
-              alertMode ? 'text-rose-300' : 'text-foreground',
+              alertMode ? 'text-rose-600 dark:text-rose-300' : 'text-foreground',
             )}>
               <AnimatedNumber value={value} />
             </p>
@@ -174,7 +174,7 @@ function KpiCard({
 
         {/* Sparkline footer */}
         <div className="overflow-hidden opacity-60 transition-opacity duration-200 group-hover:opacity-80">
-          <SparklineFull id={id} color={alertMode ? '#ef4444' : sparkColor} />
+          <SparklineFull id={id} color={alertMode ? '#dc2626' : sparkColor} />
         </div>
       </Link>
     </motion.div>
@@ -247,11 +247,11 @@ export function KpiCards() {
       sublabel:    'مجموع مبالغ البيع',
       href:        '/sales',
       icon:        Wallet,
-      iconBg:      'bg-red-500/10 border-red-500/20',
-      iconColor:   'text-red-400',
+      iconBg:      'bg-primary/10 border-primary/20 dark:bg-red-500/10 dark:border-red-500/20',
+      iconColor:   'text-primary dark:text-red-400',
       accentBg:    'bg-[hsl(var(--primary))]',
-      hoverShadow: 'hover:shadow-red-500/[0.08]',
-      sparkColor:  '#ef1b2d',
+      hoverShadow: 'hover:shadow-primary/[0.04] dark:hover:shadow-red-500/[0.08]',
+      sparkColor:  'hsl(var(--primary))',
       value:       data?.total_sales_amount ?? 0,
       currency:    'IQD',
     },
@@ -262,10 +262,10 @@ export function KpiCards() {
       href:        '/sales',
       icon:        TrendingUp,
       iconBg:      'bg-emerald-500/10 border-emerald-500/20',
-      iconColor:   'text-emerald-400',
-      accentBg:    'bg-emerald-500',
-      hoverShadow: 'hover:shadow-emerald-500/[0.07]',
-      sparkColor:  '#10b981',
+      iconColor:   'text-emerald-600 dark:text-emerald-400',
+      accentBg:    'bg-emerald-600 dark:bg-emerald-500',
+      hoverShadow: 'hover:shadow-emerald-500/[0.04] dark:hover:shadow-emerald-500/[0.07]',
+      sparkColor:  '#16a34a',
       value:       data?.sales ?? 0,
     },
     {
@@ -275,10 +275,10 @@ export function KpiCards() {
       href:        '/inventory',
       icon:        Car,
       iconBg:      'bg-amber-500/10 border-amber-500/20',
-      iconColor:   'text-amber-400',
-      accentBg:    'bg-amber-500',
-      hoverShadow: 'hover:shadow-amber-500/[0.07]',
-      sparkColor:  '#f59e0b',
+      iconColor:   'text-amber-600 dark:text-amber-400',
+      accentBg:    'bg-amber-600 dark:bg-amber-500',
+      hoverShadow: 'hover:shadow-amber-500/[0.04] dark:hover:shadow-amber-500/[0.07]',
+      sparkColor:  '#d97706',
       value:       data?.available_cars ?? 0,
     },
     {
@@ -288,10 +288,10 @@ export function KpiCards() {
       href:        '/installments',
       icon:        AlertTriangle,
       iconBg:      'bg-rose-500/10 border-rose-500/15',
-      iconColor:   'text-rose-400',
-      accentBg:    'bg-rose-500',
-      hoverShadow: 'hover:shadow-rose-500/[0.08]',
-      sparkColor:  '#ef4444',
+      iconColor:   'text-rose-600 dark:text-rose-400',
+      accentBg:    'bg-rose-600 dark:bg-rose-500',
+      hoverShadow: 'hover:shadow-rose-500/[0.04] dark:hover:shadow-rose-500/[0.08]',
+      sparkColor:  '#dc2626',
       value:       data?.overdue_installments ?? 0,
       isAlert:     true,
     },

@@ -174,7 +174,7 @@ export default function CarSpecificationPage() {
           </div>
 
           {/* Large Hero Image */}
-          <div className="spec-hero-container">
+          <div className="spec-hero-container glare-effect">
             {cover ? (
               <img
                 src={carPhotoUrl(cover.filename, cover.subfolder ?? 'vehicles')}
@@ -832,13 +832,31 @@ export default function CarSpecificationPage() {
             display: none !important;
           }
 
-          body {
+          html, body {
             background: #ffffff !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 297mm !important;
             height: 210mm !important;
+            max-height: 210mm !important;
             overflow: hidden !important;
+          }
+
+          .app-shell-root,
+          .app-shell-content,
+          .page-container,
+          .page-container > div {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 297mm !important;
+            height: 210mm !important;
+            max-height: 210mm !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+            border: none !important;
+            box-shadow: none !important;
+            display: block !important;
+            transform: none !important;
           }
 
           .spec-shell {
@@ -847,10 +865,12 @@ export default function CarSpecificationPage() {
             margin: 0 !important;
             width: 297mm !important;
             height: 210mm !important;
-            min-height: 0 !important;
+            min-height: 210mm !important;
+            max-height: 210mm !important;
             justify-content: center;
             align-items: center;
             overflow: hidden !important;
+            display: flex !important;
           }
 
           .spec-doc {
@@ -858,6 +878,7 @@ export default function CarSpecificationPage() {
             height: 210mm !important;
             min-width: 297mm !important;
             min-height: 210mm !important;
+            max-height: 210mm !important;
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;

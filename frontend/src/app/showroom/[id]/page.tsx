@@ -284,7 +284,7 @@ ${specUrl}`
         {/* Right Column: Hero Image, Price Card, Action buttons */}
         <section className="detail-right-col">
           {/* Main Photo Box */}
-          <div className="hero-photo-wrapper">
+          <div className="hero-photo-wrapper glare-effect">
             {currentPhoto ? (
               <img src={currentPhoto} alt={carTitle} className="hero-photo-img" />
             ) : (

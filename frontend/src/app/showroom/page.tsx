@@ -126,7 +126,7 @@ export default function PublicShowroomPage() {
                 return (
                   <article key={car.id} className="car-card">
                     {/* Image */}
-                    <div className="car-card-image">
+                    <div className="car-card-image glare-effect">
                       {cover ? (
                         <img
                           src={carPhotoUrl(cover.filename, cover.subfolder)}

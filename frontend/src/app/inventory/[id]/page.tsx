@@ -51,7 +51,7 @@ function PremiumGallery({
   return (
     <div className="relative group/gallery">
       {/* Main cinematic view - extra height and curved borders */}
-      <div className="relative h-[620px] w-full overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#090909] shadow-2xl">
+      <div className="relative h-[620px] w-full overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#090909] shadow-2xl glare-effect">
         {activePhoto ? (
           <img
             key={activeIdx}
@@ -183,7 +183,7 @@ function RelatedCarCard({ car }: { car: any }) {
       href={`/inventory/${car.id}`}
       className="group block overflow-hidden rounded-2xl border border-white/[0.05] bg-[#0c0c0c] hover:border-red-500/20 hover:bg-[#111] hover:shadow-2xl hover:shadow-red-500/5 transition-all duration-500"
     >
-      <div className="relative h-48 overflow-hidden bg-[#0a0a0a]">
+      <div className="relative h-48 overflow-hidden bg-[#0a0a0a] glare-effect">
         {hasCover ? (
           <img
             src={photoUrl(car.cover_photo.filename, car.cover_photo.subfolder ?? 'vehicles')}

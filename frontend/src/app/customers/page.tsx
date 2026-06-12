@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion, type Variants } from 'framer-motion'
 import {
@@ -18,7 +19,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { exportXlsx } from '@/lib/export'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { FilterBar } from '@/components/shared/FilterBar'
-import { DataTable } from '@/components/shared/DataTable'
+import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,8 +30,8 @@ const TYPE_OPTS = [
 ]
 
 const TYPE_BADGE: Record<string, string> = {
-  Buyer:  'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
-  Seller: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+  Buyer:  'bg-cyan-500/10 text-cyan-600 border-cyan-500/20 dark:text-cyan-300',
+  Seller: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-300',
 }
 const TYPE_LABEL: Record<string, string> = {
   Buyer: 'مشتري', Seller: 'بائع',
@@ -54,19 +55,19 @@ function KpiCard({ icon, label, value, iconColor, iconBg, accentGlow }: {
   iconColor: string; iconBg: string; accentGlow?: string
 }) {
   return (
-    <div className="app-card rounded-xl p-4 relative overflow-hidden group hover:border-white/10 transition-all duration-300">
+    <div className="bg-card border border-border/60 rounded-xl p-4 relative overflow-hidden group hover:border-primary/20 transition-all duration-300 shadow-sm">
       {/* Subtle gradient glow */}
       {accentGlow && (
-        <div className={cn('absolute -top-8 -end-8 w-24 h-24 rounded-full blur-[40px] opacity-20 group-hover:opacity-35 transition-opacity', accentGlow)} />
+        <div className={cn('absolute -top-8 -end-8 w-24 h-24 rounded-full blur-[40px] opacity-[0.03] dark:opacity-20 group-hover:opacity-[0.06] dark:group-hover:opacity-35 transition-opacity', accentGlow)} />
       )}
       <div className="relative z-10">
-        <div className={cn('mb-3 flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-white/5', iconBg)}>
+        <div className={cn('mb-3 flex h-9 w-9 items-center justify-center rounded-lg border', iconBg)}>
           <span className={iconColor}>{icon}</span>
         </div>
         <p className="font-numeric text-2xl font-bold tabular-nums text-foreground">
-          {typeof value === 'number' ? value.toLocaleString('ar-EG') : value}
+          {typeof value === 'number' ? value.toLocaleString('en-US') : value}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground/60 font-semibold">{label}</p>
       </div>
     </div>
   )
@@ -81,12 +82,93 @@ function safeText(value?: string | null, fallback = '—') {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const router = useRouter()
   const [search,     setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [view,       setView]       = useState<'cards' | 'table'>('cards')
   const [page,       setPage]       = useState(1)
   const [exporting,  setExporting]  = useState(false)
   const perPage = 20
+
+  const columns = useMemo<ColumnDef<Customer>[]>(() => [
+    {
+      key: 'name',
+      header: 'العميل',
+      render: (customer) => {
+        const displayName = customer.full_name || customer.name
+        return (
+          <div>
+            <p className="text-xs font-bold text-foreground">{displayName}</p>
+            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Phone className="h-2.5 w-2.5" />
+              {safeText(customer.phone)}
+            </div>
+          </div>
+        )
+      },
+      width: 180,
+    },
+    {
+      key: 'id_number',
+      header: 'رقم الهوية',
+      render: (customer) => <span className="font-numeric text-[11px] text-muted-foreground">{safeText(customer.id_number)}</span>,
+      width: 140,
+    },
+    {
+      key: 'customer_type',
+      header: 'النوع',
+      render: (customer) => (
+        <span className={cn(
+          'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold',
+          TYPE_BADGE[customer.customer_type]
+        )}>
+          {TYPE_LABEL[customer.customer_type] ?? customer.customer_type}
+        </span>
+      ),
+      width: 100,
+    },
+    {
+      key: 'transactions',
+      header: 'المعاملات',
+      render: (customer) => (
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1 font-semibold">
+            <UserCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+            {customer.sales_count ?? 0}
+          </span>
+          <span className="flex items-center gap-1 font-semibold">
+            <ShoppingBag className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+            {customer.purchases_count ?? 0}
+          </span>
+          <span className="flex items-center gap-1 font-semibold">
+            <FileText className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+            {customer.documents_count ?? 0}
+          </span>
+        </div>
+      ),
+      width: 170,
+    },
+    {
+      key: 'created_at',
+      header: 'مضاف',
+      render: (customer) => <span className="text-[11px] text-muted-foreground">{formatDate(customer.created_at)}</span>,
+      width: 120,
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (customer) => (
+        <div className="text-end" onClick={e => e.stopPropagation()}>
+          <Button asChild variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+            <Link href={`/customers/${customer.id}`}>
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      ),
+      width: 60,
+    }
+  ], [])
 
   const params = useMemo(() => ({
     page,
@@ -196,35 +278,35 @@ export default function CustomersPage() {
           icon={<Users className="h-4 w-4" />}
           label="إجمالي العملاء"
           value={totalCount ?? '...'}
-          iconColor="text-blue-400"
-          iconBg="bg-blue-500/10"
+          iconColor="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-500/10 border-blue-500/20"
           accentGlow="bg-blue-500"
         />
         <KpiCard
           icon={<UserCheck className="h-4 w-4" />}
           label="مشترون"
           value={counts?.buyers ?? '...'}
-          iconColor="text-cyan-400"
-          iconBg="bg-cyan-500/10"
+          iconColor="text-cyan-600 dark:text-cyan-400"
+          iconBg="bg-cyan-500/10 border-cyan-500/20"
           accentGlow="bg-cyan-500"
         />
         <KpiCard
           icon={<ShoppingBag className="h-4 w-4" />}
           label="بائعون"
           value={counts?.sellers ?? '...'}
-          iconColor="text-amber-400"
-          iconBg="bg-amber-500/10"
+          iconColor="text-amber-600 dark:text-amber-400"
+          iconBg="bg-amber-500/10 border-amber-500/20"
           accentGlow="bg-amber-500"
         />
       </div>
 
       {/* ── Filters ── */}
       <FilterBar
-        search={{
+        search={view !== 'table' ? {
           value: search,
           onChange: v => { setSearch(v); setPage(1) },
           placeholder: 'بحث بالاسم أو الهاتف أو رقم الهوية...',
-        }}
+        } : undefined}
         selects={[
           {
             value: typeFilter,
@@ -390,94 +472,21 @@ export default function CustomersPage() {
 
       {/* ── Table View ── */}
       {view === 'table' && (
-        <DataTable
+        <AdvancedTable
+          data={items}
+          columns={columns}
           isLoading={isLoading}
           isError={isError}
-          isEmpty={items.length === 0}
           onRetry={() => refetch()}
-          emptyProps={{
-            variant: hasFilters ? 'search' : 'default',
-            icon: <Users className="h-5 w-5" />,
-            title: hasFilters ? 'لا توجد نتائج مطابقة' : 'لا يوجد عملاء بعد',
-            description: hasFilters ? 'جرّب تعديل معايير البحث' : 'أضف أول عميل للبدء',
-            action: hasFilters ? (
-              <Button type="button" variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5">مسح الفلاتر</Button>
-            ) : (
-              <Button asChild size="sm">
-                <Link href="/customers/new"><Plus className="me-1.5 h-3.5 w-3.5" />عميل جديد</Link>
-              </Button>
-            ),
-          }}
+          onRowClick={(row) => router.push(`/customers/${row.id}`)}
+          searchPlaceholder="بحث بالاسم، الهاتف، الهوية..."
+          searchValue={search}
+          onSearchChange={(val) => { setSearch(val); setPage(1) }}
+          exportFilename="العملاء"
           footer={
             <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} label="عميل" compact />
           }
-        >
-          <table className="app-table">
-            <thead>
-              <tr>
-                <th>العميل</th>
-                <th className="hidden sm:table-cell">رقم الهوية</th>
-                <th className="hidden sm:table-cell">النوع</th>
-                <th>المعاملات</th>
-                <th className="hidden md:table-cell">مضاف</th>
-                <th className="w-10"><span className="sr-only">إجراءات</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((customer) => {
-                const displayName = customer.full_name || customer.name
-                return (
-                  <tr key={customer.id}>
-                    <td>
-                      <p className="text-xs font-semibold">{displayName}</p>
-                      <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Phone className="h-2.5 w-2.5" />
-                        {safeText(customer.phone)}
-                      </div>
-                    </td>
-                    <td className="hidden sm:table-cell font-numeric text-[11px] text-muted-foreground">
-                      {safeText(customer.id_number)}
-                    </td>
-                    <td className="hidden sm:table-cell">
-                      <span className={cn(
-                        'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold',
-                        TYPE_BADGE[customer.customer_type],
-                      )}>
-                        {TYPE_LABEL[customer.customer_type] ?? customer.customer_type}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <UserCheck className="h-3 w-3 text-emerald-400/60" />
-                          {customer.sales_count ?? 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <ShoppingBag className="h-3 w-3 text-blue-400/60" />
-                          {customer.purchases_count ?? 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <FileText className="h-3 w-3 text-violet-400/60" />
-                          {customer.documents_count ?? 0}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="hidden md:table-cell text-[11px] text-muted-foreground">
-                      {formatDate(customer.created_at)}
-                    </td>
-                    <td className="text-end">
-                      <Button asChild variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                        <Link href={`/customers/${customer.id}`}>
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </DataTable>
+        />
       )}
 
     </div>

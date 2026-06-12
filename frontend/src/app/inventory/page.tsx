@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { exportXlsx } from '@/lib/export'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { DataTable } from '@/components/shared/DataTable'
+import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -183,6 +183,78 @@ export default function InventoryPage() {
   const [exporting, setExporting] = useState(false)
   const perPage = 18
 
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      key: 'brand',
+      header: 'السيارة',
+      render: (car) => (
+        <div>
+          <p className="text-xs font-bold text-foreground">{car.brand} {car.model}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{car.manufacturing_year} · {car.color}</p>
+        </div>
+      ),
+      width: 180,
+    },
+    {
+      key: 'vin',
+      header: 'رقم الهيكل',
+      render: (car) => <span className="font-code text-[10px] text-muted-foreground">{car.vin}</span>,
+      width: 150,
+    },
+    {
+      key: 'plate_number',
+      header: 'رقم اللوحة',
+      render: (car) => <span className="text-[11px] font-medium">{car.plate_number || '—'}</span>,
+      width: 110,
+    },
+    {
+      key: 'selling_price',
+      header: 'سعر البيع',
+      isNumeric: true,
+      render: (car) => (
+        <span className="font-numeric text-xs font-bold text-foreground">
+          {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
+        </span>
+      ),
+      width: 140,
+    },
+    {
+      key: 'purchase_price',
+      header: 'سعر الشراء',
+      isNumeric: true,
+      render: (car) => (
+        <span className="font-numeric text-xs font-medium text-muted-foreground">
+          {formatMoney(car.purchase_price, car.currency)}
+        </span>
+      ),
+      width: 140,
+    },
+    {
+      key: 'status',
+      header: 'الحالة',
+      render: (car) => (
+        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold border', getStatusVariant(car.status))}>
+          {translateStatus(car.status)}
+        </span>
+      ),
+      width: 100,
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (car) => (
+        <div className="text-end" onClick={e => e.stopPropagation()}>
+          <Button asChild variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+            <Link href={`/inventory/${car.id}`}>
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      ),
+      width: 60,
+    }
+  ], [])
+
   const params = useMemo(() => ({
     page,
     per_page: perPage,
@@ -331,25 +403,27 @@ export default function InventoryPage() {
 
       {/* ── Search & Filter Chips ── */}
       <div className="space-y-3 mt-4">
-        <div className="relative">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-          <Input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="بحث بالماركة أو الموديل أو رقم الهيكل..."
-            className="h-10 bg-[var(--s1)] ps-10 text-sm border-white/5 focus:border-red-500/50"
-          />
-          {search && (
-            <button
-              type="button"
-              aria-label="مسح البحث"
-              onClick={() => { setSearch(''); setPage(1) }}
-              className="absolute end-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+        {view !== 'table' && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
+            <Input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="بحث بالماركة أو الموديل أو رقم الهيكل..."
+              className="h-10 bg-[var(--s1)] ps-10 text-sm border-white/5 focus:border-red-500/50"
+            />
+            {search && (
+              <button
+                type="button"
+                aria-label="مسح البحث"
+                onClick={() => { setSearch(''); setPage(1) }}
+                className="absolute end-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Brand / Status Filter Chips */}
         <div className="flex flex-wrap items-center gap-2 pb-1 overflow-x-auto">
@@ -504,7 +578,7 @@ export default function InventoryPage() {
                           className="group bg-[#0e0e0e] border border-white/[0.05] hover:border-red-500/30 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[0_12px_30px_rgba(239,27,45,0.12)] flex flex-col h-full"
                         >
                           {/* Photo Container */}
-                          <div className="relative h-64 overflow-hidden bg-[#070707] w-full shrink-0">
+                          <div className="relative h-64 overflow-hidden bg-[#070707] w-full shrink-0 glare-effect">
                             {car.cover_photo ? (
                               <img
                                 src={photoUrl(
@@ -637,29 +711,16 @@ export default function InventoryPage() {
 
           {/* ── Table View ─────────────────────────────────────────────── */}
           {view === 'table' && (
-            <DataTable
+            <AdvancedTable
+              data={items}
+              columns={columns}
               isLoading={isLoading}
               isError={isError}
-              isEmpty={items.length === 0}
               onRetry={() => refetch()}
-              emptyProps={{
-                variant: hasFilters ? 'search' : 'default',
-                icon: <Car className="h-5 w-5" />,
-                title: hasFilters ? 'لا توجد سيارات مطابقة' : 'المخزون فارغ',
-                description: hasFilters ? 'جرّب تعديل معايير البحث أو الفلترة' : 'أضف أول سيارة لبدء المخزون',
-                action: hasFilters ? (
-                  <Button type="button" variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5">
-                    مسح الفلاتر
-                  </Button>
-                ) : (
-                  <Button asChild size="sm">
-                    <Link href="/inventory/new">
-                      <Plus className="me-1.5 h-3.5 w-3.5" />
-                      سيارة جديدة
-                    </Link>
-                  </Button>
-                ),
-              }}
+              searchPlaceholder="بحث بالماركة أو الموديل أو رقم الهيكل..."
+              searchValue={search}
+              onSearchChange={(val) => { setSearch(val); setPage(1) }}
+              exportFilename="المخزون"
               footer={
                 <Pagination
                   page={page}
@@ -670,51 +731,7 @@ export default function InventoryPage() {
                   compact
                 />
               }
-            >
-              <table className="app-table">
-                <thead>
-                  <tr>
-                    <th>السيارة</th>
-                    <th>رقم الهيكل</th>
-                    <th className="hidden sm:table-cell">اللوحة</th>
-                    <th>سعر البيع</th>
-                    <th className="hidden md:table-cell">سعر الشراء</th>
-                    <th>الحالة</th>
-                    <th className="w-10"><span className="sr-only">إجراءات</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((car) => (
-                    <tr key={car.id}>
-                      <td>
-                        <p className="text-xs font-semibold">{car.brand} {car.model}</p>
-                        <p className="text-[11px] text-muted-foreground">{car.manufacturing_year} · {car.color}</p>
-                      </td>
-                      <td className="font-code text-[11px] text-muted-foreground">{car.vin}</td>
-                      <td className="hidden sm:table-cell text-xs">{car.plate_number || '—'}</td>
-                      <td className="font-numeric text-xs font-semibold text-foreground">
-                        {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
-                      </td>
-                      <td className="hidden md:table-cell font-numeric text-xs text-muted-foreground">
-                        {formatMoney(car.purchase_price, car.currency)}
-                      </td>
-                      <td>
-                        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', getStatusVariant(car.status))}>
-                          {translateStatus(car.status)}
-                        </span>
-                      </td>
-                      <td className="text-end">
-                        <Button asChild variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                          <Link href={`/inventory/${car.id}`}>
-                            <ArrowUpRight className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </DataTable>
+            />
           )}
 
         </div>

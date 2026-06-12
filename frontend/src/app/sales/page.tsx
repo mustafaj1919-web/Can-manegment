@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
@@ -15,7 +15,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { exportXlsx } from '@/lib/export'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { FilterBar } from '@/components/shared/FilterBar'
-import { DataTable } from '@/components/shared/DataTable'
+import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
 
 const STATUS_OPTS = [
   { value: 'all',       label: 'كل الحالات' },
@@ -46,6 +46,119 @@ export default function SalesPage() {
   const [exporting, setExporting] = useState(false)
   const PER_PAGE = 20
   const router = useRouter()
+
+  const columns = useMemo<ColumnDef<SaleListItem>[]>(() => [
+    {
+      key: 'invoice_number',
+      header: 'الفاتورة',
+      render: (sale: SaleListItem) => (
+        <div>
+          <p className="font-code text-xs font-semibold text-primary">{sale.invoice_number}</p>
+          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Calendar className="h-3 w-3" />
+            {formatDate(sale.sale_date)}
+          </div>
+        </div>
+      ),
+      width: 120,
+    },
+    {
+      key: 'car_name',
+      header: 'السيارة',
+      render: (sale: SaleListItem) => (
+        <div>
+          <div className="flex items-center gap-1.5">
+            <Car className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+            <span className="text-xs font-bold text-foreground truncate max-w-[150px]">
+              {sale.car_name ?? `#${sale.car_id ?? '—'}`}
+            </span>
+          </div>
+          {sale.car_vin && (
+            <p className="mt-0.5 ps-5 font-code text-[10px] text-muted-foreground/45">
+              {sale.car_vin}
+            </p>
+          )}
+        </div>
+      ),
+      width: 190,
+    },
+    {
+      key: 'buyer_name',
+      header: 'المشتري',
+      render: (sale: SaleListItem) => (
+        <div>
+          <div className="flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+            <span className="text-xs font-semibold text-foreground truncate max-w-[130px]">{sale.buyer_name ?? '—'}</span>
+          </div>
+          {sale.buyer_phone && (
+            <p className="mt-0.5 ps-5 text-[10px] text-muted-foreground/45">{sale.buyer_phone}</p>
+          )}
+        </div>
+      ),
+      width: 170,
+    },
+    {
+      key: 'selling_price',
+      header: 'المبلغ',
+      isNumeric: true,
+      render: (sale: SaleListItem) => (
+        <div>
+          <p className="font-numeric text-xs font-bold text-foreground">
+            {formatMoney(sale.selling_price, sale.currency)}
+          </p>
+          {sale.remaining_amount > 0 && (
+            <p className="mt-0.5 font-numeric text-[10px] font-bold text-rose-600 dark:text-rose-400">
+              متبقي: {formatMoney(sale.remaining_amount, sale.currency)}
+            </p>
+          )}
+        </div>
+      ),
+      width: 140,
+    },
+    {
+      key: 'payment_method',
+      header: 'الطريقة',
+      render: (sale: SaleListItem) => (
+        <span className="text-xs font-medium text-foreground/80">
+          {METHOD_LABELS[sale.payment_method] ?? sale.payment_method}
+        </span>
+      ),
+      width: 110,
+    },
+    {
+      key: 'status',
+      header: 'الحالة',
+      render: (sale: SaleListItem) => (
+        <span className={cn(
+          'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold border',
+          getStatusVariant(sale.status)
+        )}>
+          {translateStatus(sale.status)}
+        </span>
+      ),
+      width: 100,
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (sale: SaleListItem) => (
+        <div className="text-end" onClick={e => e.stopPropagation()}>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-sm"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          >
+            <Link href={`/sales/${sale.id}`}>
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      ),
+      width: 60,
+    }
+  ], [])
 
   const params = {
     page,
@@ -122,11 +235,6 @@ export default function SalesPage() {
       />
 
       <FilterBar
-        search={{
-          value: search,
-          onChange: v => { setSearch(v); setPage(1) },
-          placeholder: 'رقم الفاتورة، المشتري، السيارة، رقم الهيكل...',
-        }}
         selects={[
           {
             value: status,
@@ -152,29 +260,17 @@ export default function SalesPage() {
         hasActiveFilters={activeFilters}
       />
 
-      <DataTable
+      <AdvancedTable
+        data={items}
+        columns={columns}
         isLoading={isLoading}
         isError={isError}
-        isEmpty={items.length === 0}
         onRetry={() => refetch()}
-        emptyProps={{
-          variant: activeFilters ? 'search' : 'default',
-          icon: <Receipt className="h-5 w-5" />,
-          title: activeFilters ? 'لا توجد نتائج مطابقة' : 'لا توجد فواتير مبيعات',
-          description: activeFilters ? 'جرّب تعديل الفلاتر أو مسحها' : 'أضف أول فاتورة بيع للبدء',
-          action: activeFilters ? (
-            <Button type="button" variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5">
-              مسح الفلاتر
-            </Button>
-          ) : (
-            <Button asChild size="sm">
-              <Link href="/sales/new">
-                <Plus className="me-1.5 h-3.5 w-3.5" />
-                فاتورة جديدة
-              </Link>
-            </Button>
-          ),
-        }}
+        onRowClick={(row) => router.push(`/sales/${row.id}`)}
+        searchPlaceholder="رقم الفاتورة، المشتري، السيارة، الهيكل..."
+        searchValue={search}
+        onSearchChange={(val) => { setSearch(val); setPage(1) }}
+        exportFilename="فواتير-المبيعات"
         footer={
           <Pagination
             page={page}
@@ -184,93 +280,7 @@ export default function SalesPage() {
             label="فاتورة"
           />
         }
-      >
-        <table className="app-table">
-          <thead>
-            <tr>
-              <th>الفاتورة</th>
-              <th className="hidden md:table-cell">السيارة</th>
-              <th className="hidden lg:table-cell">المشتري</th>
-              <th>المبلغ</th>
-              <th className="hidden sm:table-cell">الطريقة</th>
-              <th className="hidden sm:table-cell">الحالة</th>
-              <th className="w-10"><span className="sr-only">إجراءات</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((sale) => (
-              <tr
-                key={sale.id}
-                data-clickable
-                onClick={() => router.push(`/sales/${sale.id}`)}
-              >
-                <td>
-                  <p className="font-code text-xs font-semibold text-primary">{sale.invoice_number}</p>
-                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(sale.sale_date)}
-                  </div>
-                </td>
-                <td className="hidden md:table-cell">
-                  <div className="flex items-center gap-2">
-                    <Car className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                    <span className="text-xs truncate max-w-[150px]">
-                      {sale.car_name ?? `#${sale.car_id ?? '—'}`}
-                    </span>
-                  </div>
-                  {sale.car_vin && (
-                    <p className="mt-0.5 ps-5 font-code text-[10px] text-muted-foreground/45">
-                      {sale.car_vin}
-                    </p>
-                  )}
-                </td>
-                <td className="hidden lg:table-cell">
-                  <div className="flex items-center gap-2">
-                    <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                    <span className="text-xs truncate max-w-[130px]">{sale.buyer_name ?? '—'}</span>
-                  </div>
-                  {sale.buyer_phone && (
-                    <p className="mt-0.5 ps-5 text-[10px] text-muted-foreground/45">{sale.buyer_phone}</p>
-                  )}
-                </td>
-                <td>
-                  <p className="font-numeric text-xs font-semibold text-foreground">
-                    {formatMoney(sale.selling_price, sale.currency)}
-                  </p>
-                  {sale.remaining_amount > 0 && (
-                    <p className="mt-0.5 font-numeric text-[10px] text-rose-400">
-                      متبقي: {formatMoney(sale.remaining_amount, sale.currency)}
-                    </p>
-                  )}
-                </td>
-                <td className="hidden sm:table-cell text-xs text-muted-foreground">
-                  {METHOD_LABELS[sale.payment_method] ?? sale.payment_method}
-                </td>
-                <td className="hidden sm:table-cell">
-                  <span className={cn(
-                    'inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                    getStatusVariant(sale.status)
-                  )}>
-                    {translateStatus(sale.status)}
-                  </span>
-                </td>
-                <td className="text-end">
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="icon-sm"
-                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                  >
-                    <Link href={`/sales/${sale.id}`}>
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </DataTable>
+      />
 
     </div>
   )

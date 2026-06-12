@@ -1801,7 +1801,25 @@ def _configure_file_logging(app: 'Flask') -> None:
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, 'app.log')
 
-    fmt = logging.Formatter('[%(asctime)s] %(levelname)s %(name)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    # Custom JSON formatter for Cloud / Production mode
+    class _JSONFormatter(logging.Formatter):
+        def format(self, record):
+            log_record = {
+                'timestamp': self.formatTime(record, '%Y-%m-%d %H:%M:%S'),
+                'level':     record.levelname,
+                'logger':    record.name,
+                'message':   record.getMessage(),
+                'filename':  record.filename,
+                'line':      record.lineno,
+            }
+            if record.exc_info:
+                log_record['exception'] = self.formatException(record.exc_info)
+            return json.dumps(log_record, ensure_ascii=False)
+
+    if Config.CLOUD_MODE:
+        fmt = _JSONFormatter()
+    else:
+        fmt = logging.Formatter('[%(asctime)s] %(levelname)s %(name)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
     # Rotating file handler — max 1 MB, keep 3 backups
     file_handler = logging.handlers.RotatingFileHandler(
@@ -1874,6 +1892,8 @@ def create_app():
     @app.before_request
     def _csrf_validate():
         """Reject state-changing requests whose CSRF token doesn't match the session."""
+        if app.config.get('TESTING'):
+            return
         if request.method not in ('POST', 'PUT', 'DELETE', 'PATCH'):
             return
         if request.path in _CSRF_EXEMPT:
@@ -2699,13 +2719,13 @@ def create_app():
             'total_plans': len(all_plans),
             'active_plans': 0,
             'paid_plans': 0,
-            'total_receivables': 0.0,
-            'total_paid_amount': 0.0,
-            'overdue_amount': 0.0,
-            'due_today_amount': 0.0,
-            'due_tomorrow_amount': 0.0,
-            'due_in_2_days_amount': 0.0,
-            'due_in_7_days_amount': 0.0,
+            'total_receivables': Decimal('0.0'),
+            'total_paid_amount': Decimal('0.0'),
+            'overdue_amount': Decimal('0.0'),
+            'due_today_amount': Decimal('0.0'),
+            'due_tomorrow_amount': Decimal('0.0'),
+            'due_in_2_days_amount': Decimal('0.0'),
+            'due_in_7_days_amount': Decimal('0.0'),
             'overdue_count': 0,
             'due_today_count': 0,
             'due_tomorrow_count': 0,
@@ -3997,11 +4017,16 @@ def create_app():
 
         # أقرب متابعات
         today = datetime.utcnow().date()
-        due_soon = CustomerInteraction.query.filter(
+        due_soon_q = CustomerInteraction.query.filter(
             CustomerInteraction.follow_up_date.isnot(None),
             func.date(CustomerInteraction.follow_up_date) >= today.isoformat(),
             func.date(CustomerInteraction.follow_up_date) <= (today + timedelta(days=3)).isoformat(),
-        ).order_by(CustomerInteraction.follow_up_date.asc()).limit(10).all()
+        )
+        if not can_access_all_branches():
+            bid = active_branch_id()
+            if bid:
+                due_soon_q = due_soon_q.filter(CustomerInteraction.branch_id == bid)
+        due_soon = due_soon_q.order_by(CustomerInteraction.follow_up_date.asc()).limit(10).all()
 
         return jsonify({
             'total':    total,
@@ -4022,6 +4047,8 @@ def create_app():
         if not customer_id:
             return jsonify({'error': 'customer_id مطلوب'}), 400
         customer = Customer.query.get_or_404(int(customer_id))
+        if not branch_allowed(customer):
+            return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل في فرع آخر'}), 403
 
         itype = (data.get('interaction_type') or 'call').strip()
         if itype not in INTERACTION_TYPES:
@@ -4055,6 +4082,8 @@ def create_app():
     @api_permission_required('manage_customers')
     def api_crm_update_interaction(iid):
         inter = CustomerInteraction.query.get_or_404(iid)
+        if not branch_allowed(inter):
+            return jsonify({'error': 'لا يمكنك الوصول إلى تفاعلات فرع آخر'}), 403
         data  = request.get_json(silent=True) or {}
         if 'interaction_type' in data and data['interaction_type'] in INTERACTION_TYPES:
             inter.interaction_type = data['interaction_type']
@@ -4072,6 +4101,8 @@ def create_app():
     @api_permission_required('manage_customers')
     def api_crm_delete_interaction(iid):
         inter = CustomerInteraction.query.get_or_404(iid)
+        if not branch_allowed(inter):
+            return jsonify({'error': 'لا يمكنك الوصول إلى تفاعلات فرع آخر'}), 403
         db.session.delete(inter)
         db.session.commit()
         return jsonify({'success': True})
@@ -4085,17 +4116,20 @@ def create_app():
         week_ago  = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
 
-        total_customers   = Customer.query.count()
-        new_this_month    = Customer.query.filter(func.date(Customer.created_at) >= month_ago.isoformat()).count()
-        interactions_week = CustomerInteraction.query.filter(func.date(CustomerInteraction.interaction_date) >= week_ago.isoformat()).count()
-        follow_ups_due    = CustomerInteraction.query.filter(
+        total_customers   = scoped_query(Customer).count()
+        new_this_month    = scoped_query(Customer).filter(func.date(Customer.created_at) >= month_ago.isoformat()).count()
+        interactions_week = scoped_query(CustomerInteraction).filter(func.date(CustomerInteraction.interaction_date) >= week_ago.isoformat()).count()
+        follow_ups_due_q  = scoped_query(CustomerInteraction).filter(
             CustomerInteraction.follow_up_date.isnot(None),
             func.date(CustomerInteraction.follow_up_date) <= today.isoformat(),
             CustomerInteraction.outcome.in_([None, 'follow_up']),
-        ).count()
+        )
+        follow_ups_due    = follow_ups_due_q.count()
 
         by_type = {}
-        for row in db.session.query(CustomerInteraction.interaction_type, func.count()).group_by(CustomerInteraction.interaction_type).all():
+        by_type_q = db.session.query(CustomerInteraction.interaction_type, func.count())
+        by_type_q = branch_filter(by_type_q, CustomerInteraction)
+        for row in by_type_q.group_by(CustomerInteraction.interaction_type).all():
             by_type[row[0]] = {'count': row[1], 'label': INTERACTION_LABELS.get(row[0], row[0])}
 
         by_outcome = {}
@@ -4214,6 +4248,20 @@ def create_app():
         if not customer_id:
             return jsonify({'error': 'customer_id مطلوب'}), 400
         customer = Customer.query.get_or_404(int(customer_id))
+        if not branch_allowed(customer):
+            return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل في فرع آخر'}), 403
+
+        car_id = data.get('car_id')
+        if car_id:
+            car = Car.query.get_or_404(int(car_id))
+            if not branch_allowed(car):
+                return jsonify({'error': 'السيارة المحددة تابعة لفرع آخر'}), 403
+
+        emp_id = data.get('assigned_to_id')
+        if emp_id:
+            emp = Employee.query.get_or_404(int(emp_id))
+            if not branch_allowed(emp):
+                return jsonify({'error': 'الموظف المحدد تابع لفرع آخر'}), 403
 
         stage = (data.get('stage') or 'lead').strip()
         if stage not in PIPELINE_STAGES:
@@ -4222,8 +4270,8 @@ def create_app():
         deal = SalePipeline(
             branch_id      = customer.branch_id,
             customer_id    = customer.id,
-            car_id         = int(data['car_id']) if data.get('car_id') else None,
-            assigned_to_id = int(data['assigned_to_id']) if data.get('assigned_to_id') else None,
+            car_id         = int(car_id) if car_id else None,
+            assigned_to_id = int(emp_id) if emp_id else None,
             created_by_id  = current_user.id if current_user.is_authenticated else None,
             stage          = stage,
             expected_price = money_value(data['expected_price']) if data.get('expected_price') else None,
@@ -4241,6 +4289,8 @@ def create_app():
     def api_pipeline_move_stage(deal_id):
         """تحريك الصفقة إلى مرحلة أخرى."""
         deal  = SalePipeline.query.get_or_404(deal_id)
+        if not branch_allowed(deal):
+            return jsonify({'error': 'لا يمكنك الوصول إلى صفقات فرع آخر'}), 403
         data  = request.get_json(silent=True) or {}
         stage = (data.get('stage') or '').strip()
         if stage not in PIPELINE_STAGES:
@@ -4263,11 +4313,23 @@ def create_app():
     @api_permission_required('manage_sales')
     def api_pipeline_update(deal_id):
         deal = SalePipeline.query.get_or_404(deal_id)
+        if not branch_allowed(deal):
+            return jsonify({'error': 'لا يمكنك الوصول إلى صفقات فرع آخر'}), 403
         data = request.get_json(silent=True) or {}
         if 'car_id' in data:
-            deal.car_id = int(data['car_id']) if data['car_id'] else None
+            car_id = int(data['car_id']) if data['car_id'] else None
+            if car_id:
+                car = Car.query.get_or_404(car_id)
+                if not branch_allowed(car):
+                    return jsonify({'error': 'السيارة المحددة تابعة لفرع آخر'}), 403
+            deal.car_id = car_id
         if 'assigned_to_id' in data:
-            deal.assigned_to_id = int(data['assigned_to_id']) if data['assigned_to_id'] else None
+            emp_id = int(data['assigned_to_id']) if data['assigned_to_id'] else None
+            if emp_id:
+                emp = Employee.query.get_or_404(emp_id)
+                if not branch_allowed(emp):
+                    return jsonify({'error': 'الموظف المحدد تابع لفرع آخر'}), 403
+            deal.assigned_to_id = emp_id
         if 'expected_price' in data:
             deal.expected_price = money_value(data['expected_price']) if data['expected_price'] else None
         if 'notes' in data:
@@ -4282,6 +4344,8 @@ def create_app():
     @api_permission_required('manage_sales')
     def api_pipeline_delete(deal_id):
         deal = SalePipeline.query.get_or_404(deal_id)
+        if not branch_allowed(deal):
+            return jsonify({'error': 'لا يمكنك الوصول إلى صفقات فرع آخر'}), 403
         db.session.delete(deal)
         db.session.commit()
         return jsonify({'success': True})
@@ -4603,7 +4667,7 @@ def create_app():
             for e in expenses:
                 cat = e.category or 'other'
                 amt = to_iqd(e.amount, e.currency) or 0
-                cats.setdefault(cat, {'count': 0, 'total': 0.0, 'items': []})
+                cats.setdefault(cat, {'count': 0, 'total': Decimal('0.0'), 'items': []})
                 cats[cat]['count']  += 1
                 cats[cat]['total']  = round(cats[cat]['total'] + amt, 2)
                 cats[cat]['items'].append({'id': e.id, 'title': e.title, 'amount_iqd': round(amt, 2)})
@@ -5168,10 +5232,10 @@ def create_app():
             query = query.filter(JournalEntry.entry_date <= end_date + ' 23:59:59')
         entries = query.all()
         centers = {cc.id: {'id': cc.id, 'name': cc.name, 'code': cc.code,
-                            'revenue_iqd': 0.0, 'expense_iqd': 0.0, 'entry_count': 0}
+                            'revenue_iqd': Decimal('0.0'), 'expense_iqd': Decimal('0.0'), 'entry_count': 0}
                    for cc in CostCenter.query.all()}
         unassigned = {'id': None, 'name': 'غير مُعيَّن', 'code': None,
-                      'revenue_iqd': 0.0, 'expense_iqd': 0.0, 'entry_count': 0}
+                      'revenue_iqd': Decimal('0.0'), 'expense_iqd': Decimal('0.0'), 'entry_count': 0}
         income_types = {'Income', 'Equity'}
         for je in entries:
             bucket = centers.get(je.cost_center_id, unassigned) if je.cost_center_id else unassigned
@@ -5868,10 +5932,10 @@ def create_app():
             .all()
         )
         buckets = {
-            '1_30':  {'label': '1-30 يوم',  'min': 1,  'max': 30,  'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
-            '31_60': {'label': '31-60 يوم', 'min': 31, 'max': 60,  'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
-            '61_90': {'label': '61-90 يوم', 'min': 61, 'max': 90,  'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
-            '90p':   {'label': '90+ يوم',   'min': 91, 'max': None,'schedules': [], 'count': 0, 'total': 0.0, 'customers': set()},
+            '1_30':  {'label': '1-30 يوم',  'min': 1,  'max': 30,  'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
+            '31_60': {'label': '31-60 يوم', 'min': 31, 'max': 60,  'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
+            '61_90': {'label': '61-90 يوم', 'min': 61, 'max': 90,  'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
+            '90p':   {'label': '90+ يوم',   'min': 91, 'max': None,'schedules': [], 'count': 0, 'total': Decimal('0.0'), 'customers': set()},
         }
         for sch in overdue_schedules:
             days = (today - sch.due_date.date()).days
@@ -7658,6 +7722,8 @@ def create_app():
     def api_payment_receipt(payment_id):
         """Return all data needed to render a payment receipt (سند قبض)."""
         payment = Payment.query.get_or_404(payment_id)
+        if not branch_allowed(payment):
+            return jsonify({'error': 'لا يمكنك الوصول إلى إيصال دفع في فرع آخر'}), 403
         plan    = None
         sale    = None
         schedule = None
@@ -7985,7 +8051,7 @@ def create_app():
         if document_type in SINGLE_DOC_TYPES:
             existing = CustomerDocument.query.filter_by(customer_id=c.id, document_type=document_type).first()
             if existing:
-                old_path = os.path.join(Config.UPLOAD_FOLDER, 'customers', existing.filename)
+                old_path = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers', existing.filename)
                 try:
                     if os.path.exists(old_path):
                         os.remove(old_path)
@@ -7994,7 +8060,7 @@ def create_app():
                 db.session.delete(existing)
                 db.session.flush()
 
-        upload_folder = os.path.join(Config.UPLOAD_FOLDER, 'customers')
+        upload_folder = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers')
         os.makedirs(upload_folder, exist_ok=True)
         original_name = secure_filename(file_storage.filename)
         extension = original_name.rsplit('.', 1)[1].lower()
@@ -8019,6 +8085,28 @@ def create_app():
             'uploaded_at':       doc.uploaded_at.isoformat() if doc.uploaded_at else None,
         }), 201
 
+    @app.route('/api/customers/<int:customer_id>/documents/<int:doc_id>/download', methods=['GET'])
+    @api_login_required
+    @api_permission_required('manage_customers')
+    def api_download_customer_document(customer_id, doc_id):
+        c = Customer.query.get_or_404(customer_id)
+        if not branch_allowed(c):
+            return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل'}), 403
+
+        doc = CustomerDocument.query.filter_by(id=doc_id, customer_id=customer_id).first_or_404()
+        private_folder = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers')
+        safe_filename = os.path.basename(doc.filename)
+
+        response = send_from_directory(
+            private_folder,
+            safe_filename,
+            as_attachment=True,
+            download_name=doc.original_filename or safe_filename
+        )
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        return response
+
     @app.route('/api/customers/<int:customer_id>/documents/<int:doc_id>', methods=['DELETE'])
     @api_login_required
     @api_permission_required('manage_customers')
@@ -8028,7 +8116,7 @@ def create_app():
             return jsonify({'error': 'لا يمكنك الوصول إلى هذا العميل'}), 403
 
         doc = CustomerDocument.query.filter_by(id=doc_id, customer_id=customer_id).first_or_404()
-        file_path = os.path.join(Config.UPLOAD_FOLDER, 'customers', doc.filename)
+        file_path = os.path.join(Config.PRIVATE_STORAGE_FOLDER, 'customers', doc.filename)
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
@@ -8396,6 +8484,8 @@ def create_app():
     @api_permission_required('manage_users')
     def api_employee_detail(emp_id):
         emp = Employee.query.get_or_404(emp_id)
+        if not branch_allowed(emp):
+            return jsonify({'error': 'لا يمكنك الوصول إلى موظف في فرع آخر'}), 403
         return jsonify(_employee_payload(emp))
 
     @app.route('/api/employees/<int:emp_id>', methods=['PUT'])
@@ -8403,6 +8493,8 @@ def create_app():
     @api_permission_required('manage_users')
     def api_update_employee(emp_id):
         emp  = Employee.query.get_or_404(emp_id)
+        if not branch_allowed(emp):
+            return jsonify({'error': 'لا يمكنك الوصول إلى موظف في فرع آخر'}), 403
         data = request.get_json(silent=True) or {}
         full_name = (data.get('full_name') or '').strip()
         phone     = (data.get('phone') or '').strip()
@@ -8423,6 +8515,8 @@ def create_app():
     @api_permission_required('manage_users')
     def api_delete_employee(emp_id):
         emp = Employee.query.get_or_404(emp_id)
+        if not branch_allowed(emp):
+            return jsonify({'error': 'لا يمكنك الوصول إلى موظف في فرع آخر'}), 403
         if emp.sales:
             return jsonify({'error': 'لا يمكن حذف موظف مرتبط بفواتير بيع'}), 409
         log_action('delete employee', 'Employee', emp.id, emp.full_name)
