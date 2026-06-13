@@ -25,8 +25,7 @@ frontend/node_modules/
 frontend/tsconfig.tsbuildinfo
 **/tsconfig.tsbuildinfo
 
-# مجلد v2-enterprise — تجريبي، لا يُرفع
-v2-enterprise/
+# مجلد v2-enterprise — يُتتبّع على برانش v2-enterprise (له .gitignore خاص فيه)
 
 # لوجات
 logs/

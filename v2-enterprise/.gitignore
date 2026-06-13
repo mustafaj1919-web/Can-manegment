@@ -1,0 +1,38 @@
+# ─── Secrets / local env ───────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pfx
+*.key
+
+# ─── Node / Next.js (frontend) ─────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+coverage/
+.eslintcache
+playwright-report/
+test-results/
+
+# ─── .NET (backend) ────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ─── Docker / runtime data ─────────────────────────────
+backups/
+*.log
+
+# ─── OS / editor ───────────────────────────────────────
+.DS_Store
+Thumbs.db

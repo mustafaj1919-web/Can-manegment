@@ -1,0 +1,49 @@
+services:
+  v2-postgres-db:
+    image: postgres:16-alpine
+    container_name: v2-postgres-db
+    environment:
+      POSTGRES_DB: CarShowroomV2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - v2_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d CarShowroomV2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - v2-network
+
+  v2-enterprise-api:
+    image: carshowroom-v2-api:latest
+    container_name: v2-enterprise-api
+    build:
+      context: .
+      dockerfile: src/API/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=v2-postgres-db;Database=CarShowroomV2;Username=postgres;Password=postgres_password
+      - JwtSettings__Secret=${JWT_SECRET:?JWT_SECRET is required}
+      - JwtSettings__Issuer=CarShowroomEnterprise
+      - JwtSettings__Audience=CarShowroomEnterpriseUsers
+      - AdminSettings__InitialPassword=${ADMIN_INITIAL_PASSWORD:-Admin@Showroom2024!}
+      - Cors__AllowedOrigins__0=http://localhost:3000
+    depends_on:
+      v2-postgres-db:
+        condition: service_healthy
+    networks:
+      - v2-network
+
+volumes:
+  v2_postgres_data:
+
+networks:
+  v2-network:
+    name: v2-enterprise-network
+    driver: bridge

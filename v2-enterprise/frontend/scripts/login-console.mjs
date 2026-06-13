@@ -1,0 +1,14 @@
+﻿import { chromium } from 'playwright';
+const browser=await chromium.launch({headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:900}});
+const page=await context.newPage();
+page.on('console', msg=>console.log('console', msg.type(), msg.text()));
+page.on('response', async r=>{ if(r.url().includes('/api/auth/login')) console.log('login response', r.status(), await r.text().catch(()=>'')); });
+await page.goto('http://127.0.0.1:3000/login',{waitUntil:'networkidle'});
+await page.fill('input[autocomplete="username"]','owner');
+await page.fill('input[autocomplete="current-password"]','Owner@12345');
+await page.click('button[type="submit"]');
+await page.waitForTimeout(3000);
+console.log('url', page.url());
+console.log((await page.locator('body').innerText()).slice(0,500));
+await browser.close();
