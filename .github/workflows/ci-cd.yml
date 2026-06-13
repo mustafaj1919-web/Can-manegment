@@ -1,133 +1,55 @@
-name: Enterprise CI/CD Pipeline
+name: V2 Enterprise CI
 
+# يعمل فقط على برانش v2-enterprise المستقل (نظام منفصل عن المشروع القديم في main/master)
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ v2-enterprise ]
+    paths:
+      - 'v2-enterprise/**'
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ v2-enterprise ]
+    paths:
+      - 'v2-enterprise/**'
 
 jobs:
-  # 1. Backend CI: Linting, Security Scan, and Unit Testing against live PostgreSQL
-  backend-ci:
+  # الباك إند: .NET 8 — بناء الحل (Release)
+  backend-build:
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: showroom_admin
-          POSTGRES_PASSWORD: Aldulimi99_secure_db_pass
-          POSTGRES_DB: showroom_production
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          dotnet-version: '8.0.x'
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpq-dev
+      - name: Restore
+        run: dotnet restore v2-enterprise/CarShowroomManagementV2.sln
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-cov bandit requests
-          # Exclude windows specific dependencies on Linux runner
-          sed -i '/pywin32/d' requirements.txt
-          pip install -r requirements.txt
+      - name: Build (Release)
+        run: dotnet build v2-enterprise/CarShowroomManagementV2.sln --configuration Release --no-restore
 
-      - name: Run Python Security Scan (Bandit)
-        run: |
-          # B101: assert used (common in tests/app), B105: hardcoded password strings in configs, B106: password binding
-          # We check the backend code ignoring assertion checks in application logic for test environments
-          bandit -r backend/ -x backend/diag_test.py,backend/diag2_test.py --skip B101,B105,B106
-
-      - name: Run Backend Tests
-        env:
-          DATABASE_URL: postgresql://showroom_admin:Aldulimi99_secure_db_pass@localhost:5432/showroom_production
-          SECRET_KEY: test_secret_key_for_ci_pipeline
-          CLOUD_MODE: 1
-        run: |
-          # Create database schema and tables before running tests
-          python -c "from backend import create_app, db; app = create_app(); ctx = app.app_context(); ctx.push(); db.create_all()"
-          # Execute the test suite
-          python -m pytest tests/ -v --cov=backend
-
-  # 2. Frontend CI: Linting, TypeScript Type Checking, and Production Build
-  frontend-ci:
+  # الفرونت إند: Next.js 16 — بناء الإنتاج
+  frontend-build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: v2-enterprise/frontend/package-lock.json
 
-      - name: Install Node Dependencies
-        working-directory: ./frontend
+      - name: Install dependencies
+        working-directory: ./v2-enterprise/frontend
         run: npm ci
 
-      - name: Run ESLint
-        working-directory: ./frontend
-        run: npm run lint
-
-      - name: Run TypeScript Type Check
-        working-directory: ./frontend
-        run: npm run type-check
-
-      - name: Build Next.js Application
-        working-directory: ./frontend
+      - name: Build Next.js (production)
+        working-directory: ./v2-enterprise/frontend
         env:
           NEXT_TELEMETRY_DISABLED: 1
-          NODE_ENV: production
         run: npm run build
-
-  # 3. Docker CI: Verify Dockerfiles and build context integrity
-  docker-build-ci:
-    runs-on: ubuntu-latest
-    needs: [backend-ci, frontend-ci]
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Verify Backend Dockerfile Build
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: false
-          tags: car-showroom-backend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Verify Frontend Dockerfile Build
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: false
-          tags: car-showroom-frontend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
