@@ -13,11 +13,26 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
 {
     public class CreateVehicleCommand : IRequest<Guid>
     {
+        public string? Brand { get; set; }
         public string Model { get; set; } = string.Empty;
+        public string? Trim { get; set; }
         public string ChassisNumber { get; set; } = string.Empty;
         public string? EngineNumber { get; set; }
         public string? Color { get; set; }
         public int Year { get; set; }
+        public string? Condition { get; set; }
+        public string? PlateNumber { get; set; }
+        public string? PlateStatus { get; set; }
+        public int? Mileage { get; set; }
+        public string? EngineSize { get; set; }
+        public int? Cylinders { get; set; }
+        public string? Transmission { get; set; }
+        public string? FuelType { get; set; }
+        public string? ImportCountry { get; set; }
+        public int? SeatCount { get; set; }
+        public string? SeatMaterial { get; set; }
+        public string Currency { get; set; } = "IQD";
+        public string? Notes { get; set; }
         public decimal PurchaseCost { get; set; }
         public decimal TargetSellingPrice { get; set; }
         public string CreditAccountCode { get; set; } = "2101"; // الافتراضي ذمم الدائنين (الموردين)
@@ -94,11 +109,26 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
                 var vehicle = new Vehicle
                 {
                     Id = Guid.NewGuid(),
+                    Brand = request.Brand,
                     Model = request.Model,
+                    Trim = request.Trim,
                     ChassisNumber = request.ChassisNumber,
                     EngineNumber = request.EngineNumber,
                     Color = request.Color,
                     Year = request.Year,
+                    Condition = request.Condition,
+                    PlateNumber = request.PlateNumber,
+                    PlateStatus = request.PlateStatus,
+                    Mileage = request.Mileage,
+                    EngineSize = request.EngineSize,
+                    Cylinders = request.Cylinders,
+                    Transmission = request.Transmission,
+                    FuelType = request.FuelType,
+                    ImportCountry = request.ImportCountry,
+                    SeatCount = request.SeatCount,
+                    SeatMaterial = request.SeatMaterial,
+                    Currency = request.Currency ?? "IQD",
+                    Notes = request.Notes,
                     PurchaseCost = request.PurchaseCost,
                     BookValue = request.PurchaseCost, // القيمة الدفترية تبدأ بسعر الشراء
                     TargetSellingPrice = request.TargetSellingPrice,

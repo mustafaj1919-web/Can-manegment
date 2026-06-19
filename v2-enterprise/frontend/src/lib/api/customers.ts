@@ -45,7 +45,7 @@ export interface Customer {
   id_expiry_date?: string | null
   nationality?: string | null
   date_of_birth?: string | null
-  customer_type: 'Buyer' | 'Seller'
+  customer_type: 'Individual' | 'Company'
   notes?: string | null
   branch_id?: number | null
   branch?: { id: number; name: string; is_main: boolean; created_at?: string } | null
@@ -67,7 +67,7 @@ export interface CustomerPayload {
   name: string
   phone: string
   id_number: string
-  customer_type: 'Buyer' | 'Seller'
+  customer_type: 'Individual' | 'Company'
   address?: string
   id_type?: string
   id_issue_date?: string
@@ -77,7 +77,30 @@ export interface CustomerPayload {
   notes?: string
 }
 
-/* ─── API functions ──────────────────────────────────────────────────────── */
+/* ─── Backend → Frontend field mapper ───────────────────────────────────── */
+
+function mapCustomerFromBackend(c: any): Customer {
+  return {
+    id:             c.id             ?? c.Id             ?? '',
+    name:           c.name           ?? c.Name           ?? '',
+    full_name:      c.fullName       ?? c.full_name      ?? c.FullName ?? null,
+    phone:          c.phone          ?? c.Phone          ?? null,
+    address:        c.address        ?? c.Address        ?? null,
+    id_type:        c.idType         ?? c.id_type        ?? null,
+    id_number:      c.idNumber       ?? c.id_number      ?? '',
+    id_issue_date:  c.idIssueDate    ?? c.id_issue_date  ?? null,
+    id_expiry_date: c.idExpiryDate   ?? c.id_expiry_date ?? null,
+    nationality:    c.nationality    ?? c.Nationality    ?? null,
+    date_of_birth:  c.dateOfBirth    ?? c.date_of_birth  ?? null,
+    customer_type:  (c.customerType  ?? c.customer_type  ?? 'Individual') as 'Individual' | 'Company',
+    notes:          c.notes          ?? c.Notes          ?? null,
+    branch_id:      c.branchId       ?? c.branch_id      ?? null,
+    created_at:     c.createdAt      ?? c.created_at     ?? null,
+    documents_count: c.documentsCount ?? c.documents_count ?? 0,
+    sales_count:    c.salesCount     ?? c.sales_count    ?? 0,
+    documents:      c.documents      ?? [],
+  }
+}
 
 /* ─── API functions ──────────────────────────────────────────────────────── */
 
@@ -91,14 +114,13 @@ export async function getCustomers(params: {
   if (params.customer_type) qs.set('customer_type', params.customer_type)
   const res = await get<any>(`/Customers?${qs.toString()}`)
   if (res && res.success && res.data) {
-    // Check if the backend returns array directly or inside list envelope
-    const data = res.data;
+    const data = res.data
     if (Array.isArray(data)) {
       return {
-        items: data,
-        total: data.length,
-        page: params.page ?? 1,
-        per_page: params.per_page ?? 25
+        items: data.map(mapCustomerFromBackend),
+        total:    res.total    ?? data.length,
+        page:     res.page     ?? params.page     ?? 1,
+        per_page: res.per_page ?? params.per_page ?? 25,
       }
     }
     return data
@@ -107,13 +129,15 @@ export async function getCustomers(params: {
 }
 
 export async function getCustomerById(id: number | string): Promise<Customer> {
-  // نظرًا لعدم توفر نقطة اتصال مباشرة لجلب عميل واحد بـ GET، نقوم بالبحث عنه في القائمة المسترجعة
   try {
-    const list = await getCustomers({ per_page: 500 })
-    const customer = list.items.find(c => String(c.id) === String(id))
-    if (customer) return customer
-  } catch {}
-  return Promise.reject(new Error('العميل غير موجود أو الميزة غير متاحة'))
+    const res = await get<any>(`/Customers/${id}`)
+    if (res && res.success && res.data) {
+      return mapCustomerFromBackend(res.data)
+    }
+    return mapCustomerFromBackend(res)
+  } catch {
+    return Promise.reject(new Error('العميل غير موجود'))
+  }
 }
 
 /* ─── Customer Statement ────────────────────────────────────────────────── */
@@ -194,20 +218,65 @@ export async function getCustomerStatement(id: number | string): Promise<Custome
   return res
 }
 
+// تحويل حقول الفورم (snake_case) إلى حقول الأمر في الباكيند (PascalCase).
+// ملاحظة: .NET يطابق الأسماء دون حساسية لحالة الأحرف لكنه لا يفهم snake_case.
+function mapCustomerBody(payload: CustomerPayload) {
+  return {
+    Name: payload.name,
+    FullName: payload.name,
+    Phone: payload.phone,
+    IdNumber: payload.id_number,
+    IdType: payload.id_type || null,
+    Address: payload.address || null,
+    IdIssueDate: payload.id_issue_date || null,
+    IdExpiryDate: payload.id_expiry_date || null,
+    Nationality: payload.nationality || null,
+    DateOfBirth: payload.date_of_birth || null,
+    CustomerType: (payload.customer_type === 'Individual' || (payload.customer_type as string) === 'Buyer') ? 'Individual' : 'Company', // Individual | Company
+    Notes: payload.notes || null,
+  }
+}
+
 export async function createCustomer(payload: CustomerPayload): Promise<Customer> {
-  const res = await post<any>('/Customers', payload)
+  const res = await post<any>('/Customers', mapCustomerBody(payload))
   if (res && res.success) {
     return {
-      id: res.customerId ?? res.data?.id,
-      ...res.data
+      id: res.customerId,
+      ...payload
     } as any
   }
   return res
 }
 
 export async function updateCustomer(id: number | string, payload: CustomerPayload): Promise<Customer> {
-  // لتجنب خطأ 404 لعدم وجود PUT حالياً في الخلفية، نقوم بإرجاع نجاح آمن محلياً
-  return Promise.reject(new Error('تعديل العملاء غير متاح حالياً'))
+  const res = await put<any>(`/Customers/${id}`, mapCustomerBody(payload))
+  if (res && res.success) {
+    return { id: res.customerId ?? id, ...payload } as any
+  }
+  return res
+}
+
+export async function getCustomerDocuments(customerId: number | string): Promise<CustomerDocument[]> {
+  const res = await get<any>(`/Customers/${customerId}/documents`)
+  if (res && res.success && Array.isArray(res.data)) {
+    return res.data.map((d: any) => ({
+      id:                d.id ?? d.Id,
+      document_type:     d.document_type ?? d.documentType ?? '',
+      filename:          d.filename ?? d.FileName ?? '',
+      original_filename: d.original_filename ?? d.originalFileName ?? null,
+      uploaded_at:       d.uploaded_at ?? d.uploadedAt ?? null,
+    }))
+  }
+  return []
+}
+
+export async function deleteCustomerDocument(customerId: number | string, docId: number | string): Promise<void> {
+  const { apiClient } = await import('./client')
+  await apiClient.delete(`/Customers/${customerId}/documents/${docId}`)
+}
+
+export function getDocumentUrl(filename: string): string {
+  return `/api/Customers/documents/${filename}`
 }
 
 export async function uploadCustomerDocument(
@@ -233,14 +302,6 @@ export async function uploadCustomerDocument(
     }
   }
   return response.data
-}
-
-export async function deleteCustomerDocument(
-  customerId: number | string,
-  docId: number | string
-): Promise<void> {
-  // حذف المستندات غير مدعوم بنقطة اتصال خاصة بالخلفية
-  return Promise.resolve()
 }
 
 /* ─── Scanner API ─────────────────────────────────────────────────────────── */

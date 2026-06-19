@@ -33,7 +33,10 @@ services:
       - JwtSettings__Issuer=CarShowroomEnterprise
       - JwtSettings__Audience=CarShowroomEnterpriseUsers
       - AdminSettings__InitialPassword=${ADMIN_INITIAL_PASSWORD:-Admin@Showroom2024!}
+      - AdminSettings__ForceResetPassword=${RESET_ADMIN_PASSWORD:-false}
       - Cors__AllowedOrigins__0=http://localhost:3000
+    volumes:
+      - v2_vehicle_photos:/app/storage/vehicles
     depends_on:
       v2-postgres-db:
         condition: service_healthy
@@ -42,6 +45,7 @@ services:
 
 volumes:
   v2_postgres_data:
+  v2_vehicle_photos:
 
 networks:
   v2-network:

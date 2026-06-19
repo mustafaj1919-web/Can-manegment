@@ -36,8 +36,9 @@ RUN apk update && apk upgrade --no-cache
 RUN addgroup -g 10001 -S appgroup && \
     adduser -u 10001 -S appuser -G appgroup
 
-# إنشاء مجلدات وتعديل الصلاحيات
-RUN mkdir -p /app/logs && chown -R appuser:appgroup /app
+# إنشاء مجلدات وتعديل الصلاحيات — يجب أن يشمل storage قبل تثبيت الـ volume
+RUN mkdir -p /app/logs /app/storage/vehicles /app/backups && \
+    chown -R appuser:appgroup /app
 
 USER appuser
 

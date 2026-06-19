@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { getNotifications } from '@/lib/api/dashboard'
+import { useAuthStore } from '@/lib/stores/auth-store'
 import type { Notification } from '@/types'
 
 const POLL_INTERVAL = 5 * 60 * 1000 // 5 min
@@ -27,6 +28,7 @@ function markSeen(ids: number[]) {
 export function useInstallmentAlerts() {
   const qc = useQueryClient()
   const shownRef = useRef<Set<number>>(new Set())
+  const token = useAuthStore(state => state.token)
 
   const { data } = useQuery({
     queryKey: ['notifications-poll'],
@@ -34,6 +36,7 @@ export function useInstallmentAlerts() {
     refetchInterval: POLL_INTERVAL,
     staleTime: POLL_INTERVAL,
     retry: false,
+    enabled: !!token,
   })
 
   useEffect(() => {

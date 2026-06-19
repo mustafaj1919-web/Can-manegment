@@ -1,4 +1,4 @@
-import { get, post, put } from './client'
+import { get, post, put, del } from './client'
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -70,6 +70,59 @@ export interface CarPayload {
   notes?: string
 }
 
+/* ─── Backend → Frontend field mapper ───────────────────────────────────── */
+
+function mapVehicleFromBackend(v: any): Car {
+  // الباكيند يرجع images: string[] (أسماء الملفات فقط)
+  // نحوّلها إلى CarPhoto[] لاستخدامها مع photoUrl()
+  const rawImages: any[] = v.images ?? v.Images ?? v.photos ?? v.Photos ?? []
+  const photos: CarPhoto[] = rawImages.map((img: any) =>
+    typeof img === 'string'
+      ? { id: img, filename: img, subfolder: 'vehicles' }
+      : typeof img === 'object' && img !== null && (img.id ?? img.Id) && (img.fileName ?? img.FileName)
+      ? { id: img.id ?? img.Id, filename: img.fileName ?? img.FileName, subfolder: 'vehicles' }
+      : img
+  )
+
+  // cover photo: from photos array or from coverImage field (list endpoint)
+  const coverFilename: string | null = v.coverImage ?? v.CoverImage ?? null
+  const cover_photo: CarPhoto | null = photos.length > 0
+    ? photos[0]
+    : coverFilename
+      ? { id: coverFilename, filename: coverFilename, subfolder: 'vehicles' }
+      : null
+
+  return {
+    id:                v.id               ?? v.Id               ?? '',
+    branch_id:         v.branchId         ?? v.branch_id        ?? null,
+    brand:             v.brand            ?? v.Brand            ?? '',
+    model:             v.model            ?? v.Model            ?? '',
+    manufacturing_year: v.year            ?? v.manufacturingYear ?? v.manufacturing_year ?? 0,
+    trim:              v.trim             ?? v.Trim             ?? null,
+    condition:         v.condition        ?? v.Condition        ?? null,
+    color:             v.color            ?? v.Color            ?? null,
+    vin:               v.chassisNumber    ?? v.vin              ?? v.ChassisNumber ?? '',
+    plate_number:      v.plateNumber      ?? v.plate_number     ?? v.PlateNumber ?? '',
+    plate_status:      v.plateStatus      ?? v.plate_status     ?? v.PlateStatus ?? null,
+    mileage:           v.mileage          ?? v.Mileage          ?? null,
+    engine_size:       v.engineSize       ?? v.EngineSize       ?? v.engine_size ?? null,
+    cylinders:         v.cylinders        ?? v.Cylinders        ?? null,
+    transmission:      v.transmission     ?? v.Transmission     ?? null,
+    fuel_type:         v.fuelType         ?? v.FuelType         ?? v.fuel_type ?? null,
+    import_country:    v.importCountry    ?? v.ImportCountry    ?? v.import_country ?? null,
+    seat_count:        v.seatCount        ?? v.SeatCount        ?? v.seat_count ?? null,
+    seat_material:     v.seatMaterial     ?? v.SeatMaterial     ?? v.seat_material ?? null,
+    purchase_price:    v.purchaseCost     ?? v.purchase_price   ?? v.PurchaseCost ?? 0,
+    selling_price:     v.targetSellingPrice ?? v.selling_price  ?? v.TargetSellingPrice ?? null,
+    currency:          v.currency         ?? v.Currency         ?? 'IQD',
+    status:            v.status           ?? v.Status           ?? 'Available',
+    notes:             v.notes            ?? v.Notes            ?? null,
+    created_at:        v.createdAt        ?? v.created_at       ?? null,
+    photos,
+    cover_photo,
+  }
+}
+
 /* ─── API functions ──────────────────────────────────────────────────────── */
 
 export async function getCars(params: {
@@ -85,10 +138,10 @@ export async function getCars(params: {
     const data = res.data
     if (Array.isArray(data)) {
       return {
-        items: data,
-        total: data.length,
-        page: params.page ?? 1,
-        per_page: params.per_page ?? 25
+        items: data.map(mapVehicleFromBackend),
+        total: res.total ?? data.length,
+        page:  res.page  ?? params.page     ?? 1,
+        per_page: res.per_page ?? params.per_page ?? 25,
       }
     }
     return data
@@ -99,9 +152,9 @@ export async function getCars(params: {
 export async function getCarById(id: string | number): Promise<Car> {
   const res = await get<any>(`/Inventory/${id}`)
   if (res && res.success && res.data) {
-    return res.data
+    return mapVehicleFromBackend(res.data)
   }
-  return res
+  return mapVehicleFromBackend(res)
 }
 
 export async function getPublicCars(params: {
@@ -116,10 +169,10 @@ export async function getPublicCars(params: {
     const data = res.data
     if (Array.isArray(data)) {
       return {
-        items: data,
-        total: data.length,
-        page: params.page ?? 1,
-        per_page: params.per_page ?? 25
+        items: data.map(mapVehicleFromBackend),
+        total: res.total ?? data.length,
+        page:  res.page  ?? params.page     ?? 1,
+        per_page: res.per_page ?? params.per_page ?? 25,
       }
     }
     return data
@@ -130,18 +183,76 @@ export async function getPublicCars(params: {
 export async function getPublicCarById(id: string | number): Promise<Car> {
   const res = await get<any>(`/public/inventory/${id}`)
   if (res && res.success && res.data) {
-    return res.data
+    return mapVehicleFromBackend(res.data)
   }
-  return res
+  return mapVehicleFromBackend(res)
+}
+
+// تحويل حقول الفورم (snake_case) إلى حقول أمر السيارة في الباكيند (PascalCase).
+function mapVehicleCreateBody(payload: CarPayload) {
+  return {
+    Brand:              payload.brand || null,
+    Model:              payload.model,
+    Trim:               payload.trim || null,
+    ChassisNumber:      payload.vin,
+    Color:              payload.color || null,
+    Year:               payload.manufacturing_year,
+    Condition:          payload.condition || null,
+    PlateNumber:        payload.plate_number || null,
+    PlateStatus:        payload.plate_status || null,
+    Mileage:            payload.mileage || null,
+    EngineSize:         payload.engine_size || null,
+    Cylinders:          payload.cylinders || null,
+    Transmission:       payload.transmission || null,
+    FuelType:           payload.fuel_type || null,
+    ImportCountry:      payload.import_country || null,
+    SeatCount:          payload.seat_count || null,
+    SeatMaterial:       payload.seat_material || null,
+    Currency:           payload.currency ?? 'IQD',
+    Notes:              payload.notes || null,
+    PurchaseCost:       payload.purchase_price,
+    TargetSellingPrice: payload.selling_price ?? payload.purchase_price,
+  }
 }
 
 export async function createCar(payload: CarPayload): Promise<Car> {
-  return post<Car>('/Inventory', payload)
+  const res = await post<any>('/Inventory', mapVehicleCreateBody(payload))
+  // Backend returns { success: true, vehicleId: "guid", message: "..." }
+  if (res?.success && res?.vehicleId) {
+    return { id: res.vehicleId, ...payload } as unknown as Car
+  }
+  return res as Car
 }
 
 export async function updateCar(id: string | number, payload: CarPayload): Promise<Car> {
-  // لا توجد دالة تعديل في الخلفية حالياً، نقوم برفض العملية
-  return Promise.reject(new Error('تعديل بيانات السيارات غير متاح حالياً'))
+  const body = {
+    Brand:              payload.brand || null,
+    Model:              payload.model,
+    Trim:               payload.trim || null,
+    ChassisNumber:      payload.vin,
+    Color:              payload.color || null,
+    Year:               payload.manufacturing_year,
+    Condition:          payload.condition || null,
+    PlateNumber:        payload.plate_number || null,
+    PlateStatus:        payload.plate_status || null,
+    Mileage:            payload.mileage || null,
+    EngineSize:         payload.engine_size || null,
+    Cylinders:          payload.cylinders || null,
+    Transmission:       payload.transmission || null,
+    FuelType:           payload.fuel_type || null,
+    ImportCountry:      payload.import_country || null,
+    SeatCount:          payload.seat_count || null,
+    SeatMaterial:       payload.seat_material || null,
+    Currency:           payload.currency ?? 'IQD',
+    Notes:              payload.notes || null,
+    TargetSellingPrice: payload.selling_price ?? 0,
+  }
+  const res = await put<any>(`/Inventory/${id}`, body)
+  // Backend returns { success: true, vehicleId: "guid", message: "..." }
+  if (res?.success) {
+    return { id: res.vehicleId ?? id, ...payload } as unknown as Car
+  }
+  return { id, ...payload } as unknown as Car
 }
 
 export async function uploadCarPhotos(
@@ -176,8 +287,7 @@ export async function uploadCarPhotos(
 }
 
 export async function deleteCarPhoto(carId: string | number, photoId: string | number): Promise<void> {
-  // حذف الصور غير مدعوم في الخلفية بنقطة اتصال منفصلة
-  return Promise.resolve()
+  await del<void>(`/Inventory/${carId}/images/${photoId}`)
 }
 
 /* ─── Vehicle Costs & Profitability ─────────────────────────────────────── */
@@ -276,17 +386,10 @@ export async function deleteVehicleCost(carId: number | string, costId: number |
 }
 
 export async function getVehicleProfitabilityReport(onlySold = false): Promise<ProfitabilityReport> {
-  // تقرير الربحية غير مدعوم بالخلفية، نرجع كائن فارغ لإظهار شاشة فارغة دون 404
-  return Promise.resolve({
-    cars: [],
-    summary: {
-      most_profitable: [],
-      least_profitable: [],
-      losing: [],
-      avg_profit_iqd: 0,
-      avg_profit_pct: 0,
-      total_cars: 0,
-      sold_cars: 0
-    }
-  })
+  const res = await get<any>(`/Inventory/profitability-report?onlySold=${onlySold}`)
+  const d = (res && res.success && res.data) ? res.data : res
+  return {
+    cars: d?.cars ?? [],
+    summary: d?.summary ?? { most_profitable: [], least_profitable: [], losing: [], avg_profit_iqd: 0, avg_profit_pct: 0, total_cars: 0, sold_cars: 0 },
+  }
 }

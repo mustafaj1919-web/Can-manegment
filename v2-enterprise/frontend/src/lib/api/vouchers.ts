@@ -80,49 +80,64 @@ export interface CashDashboard {
   bank_accounts: Array<{ code: string; name: string; balance: number }>
 }
 
-export function getVouchers(params?: {
+export async function getVouchers(params?: {
   type?: VoucherType; page?: number; per_page?: number
 }): Promise<VouchersResponse> {
-  return Promise.resolve({
-    total: 0,
-    page: params?.page ?? 1,
-    per_page: params?.per_page ?? 25,
-    items: []
-  })
+  const qs = new URLSearchParams()
+  if (params?.type)     qs.set('type', params.type)
+  if (params?.page)     qs.set('page', String(params.page))
+  if (params?.per_page) qs.set('per_page', String(params.per_page))
+  const res = await get<any>(`/Payments${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const data = (res && res.success && res.data) ? res.data : res
+  return {
+    total: data?.total ?? 0,
+    page: data?.page ?? params?.page ?? 1,
+    per_page: data?.per_page ?? params?.per_page ?? 25,
+    items: data?.items ?? [],
+  }
 }
 
-export function createVoucher(data: CreateVoucherPayload): Promise<Voucher> {
-  return Promise.reject(new Error('إنشاء السندات غير متاح حالياً'))
+export async function createVoucher(data: CreateVoucherPayload): Promise<Voucher> {
+  const body = {
+    VoucherType: data.voucher_type,
+    DebitAccountCode: data.debit_account_code,
+    CreditAccountCode: data.credit_account_code,
+    Amount: data.amount,
+    Currency: data.currency,
+    Description: data.description,
+  }
+  const res = await post<any>('/Payments/voucher', body)
+  return { id: res.voucherId, voucher_number: res.voucher_number, ...data } as any
 }
 
-export function cancelVoucher(id: number | string): Promise<{ cancelled: Voucher; reversal: Voucher }> {
-  return Promise.reject(new Error('إلغاء السندات غير متاح حالياً'))
+export async function cancelVoucher(id: number | string): Promise<{ cancelled: Voucher; reversal: Voucher }> {
+  const res = await post<any>(`/Payments/${id}/cancel`, {})
+  return res as any
+}
+
+async function fetchMovement(accountCode: string, params?: { start_date?: string; end_date?: string }): Promise<MovementReport> {
+  const qs = new URLSearchParams()
+  qs.set('account_code', accountCode)
+  if (params?.start_date) qs.set('start_date', params.start_date)
+  if (params?.end_date)   qs.set('end_date', params.end_date)
+  const res = await get<any>(`/Accounting/account-movement?${qs.toString()}`)
+  const d = (res && res.success && res.data) ? res.data : res
+  return {
+    account_code: d?.account_code ?? accountCode, account_name: d?.account_name ?? '',
+    rows: d?.rows ?? [], total_inflow: d?.total_inflow ?? 0, total_outflow: d?.total_outflow ?? 0, final_balance: d?.final_balance ?? 0,
+  }
 }
 
 export function getCashboxMovement(params?: {
   account_code?: string; start_date?: string; end_date?: string
 }): Promise<MovementReport> {
-  return Promise.resolve({
-    account_code: params?.account_code ?? '',
-    account_name: '',
-    rows: [],
-    total_inflow: 0,
-    total_outflow: 0,
-    final_balance: 0
-  })
+  return fetchMovement(params?.account_code || '111001', params)
 }
 
 export function getBankMovement(params?: {
   account_code?: string; start_date?: string; end_date?: string
 }): Promise<MovementReport> {
-  return Promise.resolve({
-    account_code: params?.account_code ?? '',
-    account_name: '',
-    rows: [],
-    total_inflow: 0,
-    total_outflow: 0,
-    final_balance: 0
-  })
+  return fetchMovement(params?.account_code || '112001', params)
 }
 
 export function getCashboxCloses(accountCode?: string): Promise<CashboxCloseRecord[]> {

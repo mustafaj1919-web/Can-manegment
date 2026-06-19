@@ -191,12 +191,31 @@ function buildQuery(params: ExpensesParams = {}) {
 }
 
 export async function getExpenses(params: ExpensesParams = {}): Promise<ExpensesResponse> {
-  // المصروفات غير مدعومة بالخلفية، نعيد هيكل فارغ
-  return Promise.resolve({ filters: { start_date: '', end_date: '', branch_id: null }, branches: [], total: 0, total_iqd: 0, items: [] })
+  const qs = new URLSearchParams()
+  if (params.start_date) qs.set('start_date', params.start_date)
+  if (params.end_date)   qs.set('end_date',   params.end_date)
+  const res = await get<any>(`/Expenses${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const data = (res && res.success && res.data) ? res.data : res
+  return {
+    filters: data?.filters ?? { start_date: '', end_date: '', branch_id: null },
+    branches: data?.branches ?? [],
+    total: data?.total ?? 0,
+    total_iqd: data?.total_iqd ?? data?.total ?? 0,
+    items: data?.items ?? [],
+  }
 }
 
 export async function createExpense(payload: CreateExpensePayload): Promise<ExpenseItem> {
-  return Promise.reject(new Error('تسجيل المصاريف غير متاح حالياً'))
+  const body = {
+    Title: payload.title,
+    Amount: payload.amount,
+    Currency: payload.currency,
+    Category: payload.category,
+    Notes: payload.notes,
+    ExpenseDate: payload.expense_date || null,
+  }
+  const res = await post<any>('/Expenses', body)
+  return { id: res.expenseId ?? '', ...payload } as any
 }
 
 export async function getCashbox(params: ExpensesParams = {}): Promise<CashboxResponse> {
@@ -266,7 +285,7 @@ export interface AccountPayload {
   name: string
   type: 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Expense'
   classification?: AccountClassification
-  parent_id?: number | null
+  parent_code?: string | null
   is_active?: boolean
 }
 
@@ -284,19 +303,34 @@ export interface AccountItem {
 }
 
 export async function createAccount(payload: AccountPayload): Promise<AccountItem> {
-  return Promise.reject(new Error('إضافة الحسابات غير متاحة حالياً'))
+  const res = await post<any>('/Accounting/accounts', {
+    Code: payload.code,
+    Name: payload.name,
+    Type: payload.type,
+    ParentCode: payload.parent_code ?? null,
+    IsActive: payload.is_active ?? true,
+  })
+  return { ...payload, code: res.code ?? payload.code } as any
 }
 
-export async function updateAccount(id: number, payload: Partial<AccountPayload>): Promise<AccountItem> {
-  return Promise.reject(new Error('تعديل الحسابات غير متاح حالياً'))
+// يُعرّف الحساب بالكود (الكود فريد وثابت بعكس المعرّف التخيّلي في الواجهة)
+export async function updateAccount(code: string, payload: Partial<AccountPayload>): Promise<AccountItem> {
+  const res = await put<any>(`/Accounting/accounts/${code}`, {
+    Name: payload.name,
+    Type: payload.type,
+    IsActive: payload.is_active,
+  })
+  return { ...payload, code: res.code ?? code } as any
 }
 
-export async function deleteAccount(id: number): Promise<{ success: boolean; is_active: boolean }> {
-  return Promise.reject(new Error('حذف أو إيقاف الحسابات غير متاح حالياً'))
+export async function deleteAccount(code: string): Promise<{ success: boolean; is_active: boolean }> {
+  const res = await del<any>(`/Accounting/accounts/${code}`)
+  return { success: true, is_active: res?.is_active ?? false }
 }
 
 export async function recomputeAccountBalances(): Promise<{ success: boolean; message: string }> {
-  return Promise.reject(new Error('إعادة احتساب الأرصدة غير متاح حالياً'))
+  const res = await post<any>('/Accounting/recompute-balances', {})
+  return { success: true, message: res?.message ?? 'تم' }
 }
 
 /* ─── Balance Sheet ─────────────────────────────────────────────────────── */
@@ -374,16 +408,31 @@ export interface JournalEntriesResponse {
 }
 
 export async function getJournalEntries(params: JournalEntriesParams = {}): Promise<JournalEntriesResponse> {
-  // قيود اليومية التفصيلية غير مدعومة بالخلفية بـ GET، نعيد هيكل فارغ
-  return Promise.resolve({ total: 0, page: params.page ?? 1, per_page: params.per_page ?? 30, items: [] })
+  const qs = new URLSearchParams()
+  if (params.page)      qs.set('page', String(params.page))
+  if (params.per_page)  qs.set('per_page', String(params.per_page))
+  if (params.date_from) qs.set('date_from', params.date_from)
+  if (params.date_to)   qs.set('date_to', params.date_to)
+  if (params.ref_type)  qs.set('ref_type', params.ref_type)
+  if (params.search)    qs.set('search', params.search)
+  const res = await get<any>(`/Accounting/journal-entries${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const data = (res && res.success && res.data) ? res.data : res
+  return {
+    total: data?.total ?? 0,
+    page: data?.page ?? params.page ?? 1,
+    per_page: data?.per_page ?? params.per_page ?? 30,
+    items: data?.items ?? [],
+  }
 }
 
-export function reverseJournalEntry(id: number): Promise<{ id: number; reference_number: string; original_id: number }> {
-  return Promise.reject(new Error('عكس القيد المحاسبي غير متاح حالياً'))
+export async function reverseJournalEntry(id: number | string): Promise<{ id: string; reference_number: string; original_id: string }> {
+  const res = await post<any>(`/Accounting/journal-entries/${id}/reverse`, {})
+  return { id: res.id, reference_number: res.reference_number, original_id: res.original_id }
 }
 
-export function postJournalEntry(id: number): Promise<{ id: number; status: string }> {
-  return Promise.reject(new Error('ترحيل القيد غير متاح حالياً'))
+export async function postJournalEntry(id: number | string): Promise<{ id: string; status: string }> {
+  const res = await post<any>(`/Accounting/journal-entries/${id}/post`, {})
+  return { id: res.id, status: res.status }
 }
 
 export interface AccountingRulesCheckResult {

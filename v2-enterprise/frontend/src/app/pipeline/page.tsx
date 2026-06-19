@@ -76,7 +76,7 @@ function DealCard({ deal, onMove, onDelete }: {
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-rose-400 transition-all">
+          <button onClick={onDelete} aria-label="حذف الصفقة" className="opacity-0 group-hover:opacity-100 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-rose-400 transition-all">
             <X className="h-3 w-3" />
           </button>
           {deal.days_in_stage > 7 && (
@@ -128,9 +128,9 @@ function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     e.preventDefault()
     if (!customerId) { toast.error('اختر العميل'); return }
     mutation.mutate({
-      customer_id:     parseInt(customerId),
-      car_id:          carId ? parseInt(carId) : undefined,
-      assigned_to_id:  assignedId ? parseInt(assignedId) : undefined,
+      customer_id:     customerId,
+      car_id:          carId || undefined,
+      assigned_to_id:  assignedId || undefined,
       expected_price:  expectedPrice ? parseFloat(expectedPrice) : undefined,
       currency,
       notes:           notes || undefined,
@@ -143,7 +143,7 @@ function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass w-full max-w-md rounded-xl border border-border/50 p-6 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">صفقة جديدة في Pipeline</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -194,8 +194,8 @@ function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </Select>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-muted-foreground">ملاحظات</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-xs resize-none focus:outline-none" />
+            <label htmlFor="deal-notes" className="mb-1.5 block text-xs text-muted-foreground">ملاحظات</label>
+            <textarea id="deal-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-xs resize-none focus:outline-none" />
           </div>
           <div className="flex gap-2 pt-1">
             <Button type="submit" disabled={mutation.isPending} size="sm" className="flex-1 bg-violet-600 hover:bg-violet-500 text-white gap-1.5">

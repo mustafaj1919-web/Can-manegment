@@ -46,7 +46,7 @@ export interface ReportRow {
 export interface CustomerBalanceRow {
   id: number
   name: string
-  type: 'Buyer' | 'Seller'
+  type: 'Individual' | 'Company'
   balance_iqd: number
 }
 
@@ -94,7 +94,26 @@ export interface ReportsParams {
 
 export async function getReports(params: ReportsParams = {}): Promise<ReportsResponse> {
   const today = new Date().toISOString().split('T')[0]
-  return Promise.resolve({
+
+  // Call real backend endpoints in parallel
+  const [dashRes, plRes] = await Promise.allSettled([
+    get<any>('/dashboard'),
+    get<any>(
+      `/Accounting/profit-loss${params.start_date || params.end_date
+        ? `?${new URLSearchParams({ ...(params.start_date ? { fromDate: params.start_date } : {}), ...(params.end_date ? { toDate: params.end_date } : {}) }).toString()}`
+        : ''}`
+    ),
+  ])
+
+  const dash = dashRes.status === 'fulfilled' ? dashRes.value : null
+  const pl   = plRes.status === 'fulfilled' && plRes.value?.success ? plRes.value.data : null
+
+  const totalRevenues = pl?.totalRevenues ?? 0
+  const totalExpenses = pl?.totalExpenses ?? 0
+  const netProfit     = pl?.netProfitOrLoss ?? (dash?.monthly_profit ?? 0)
+  const grossProfit   = totalRevenues - totalExpenses
+
+  return {
     filters: {
       start_date: params.start_date ?? '2026-01-01',
       end_date: params.end_date ?? today,
@@ -102,22 +121,22 @@ export async function getReports(params: ReportsParams = {}): Promise<ReportsRes
     },
     branches: [],
     summary: {
-      sales_count: 0,
-      purchases_count: 0,
-      installment_plans_count: 0,
-      overdue_installments_count: 0,
-      sales_total: 0,
-      sales_discount: 0,
-      sales_paid: 0,
-      sales_remaining: 0,
-      purchases_total: 0,
-      purchases_paid: 0,
-      purchases_remaining: 0,
-      installment_income: 0,
-      expenses: 0,
-      gross_profit: 0,
-      net_profit: 0,
-      cashbox_balance: 0
+      sales_count:               dash?.sales_count             ?? 0,
+      purchases_count:           dash?.purchases_count          ?? 0,
+      installment_plans_count:   dash?.installments             ?? 0,
+      overdue_installments_count: dash?.overdue_installments    ?? 0,
+      sales_total:               dash?.total_revenue            ?? 0,
+      sales_discount:            0,
+      sales_paid:                dash?.monthly_sales_paid       ?? 0,
+      sales_remaining:           dash?.installment_summary?.total_receivables ?? 0,
+      purchases_total:           dash?.total_purchases_paid     ?? 0,
+      purchases_paid:            dash?.total_purchases_paid     ?? 0,
+      purchases_remaining:       0,
+      installment_income:        dash?.installment_summary?.total_receivables ?? 0,
+      expenses:                  totalExpenses,
+      gross_profit:              grossProfit > 0 ? grossProfit : (dash?.monthly_profit ?? 0),
+      net_profit:                netProfit,
+      cashbox_balance:           dash?.cashbox_balance          ?? 0,
     },
     sales: [],
     purchases: [],
@@ -125,23 +144,23 @@ export async function getReports(params: ReportsParams = {}): Promise<ReportsRes
     overdue_installments: [],
     customer_balances: [],
     cashbox: {
-      sales_paid: 0,
+      sales_paid:         dash?.monthly_sales_paid ?? 0,
       installment_income: 0,
-      other_income: 0,
-      purchases_paid: 0,
-      expenses: 0,
-      balance: 0
+      other_income:       0,
+      purchases_paid:     dash?.total_purchases_paid ?? 0,
+      expenses:           totalExpenses,
+      balance:            dash?.cashbox_balance ?? 0,
     },
     profit_loss: {
-      sales_total: 0,
+      sales_total:    totalRevenues || (dash?.total_revenue ?? 0),
       sales_discount: 0,
-      cost_of_cars: 0,
-      gross_profit: 0,
-      other_income: 0,
-      expenses: 0,
-      net_profit: 0
-    }
-  })
+      cost_of_cars:   totalExpenses || (dash?.total_purchases_paid ?? 0),
+      gross_profit:   grossProfit > 0 ? grossProfit : (dash?.monthly_profit ?? 0),
+      other_income:   0,
+      expenses:       totalExpenses,
+      net_profit:     netProfit,
+    },
+  }
 }
 
 export interface ArAgingItem {
@@ -299,63 +318,116 @@ export async function getArAgingReport(): Promise<ArAgingResponse> {
   }
 }
 
+/* ─── Cost Center Report ─────────────────────────────────────────────────── */
+
+export interface CostCenterItem {
+  id: string
+  title: string
+  amount: number
+  currency: string
+  date: string
+  notes: string | null
+}
+
+export interface CostCenterGroup {
+  center: string
+  total: number
+  count: number
+  items: CostCenterItem[]
+}
+
+export interface CostCenterResponse {
+  from_date: string | null
+  to_date: string | null
+  total_revenue: number
+  sales_count: number
+  total_expenses: number
+  total_vehicle_costs: number
+  net_result: number
+  expense_centers: CostCenterGroup[]
+  vehicle_cost_centers: CostCenterGroup[]
+}
+
+export async function getCostCenterReport(params: { from_date?: string; to_date?: string } = {}): Promise<CostCenterResponse> {
+  const qs = new URLSearchParams()
+  if (params.from_date) qs.set('from_date', params.from_date)
+  if (params.to_date)   qs.set('to_date', params.to_date)
+  const url = `/Accounting/cost-center-report${qs.toString() ? '?' + qs.toString() : ''}`
+  const res = await get<any>(url)
+  if (res && res.success && res.data) return res.data
+  return res
+}
+
+/* ─── Branch Comparison Report ───────────────────────────────────────────── */
+
 export interface BranchComparisonRow {
-  branch: ReportBranch | null
+  branch_id: string
+  branch_name: string
+  branch_code: string
+  is_active: boolean
   sales_count: number
   purchases_count: number
   customers_count: number
-  available_cars_count: number
-  sold_cars_count: number
-  sales_total_iqd: number
-  sales_discount_iqd: number
-  sales_paid_iqd: number
-  sales_remaining_iqd: number
-  installment_income_iqd: number
-  purchase_paid_iqd: number
-  expenses_iqd: number
-  gross_profit_iqd: number
-  net_profit_iqd: number
-  cashbox_balance_iqd: number
+  available_cars: number
+  sold_cars: number
+  total_revenue: number
+  total_purchases: number
+  total_expenses: number
+  net_profit: number
 }
 
 export interface BranchComparisonResponse {
-  filters: {
-    start_date: string
-    end_date: string
-  }
+  from_date: string | null
+  to_date: string | null
   branches: BranchComparisonRow[]
   totals: {
     sales_count: number
     purchases_count: number
-    sales_total_iqd: number
-    sales_paid_iqd: number
-    sales_remaining_iqd: number
-    expenses_iqd: number
-    gross_profit_iqd: number
-    net_profit_iqd: number
-    cashbox_balance_iqd: number
+    total_revenue: number
+    total_purchases: number
+    total_expenses: number
+    net_profit: number
   }
 }
 
 export async function getBranchComparison(params: { start_date?: string; end_date?: string } = {}): Promise<BranchComparisonResponse> {
-  return Promise.resolve({
-    filters: {
-      start_date: params.start_date ?? '2026-01-01',
-      end_date: params.end_date ?? '2026-06-11'
-    },
-    branches: [],
-    totals: {
-      sales_count: 0,
-      purchases_count: 0,
-      sales_total_iqd: 0,
-      sales_paid_iqd: 0,
-      sales_remaining_iqd: 0,
-      expenses_iqd: 0,
-      gross_profit_iqd: 0,
-      net_profit_iqd: 0,
-      cashbox_balance_iqd: 0
-    }
-  })
+  const qs = new URLSearchParams()
+  if (params.start_date) qs.set('from_date', params.start_date)
+  if (params.end_date)   qs.set('to_date', params.end_date)
+  const url = `/Accounting/branch-comparison${qs.toString() ? '?' + qs.toString() : ''}`
+  const res = await get<any>(url)
+  if (res && res.success && res.data) return res.data
+  return res
+}
+
+/* ─── Accounting Rules Check ─────────────────────────────────────────────── */
+
+export interface AccountingRulesIssue {
+  type: string
+  label: string
+  ref_num?: string
+  date?: string
+  debit?: number
+  credit?: number
+  diff?: number
+  account_code?: string
+  account_name?: string
+  lines_count?: number
+}
+
+export interface AccountingRulesResponse {
+  passed: boolean
+  score: number
+  stats: { total_entries: number; total_accounts: number }
+  issues: AccountingRulesIssue[]
+  warnings: AccountingRulesIssue[]
+  summary: string
+}
+
+export async function getAccountingRulesCheck(): Promise<AccountingRulesResponse> {
+  const res = await get<any>('/Accounting/accounting-rules')
+  if (res && res.success && res.data) return res.data
+  return res
 }
 
 export interface MonthlyProfitRow {

@@ -11,6 +11,7 @@ import { QuickStatsWidget } from '@/components/dashboard/QuickStatsWidget'
 import { InstallmentSummaryPanel } from '@/components/dashboard/InstallmentSummaryPanel'
 import { DashboardStatusBar } from '@/components/dashboard/DashboardStatusBar'
 import { DashboardInsights } from '@/components/dashboard/DashboardInsights'
+import { MomComparisonWidget } from '@/components/dashboard/MomComparisonWidget'
 import { CashFlowWaterfall } from '@/components/charts/CashFlowWaterfall'
 import { InventoryDonut } from '@/components/charts/InventoryDonut'
 import { ArAgingChart } from '@/components/charts/ArAgingChart'
@@ -114,7 +115,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <InstallmentSummaryPanel />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div className="xl:col-span-8">
+          <MomComparisonWidget />
+        </div>
+        <div className="xl:col-span-4">
+          <InstallmentSummaryPanel />
+        </div>
+      </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">

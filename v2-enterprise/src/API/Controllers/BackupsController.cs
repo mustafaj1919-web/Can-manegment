@@ -9,7 +9,7 @@ using CarShowroomManagementV2.Application.Common.Interfaces;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin")]
     public class BackupsController : ApiControllerBase
     {
         private readonly string _backupFolder;

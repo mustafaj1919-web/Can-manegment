@@ -29,6 +29,12 @@ namespace CarShowroomManagementV2.Application.Common.Interfaces
         DbSet<InstallmentPlan> InstallmentPlans { get; }
         DbSet<Installment> Installments { get; }
         DbSet<CashboxClose> CashboxCloses { get; }
+        DbSet<Expense> Expenses { get; }
+        DbSet<Employee> Employees { get; }
+        DbSet<CrmInteraction> CrmInteractions { get; }
+        DbSet<Deal> Deals { get; }
+        DbSet<EmployeeCommission> EmployeeCommissions { get; }
+        DbSet<EmployeeTarget> EmployeeTargets { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

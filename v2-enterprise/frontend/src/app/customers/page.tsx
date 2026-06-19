@@ -26,18 +26,18 @@ import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const TYPE_OPTS = [
-  { value: 'all',    label: 'الكل' },
-  { value: 'Buyer',  label: 'مشترون' },
-  { value: 'Seller', label: 'بائعون' },
+  { value: 'all',        label: 'الكل' },
+  { value: 'Individual', label: 'أفراد' },
+  { value: 'Company',    label: 'شركات' },
 ]
 
 const TYPE_BADGE: Record<string, string> = {
-  Buyer:  'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-[0_0_8px_rgba(6,182,212,0.06)] font-bold',
-  Seller: 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.06)] font-bold',
+  Individual: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-[0_0_8px_rgba(6,182,212,0.06)] font-bold',
+  Company:    'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.06)] font-bold',
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  Buyer: 'مشتري', Seller: 'بائع',
+  Individual: 'فرد', Company: 'شركة',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -154,6 +154,7 @@ function QuickViewPanel({ customerId, onClose }: { customerId: number; onClose: 
             </div>
             <button
               onClick={onClose}
+              aria-label="إغلاق"
               className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-4 w-4" />
@@ -464,11 +465,11 @@ export default function CustomersPage() {
   const { data: counts } = useQuery({
     queryKey: ['customer-counts'],
     queryFn: async () => {
-      const [buyers, sellers] = await Promise.all([
-        getCustomers({ customer_type: 'Buyer',  per_page: 1, page: 1 }),
-        getCustomers({ customer_type: 'Seller', per_page: 1, page: 1 }),
+      const [individuals, companies] = await Promise.all([
+        getCustomers({ customer_type: 'Individual', per_page: 1, page: 1 }),
+        getCustomers({ customer_type: 'Company',    per_page: 1, page: 1 }),
       ])
-      return { buyers: buyers.total, sellers: sellers.total }
+      return { buyers: individuals.total, sellers: companies.total }
     },
     staleTime: 120_000,
     retry: 1,
@@ -561,7 +562,7 @@ export default function CustomersPage() {
         />
         <KpiCard
           icon={<UserCheck className="h-4 w-4" />}
-          label="مشترون"
+          label="أفراد"
           value={counts?.buyers ?? '...'}
           iconColor="text-cyan-500"
           iconBg="bg-cyan-500/10 border-cyan-500/20"
@@ -569,7 +570,7 @@ export default function CustomersPage() {
         />
         <KpiCard
           icon={<ShoppingBag className="h-4 w-4" />}
-          label="بائعون"
+          label="شركات"
           value={counts?.sellers ?? '...'}
           iconColor="text-amber-500"
           iconBg="bg-amber-500/10 border-amber-500/20"

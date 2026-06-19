@@ -96,6 +96,52 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { months = rows, totals });
         }
 
+        // مقارنة الشهر الحالي بالشهر الماضي (لودجت لوحة التحكم)
+        [HttpGet("mom-comparison")]
+        public async Task<IActionResult> GetMomComparison()
+        {
+            var now = DateTime.UtcNow;
+            var thisStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var lastStart = thisStart.AddMonths(-1);
+
+            var sales = await _context.SalesContracts
+                .Where(sc => sc.SaleDate >= lastStart && sc.Status != "Cancelled")
+                .Select(sc => new { sc.SaleDate, sc.NetPrice, sc.Profit, sc.DownPayment })
+                .ToListAsync();
+            var expenses = await _context.Expenses
+                .Where(e => e.ExpenseDate >= lastStart)
+                .Select(e => new { e.ExpenseDate, e.Amount })
+                .ToListAsync();
+
+            object Build(string label, DateTime start, DateTime end)
+            {
+                var s = sales.Where(x => x.SaleDate >= start && x.SaleDate < end).ToList();
+                var exp = expenses.Where(x => x.ExpenseDate >= start && x.ExpenseDate < end).Sum(x => x.Amount);
+                var gross = s.Sum(x => x.Profit);
+                return new
+                {
+                    label, sales_count = s.Count, revenue = s.Sum(x => x.NetPrice),
+                    cost = s.Sum(x => x.NetPrice - x.Profit), expenses = exp,
+                    gross_profit = gross, net_profit = gross - exp, cash_in = s.Sum(x => x.DownPayment)
+                };
+            }
+
+            dynamic tm = Build(GetArabicMonthLabel(thisStart), thisStart, thisStart.AddMonths(1));
+            dynamic lm = Build(GetArabicMonthLabel(lastStart), lastStart, thisStart);
+
+            double? Pct(decimal cur, decimal prev) => prev != 0 ? (double?)Math.Round((double)((cur - prev) / Math.Abs(prev)) * 100, 1) : null;
+            var changes = new Dictionary<string, double?>
+            {
+                ["sales_count"] = Pct(tm.sales_count, lm.sales_count),
+                ["revenue"] = Pct(tm.revenue, lm.revenue),
+                ["gross_profit"] = Pct(tm.gross_profit, lm.gross_profit),
+                ["expenses"] = Pct(tm.expenses, lm.expenses),
+                ["net_profit"] = Pct(tm.net_profit, lm.net_profit),
+                ["cash_in"] = Pct(tm.cash_in, lm.cash_in),
+            };
+            return Ok(new { this_month = tm, last_month = lm, changes });
+        }
+
         private static string GetArabicMonthLabel(DateTime date)
         {
             string[] arabicMonths =

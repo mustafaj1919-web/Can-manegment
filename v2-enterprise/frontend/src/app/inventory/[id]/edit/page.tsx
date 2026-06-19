@@ -18,7 +18,7 @@ export default function EditCarPage({ params }: { params: Promise<{ id: string }
     queryFn: () => getCarById(id),
     staleTime: 60_000,
     retry: 1,
-    enabled: !!id,
+    enabled: !!id && id !== 'undefined',
   })
 
   if (isLoading) {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion, LayoutGroup } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Car, TrendingUp, CalendarDays, Menu, Settings,
@@ -175,11 +175,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={pathname}
-                initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -8 }}
+                initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.995 }}
+                animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 1.002 }}
                 transition={{
-                  duration: prefersReducedMotion ? 0 : 0.20,
+                  duration: prefersReducedMotion ? 0 : 0.22,
                   ease: [0.16, 1, 0.3, 1],
                 }}
               >
@@ -212,70 +212,101 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ─── 4. BOTTOM TAB BAR (Mobile only, <= 768px) ─── */}
       <nav className="fixed bottom-0 inset-x-0 h-16 bg-background/90 backdrop-blur-md border-t border-border-subtle z-40 flex items-center justify-around px-2 lg:hidden">
-        {/* Tab 1: Dashboard */}
-        <Link
-          href="/"
-          className={cn(
-            'flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
-            pathname === '/' ? 'text-primary font-bold' : 'text-muted-foreground'
-          )}
-        >
-          <LayoutDashboard className="h-5 w-5" />
-          <span>الرئيسية</span>
-        </Link>
+        <LayoutGroup id="mobile-tabs">
+          {/* Tab 1: Dashboard */}
+          <Link
+            href="/"
+            className={cn(
+              'relative flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
+              pathname === '/' ? 'text-primary font-bold' : 'text-muted-foreground'
+            )}
+          >
+            {pathname === '/' && (
+              <motion.span
+                layoutId="mobile-tab-pip"
+                className="absolute top-0 inset-x-1 h-[2px] rounded-full bg-primary"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
+            <LayoutDashboard className="h-5 w-5" />
+            <span>الرئيسية</span>
+          </Link>
 
-        {/* Tab 2: Inventory */}
-        <Link
-          href="/inventory"
-          className={cn(
-            'flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
-            pathname.startsWith('/inventory') ? 'text-primary font-bold' : 'text-muted-foreground'
-          )}
-        >
-          <Car className="h-5 w-5" />
-          <span>المخزون</span>
-        </Link>
+          {/* Tab 2: Inventory */}
+          <Link
+            href="/inventory"
+            className={cn(
+              'relative flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
+              pathname.startsWith('/inventory') ? 'text-primary font-bold' : 'text-muted-foreground'
+            )}
+          >
+            {pathname.startsWith('/inventory') && (
+              <motion.span
+                layoutId="mobile-tab-pip"
+                className="absolute top-0 inset-x-1 h-[2px] rounded-full bg-primary"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
+            <Car className="h-5 w-5" />
+            <span>المخزون</span>
+          </Link>
 
-        {/* Tab 3: Sales */}
-        <Link
-          href="/sales"
-          className={cn(
-            'flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
-            pathname.startsWith('/sales') ? 'text-primary font-bold' : 'text-muted-foreground'
-          )}
-        >
-          <TrendingUp className="h-5 w-5" />
-          <span>المبيعات</span>
-        </Link>
+          {/* Tab 3: Sales */}
+          <Link
+            href="/sales"
+            className={cn(
+              'relative flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
+              pathname.startsWith('/sales') ? 'text-primary font-bold' : 'text-muted-foreground'
+            )}
+          >
+            {pathname.startsWith('/sales') && (
+              <motion.span
+                layoutId="mobile-tab-pip"
+                className="absolute top-0 inset-x-1 h-[2px] rounded-full bg-primary"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
+            <TrendingUp className="h-5 w-5" />
+            <span>المبيعات</span>
+          </Link>
 
-        {/* Tab 4: Installments */}
-        <Link
-          href="/installments"
-          className={cn(
-            'flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 relative transition-colors',
-            pathname.startsWith('/installments') ? 'text-primary font-bold' : 'text-muted-foreground'
-          )}
-        >
-          <CalendarDays className="h-5 w-5" />
-          <span>الأقساط</span>
-          {alertCount > 0 && (
-            <span className="absolute top-1 right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-bold text-white leading-none">
-              {alertCount}
-            </span>
-          )}
-        </Link>
+          {/* Tab 4: Installments */}
+          <Link
+            href="/installments"
+            className={cn(
+              'relative flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
+              pathname.startsWith('/installments') ? 'text-primary font-bold' : 'text-muted-foreground'
+            )}
+          >
+            {pathname.startsWith('/installments') && (
+              <motion.span
+                layoutId="mobile-tab-pip"
+                className="absolute top-0 inset-x-1 h-[2px] rounded-full bg-primary"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
+            <CalendarDays className="h-5 w-5" />
+            <span>الأقساط</span>
+            {alertCount > 0 && (
+              <span className="absolute top-1 right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-bold text-white leading-none">
+                {alertCount}
+              </span>
+            )}
+          </Link>
 
-        {/* Tab 5: More */}
-        <button
-          onClick={() => setMobileMoreOpen(true)}
-          className={cn(
-            'flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
-            mobileMoreOpen ? 'text-primary font-bold' : 'text-muted-foreground'
-          )}
-        >
-          <Menu className="h-5 w-5" />
-          <span>أكثر</span>
-        </button>
+          {/* Tab 5: More */}
+          <button
+            type="button"
+            onClick={() => setMobileMoreOpen(true)}
+            className={cn(
+              'relative flex flex-col items-center justify-center gap-1.5 text-[10px] w-12 transition-colors',
+              mobileMoreOpen ? 'text-primary font-bold' : 'text-muted-foreground'
+            )}
+          >
+            <Menu className="h-5 w-5" />
+            <span>أكثر</span>
+          </button>
+        </LayoutGroup>
       </nav>
 
       {/* ─── 5. MOBILE "MORE" SHEET DRAWER ─── */}

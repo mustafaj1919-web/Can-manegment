@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { motion, LayoutGroup } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
@@ -25,6 +26,7 @@ import {
   ShieldAlert,
   Activity,
   Users,
+  Bell,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
@@ -80,6 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
     accent: 'red',
     items: [
       { href: '/', label: 'لوحة الإدارة', icon: LayoutDashboard },
+      { href: '/notifications', label: 'الإشعارات والتنبيهات', icon: Bell, alert: true },
       { href: '/cashier', label: 'مركز الكاشير', icon: Wallet, roles: SALES_ROLES },
     ],
   },
@@ -176,100 +179,124 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation - Centered Vertically */}
+      {/* Navigation */}
       <nav className="sidebar-scroll relative z-10 flex-1 overflow-y-auto px-3 py-5 flex flex-col justify-center">
-        <div className="space-y-6">
-          {visibleSections.map((section) => (
-            <section key={section.label}>
-              <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                {section.label}
-              </p>
-              <div className="space-y-0.5">
-                {section.items.map((item) => {
-                  const Icon = item.icon
-                  const active = isItemActive(pathname, item.href)
+        {/* Single LayoutGroup wraps ALL sections so layoutId="active-bar" slides across them */}
+        <LayoutGroup id="sidebar-nav">
+          <div className="space-y-6">
+            {visibleSections.map((section, sectionIdx) => (
+              <section key={section.label}>
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: sectionIdx * 0.06, duration: 0.2 }}
+                  className="mb-2 px-3 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50"
+                >
+                  {section.label}
+                </motion.p>
 
-                  if (item.soon) {
+                <div className="space-y-0.5">
+                  {section.items.map((item, itemIdx) => {
+                    const Icon = item.icon
+                    const active = isItemActive(pathname, item.href)
+
+                    if (item.soon) {
+                      return (
+                        <div
+                          key={item.href}
+                          className="group relative flex h-9 items-center gap-3 rounded-lg px-3 text-xs font-semibold cursor-not-allowed opacity-40 select-none"
+                          title="قيد التطوير"
+                        >
+                          <Icon className="h-4 w-4 shrink-0 opacity-40" />
+                          <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.label}</span>
+                          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-muted/40 text-muted-foreground border border-border/30">
+                            قريباً
+                          </span>
+                        </div>
+                      )
+                    }
+
                     return (
-                      <div
+                      <motion.div
                         key={item.href}
-                        className="group relative flex h-9 items-center gap-3 rounded-lg px-3 text-xs font-semibold cursor-not-allowed opacity-40 select-none"
-                        title="قيد التطوير"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{
+                          delay: sectionIdx * 0.06 + itemIdx * 0.04,
+                          duration: 0.22,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+                        whileHover={{ x: -2 }}
+                        whileTap={{ scale: 0.98 }}
                       >
-                        <Icon className="h-4 w-4 shrink-0 opacity-40" />
-                        <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.label}</span>
-                        <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-muted/40 text-muted-foreground border border-border/30">
-                          قريباً
-                        </span>
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-xs font-semibold transition-all duration-150',
-                        active
-                          ? 'bg-primary/[0.08] text-foreground font-bold'
-                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      )}
-                    >
-                      {active && (
-                        <span
+                        <Link
+                          href={item.href}
                           className={cn(
-                            'absolute inset-y-2 start-0 w-[2.5px] rounded-full',
-                            ACCENT_INDICATOR[section.accent]
+                            'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-xs font-semibold transition-colors duration-150',
+                            active
+                              ? 'bg-primary/[0.08] text-foreground font-bold'
+                              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                           )}
-                        />
-                      )}
+                        >
+                          {/* Animated active indicator bar — slides between items via layoutId */}
+                          {active && (
+                            <motion.span
+                              layoutId="sidebar-active-bar"
+                              className={cn(
+                                'absolute inset-y-2 start-0 w-[2.5px] rounded-full',
+                                ACCENT_INDICATOR[section.accent]
+                              )}
+                              transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                            />
+                          )}
 
-                      <Icon
-                        className={cn(
-                          'h-4 w-4 shrink-0 transition-all duration-150',
-                          active
-                            ? ACCENT_ICON_ACTIVE[section.accent]
-                            : 'opacity-40 group-hover:opacity-75'
-                        )}
-                      />
+                          <Icon
+                            className={cn(
+                              'h-4 w-4 shrink-0 transition-all duration-150',
+                              active
+                                ? ACCENT_ICON_ACTIVE[section.accent]
+                                : 'opacity-40 group-hover:opacity-75'
+                            )}
+                          />
 
-                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          <span className="min-w-0 flex-1 truncate">{item.label}</span>
 
-                      {item.alert && alertCount > 0 ? (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-rose-500/10 px-1.5 text-[10px] font-black text-rose-500 border border-rose-500/20">
-                          {alertCount}
-                        </span>
-                      ) : (
-                        <ChevronLeft className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-30" />
-                      )}
-                    </Link>
-                  )
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
+                          {item.alert && alertCount > 0 ? (
+                            <motion.span
+                              initial={{ scale: 0.6 }}
+                              animate={{ scale: 1 }}
+                              className="flex h-5 min-w-5 items-center justify-center rounded-md bg-rose-500/10 px-1.5 text-[10px] font-black text-rose-500 border border-rose-500/20"
+                            >
+                              {alertCount}
+                            </motion.span>
+                          ) : (
+                            <ChevronLeft className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-30" />
+                          )}
+                        </Link>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </LayoutGroup>
       </nav>
 
-      {/* User Footer with professional Popover Dropdown */}
+      {/* User Footer */}
       <div className="relative z-10 border-t border-border-subtle p-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className={cn(
-                "flex w-full items-center gap-3 rounded-xl border border-border/40 bg-secondary/20 hover:bg-secondary/40 px-3 py-2.5 transition-all duration-200 text-right focus:outline-none cursor-pointer"
-              )}
+              className="flex w-full items-center gap-3 rounded-xl border border-border/40 bg-secondary/20 hover:bg-secondary/40 px-3 py-2.5 transition-all duration-200 text-right focus:outline-none cursor-pointer"
             >
-              {/* User Avatar */}
               <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-[#f4a522] p-[1.5px] shadow-sm">
                 <div className="flex h-full w-full items-center justify-center rounded-[6px] bg-[var(--sidebar-bg)] text-[10px] font-black text-foreground">
                   {(user?.username ?? 'AD').slice(0, 2).toUpperCase()}
                 </div>
               </div>
 
-              {/* User Details */}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold text-foreground">{user?.username ?? 'admin'}</p>
                 <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-muted-foreground font-medium">
@@ -278,7 +305,6 @@ export function Sidebar() {
                 </p>
               </div>
 
-              {/* Indicator icon */}
               <ChevronUp className="h-4 w-4 text-muted-foreground/60 transition-transform duration-200" />
             </button>
           </DropdownMenuTrigger>
@@ -294,7 +320,6 @@ export function Sidebar() {
               boxShadow: '0 -10px 30px rgba(0,0,0,0.5)',
             }}
           >
-            {/* Header info */}
             <div className="px-3 py-2 select-none text-right">
               <p className="text-xs font-bold text-foreground">{user?.username ?? 'admin'}</p>
               <div className="mt-1 flex items-center gap-1.5">
@@ -309,10 +334,9 @@ export function Sidebar() {
 
             <DropdownMenuSeparator className="bg-secondary/40 mx-2 my-1" />
 
-            {/* Menu Items */}
             <DropdownMenuItem asChild>
               <Link
-                href="/users"
+                href="/settings"
                 className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 cursor-pointer text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
               >
                 <UserCog className="h-4 w-4 opacity-70 text-primary" />
@@ -332,7 +356,6 @@ export function Sidebar() {
 
             <DropdownMenuSeparator className="bg-secondary/40 mx-2 my-1" />
 
-            {/* Logout button */}
             <DropdownMenuItem
               onClick={handleLogout}
               className="flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 cursor-pointer text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors focus:bg-rose-500/10 focus:text-rose-300"

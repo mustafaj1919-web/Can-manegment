@@ -146,7 +146,7 @@ export function UserForm({ user }: UserFormProps) {
     e.preventDefault()
     if (!validate()) return
 
-    const bid = branchId ? parseInt(branchId) : null
+    const bid = branchId || null
 
     if (isEdit) {
       const payload: UpdateUserPayload = {

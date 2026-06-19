@@ -44,7 +44,7 @@ export function CustomerForm({ customer }: CustomerFormProps) {
 
   const [name,          setName]          = useState(customer?.full_name || customer?.name || '')
   const [phone,         setPhone]         = useState(customer?.phone || '')
-  const [customerType,  setCustomerType]  = useState<'Buyer' | 'Seller'>(customer?.customer_type || 'Buyer')
+  const [customerType,  setCustomerType]  = useState<'Individual' | 'Company'>((customer?.customer_type as 'Individual' | 'Company') || 'Individual')
   const [idType,        setIdType]        = useState(customer?.id_type || '')
   const [idNumber,      setIdNumber]      = useState(customer?.id_number || '')
   const [idIssueDate,   setIdIssueDate]   = useState(customer?.id_issue_date  ? customer.id_issue_date.slice(0, 10)  : '')
@@ -272,13 +272,13 @@ export function CustomerForm({ customer }: CustomerFormProps) {
 
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">نوع العميل *</Label>
-              <Select value={customerType} onValueChange={(value) => setCustomerType(value as 'Buyer' | 'Seller')}>
+              <Select value={customerType} onValueChange={(value) => setCustomerType(value as 'Individual' | 'Company')}>
                 <SelectTrigger className="bg-secondary/30 border-border/60">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Buyer">مشتري</SelectItem>
-                  <SelectItem value="Seller">بائع</SelectItem>
+                  <SelectItem value="Individual">فرد</SelectItem>
+                  <SelectItem value="Company">شركة</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -440,22 +440,7 @@ export function CustomerForm({ customer }: CustomerFormProps) {
                         onClick={() => fileInputRefs.current[slot.type]?.click()}
                         className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/50 text-xs text-muted-foreground hover:border-cyan-500/40 hover:text-cyan-400 transition-colors">
                         <Upload className="h-3.5 w-3.5" />
-                        اختر ملف
-                      </button>
-                      <button type="button"
-                        onClick={() => handleScan(slot.type)}
-                        disabled={scanningSlot !== null}
-                        title="مسح ضوئي من الطابعة/الماسح"
-                        className={cn(
-                          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed transition-colors',
-                          scanningSlot === slot.type
-                            ? 'border-violet-500/50 text-violet-400 bg-violet-500/10'
-                            : 'border-border/50 text-muted-foreground hover:border-violet-500/40 hover:text-violet-400',
-                          scanningSlot !== null && scanningSlot !== slot.type && 'opacity-40 cursor-not-allowed',
-                        )}>
-                        {scanningSlot === slot.type
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <ScanLine className="h-3.5 w-3.5" />}
+                        اختر ملف (صورة / PDF)
                       </button>
                     </div>
                   )}

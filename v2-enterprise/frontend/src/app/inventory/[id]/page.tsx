@@ -9,10 +9,10 @@ import {
   Edit, FileText, Plus, Trash2, ArrowUpRight,
   Fuel, Gauge, Settings, Calendar, MapPin, Palette,
   Shield, Tag, Hash, Layers, Armchair, Cylinder, Zap, Info,
-  Upload, X, Loader2
+  Upload, X, Loader2, ImageOff
 } from 'lucide-react'
 import { cn, formatMoney, formatNumber, getStatusVariant, photoUrl, translateStatus } from '@/lib/utils'
-import { getCarById, getVehicleCosts, addVehicleCost, deleteVehicleCost, getCars, uploadCarPhotos } from '@/lib/api/inventory'
+import { getCarById, getVehicleCosts, addVehicleCost, deleteVehicleCost, getCars, uploadCarPhotos, deleteCarPhoto } from '@/lib/api/inventory'
 import type { CarPhoto } from '@/lib/api/inventory'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -54,24 +54,34 @@ function PremiumGallery({
   photos: CarPhoto[]; carBrand: string; carModel: string; carId: string; status: string; year?: number
 }) {
   const [activeIdx, setActiveIdx] = useState(0)
+  const [broken, setBroken] = useState<Set<string>>(new Set())
   const activePhoto = photos[activeIdx]
+  const activeKey = activePhoto ? String(activePhoto.id) : null
+  const isActiveBroken = activeKey ? broken.has(activeKey) : false
 
   function prev() { setActiveIdx(i => (i === 0 ? photos.length - 1 : i - 1)) }
   function next() { setActiveIdx(i => (i === photos.length - 1 ? 0 : i + 1)) }
+  function markBroken(key: string) { setBroken(prev => new Set(prev).add(key)) }
+
+  const showFallback = !activePhoto || isActiveBroken
 
   return (
     <div className="relative group/gallery">
       {/* Main cinematic view - extra height and curved borders */}
       <div className="relative h-[620px] w-full overflow-hidden rounded-[24px] border border-border/50 bg-card shadow-2xl glare-effect">
-        {activePhoto ? (
+        {!showFallback && activePhoto && (
           <img
             key={activeIdx}
             src={photoUrl(activePhoto.filename, activePhoto.subfolder ?? 'vehicles')}
             alt={`${carBrand} ${carModel}`}
             className="h-full w-full object-cover transition-transform duration-[1200ms] ease-out hover:scale-105"
+            onError={() => markBroken(String(activePhoto.id))}
           />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-5 bg-[radial-gradient(circle_at_50%_120%,rgba(239,27,45,0.15),transparent_55%)]">
+        )}
+
+        {/* Fallback — shown when no photos or active image is broken */}
+        {showFallback && (
+          <div className="absolute inset-0 flex h-full flex-col items-center justify-center gap-5 bg-[radial-gradient(circle_at_50%_120%,rgba(239,27,45,0.15),transparent_55%)]">
             <img
               src="/fallback_car.png"
               alt={carBrand}
@@ -107,7 +117,7 @@ function PremiumGallery({
           </h2>
         </div>
 
-        {/* Photo counter */}
+        {/* Photo counter — only count non-broken photos */}
         {photos.length > 0 && (
           <div className="absolute top-6 end-6 rounded-full bg-black/70 px-4 py-2 text-[10px] font-black tracking-widest text-white/90 backdrop-blur-xl border border-border/50">
             {activeIdx + 1} / {photos.length}
@@ -140,7 +150,10 @@ function PremiumGallery({
       {/* Thumbnail strip - elegant mini tiles */}
       {photos.length > 1 && (
         <div className="flex gap-2.5 overflow-x-auto py-2 justify-center" dir="ltr">
-          {photos.map((photo, idx) => (
+          {photos.map((photo, idx) => {
+            const key = String(photo.id)
+            const isBroken = broken.has(key)
+            return (
             <button
               key={photo.id}
               type="button"
@@ -153,13 +166,21 @@ function PremiumGallery({
                   : 'border-border/50 opacity-40 hover:opacity-80',
               )}
             >
+              {isBroken ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-secondary/30">
+                  <ImageOff className="h-5 w-5 text-muted-foreground/40" />
+                </div>
+              ) : (
               <img
                 src={photoUrl(photo.filename, photo.subfolder ?? 'vehicles')}
                 alt=""
                 className="h-full w-full object-cover"
+                onError={() => markBroken(key)}
               />
+              )}
             </button>
-          ))}
+          )
+          })}
         </div>
       )}
     </div>
@@ -306,19 +327,21 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
     qc.invalidateQueries({ queryKey: ['car', id] })
   }
 
+  const isValidId = !!id && id !== 'undefined'
+
   const { data: car, isLoading, isError } = useQuery({
     queryKey: ['car', id],
     queryFn: () => getCarById(id),
     staleTime: 30_000,
     retry: 1,
-    enabled: !!id,
+    enabled: isValidId,
   })
 
   const { data: profData } = useQuery({
     queryKey: ['vehicle-costs', id],
     queryFn: () => getVehicleCosts(id),
     staleTime: 30_000,
-    enabled: !!id,
+    enabled: isValidId,
   })
 
   const { data: relatedData } = useQuery({
@@ -345,6 +368,15 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
   const deleteMutation = useMutation({
     mutationFn: (costId: number) => deleteVehicleCost(id, costId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vehicle-costs', id] }),
+  })
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: (photoId: string | number) => deleteCarPhoto(id, photoId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['car', id] })
+      toast.success('تم حذف الصورة بنجاح')
+    },
+    onError: () => toast.error('فشل حذف الصورة'),
   })
 
   if (isLoading) {
@@ -752,6 +784,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                   type="button"
                   onClick={() => setShowPhotoManager(false)}
                   disabled={isUploadingAll}
+                  aria-label="إغلاق مدير الصور"
                   className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40 hover:text-white transition-colors"
                 >
                   <X className="h-5 w-5" />
@@ -775,12 +808,22 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                             src={photoUrl(photo.filename, photo.subfolder ?? 'vehicles')}
                             alt=""
                             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = '0.2' }}
                           />
-                          {/* Disabled delete overlay with info */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                            <span className="text-[10px] bg-red-600/20 border border-red-500/30 text-red-400 px-2 py-0.5 rounded-md font-family-cairo">
-                              غير متاح للحذف
-                            </span>
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button
+                              type="button"
+                              disabled={deletePhotoMutation.isPending}
+                              onClick={() => deletePhotoMutation.mutate(photo.id)}
+                              className="flex items-center gap-1 rounded-lg bg-red-600/90 hover:bg-red-500 px-2.5 py-1.5 text-[10px] font-bold text-white transition-all disabled:opacity-50"
+                            >
+                              {deletePhotoMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                              حذف
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -815,6 +858,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                       type="file"
                       multiple
                       accept=".jpg,.jpeg,.png,.webp"
+                      aria-label="رفع صور المركبة"
                       className="hidden"
                       onChange={(e) => handleFileChange(e.target.files)}
                     />
@@ -831,6 +875,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
                         type="checkbox"
                         checked={useCompression}
                         onChange={(e) => setUseCompression(e.target.checked)}
+                        aria-label="تفعيل الضغط التلقائي للصور"
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-600"></div>

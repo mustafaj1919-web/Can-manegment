@@ -88,6 +88,7 @@ function InteractionCard({ item, onDelete }: {
               )}
               <button
                 onClick={onDelete}
+                aria-label="حذف التفاعل"
                 className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-rose-400 hover:bg-rose-400/10 transition-all"
               >
                 <X className="h-3 w-3" />
@@ -136,13 +137,13 @@ function AddInteractionForm({ onClose, onSuccess }: { onClose: () => void; onSuc
     e.preventDefault()
     if (!customerId) { toast.error('اختر العميل'); return }
     mutation.mutate({
-      customer_id:      parseInt(customerId),
+      customer_id:      customerId,
       interaction_type: type,
       notes:            notes || undefined,
       outcome:          (outcome as OutcomeType) || undefined,
       follow_up_date:   followUpDate || undefined,
       interaction_date: interactionDate,
-      employee_id:      employeeId ? parseInt(employeeId) : undefined,
+      employee_id:      employeeId || undefined,
     })
   }
 
@@ -151,7 +152,7 @@ function AddInteractionForm({ onClose, onSuccess }: { onClose: () => void; onSuc
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="glass w-full max-w-md rounded-xl border border-border/50 p-6 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">تسجيل تفاعل جديد</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>

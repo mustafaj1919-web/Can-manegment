@@ -23,6 +23,10 @@ using Microsoft.EntityFrameworkCore.Storage;
 using CarShowroomManagementV2.Infrastructure.Identity;
 using Microsoft.Extensions.FileProviders;
 
+// السماح لـ Npgsql بكتابة قيم DateTime (Kind=Unspecified القادمة من تواريخ الواجهة)
+// إلى أعمدة timestamptz دون رفضها. يجب ضبطه قبل أول استخدام لـ Npgsql.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. إعداد Serilog للسجلات المهيكلة
@@ -175,21 +179,23 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("FrontendPolicy");
-app.UseRateLimiter();
-app.UseRouting();
 
+// Static files must run before routing so they are never subject to auth or rate-limiting
 var vehicleImagesPath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "vehicles");
 Directory.CreateDirectory(vehicleImagesPath);
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(vehicleImagesPath),
-    RequestPath = "/static/uploads/vehicles"
+    RequestPath = "/static/uploads/vehicles",
+    ServeUnknownFileTypes = false,
 });
 
+app.UseRateLimiter();
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireRateLimiting("GlobalPolicy");
 app.MapHealthChecks("/healthz");
 
 app.Run();
@@ -252,14 +258,120 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
         await context.SaveChangesAsync();
     }
 
-    // ج. إنشاء المستخدم المدير الافتراضي — يُنشأ مرة واحدة فقط، لا تُعاد الكتابة على كلمة المرور
+    // ب.2. إنشاء الأدوار الافتراضية إذا لم تكن موجودة
+    var defaultRoles = new[]
+    {
+        new Role { Name = "Owner", Description = "مالك المعرض" },
+        new Role { Name = "Admin", Description = "مدير النظام" },
+        new Role { Name = "Accountant", Description = "محاسب" },
+        new Role { Name = "Sales", Description = "موظف مبيعات" },
+        new Role { Name = "Viewer", Description = "مشاهد" }
+    };
+
+    foreach (var r in defaultRoles)
+    {
+        var existingRole = await context.Roles.FirstOrDefaultAsync(dbRole => dbRole.Name == r.Name);
+        if (existingRole == null)
+        {
+            context.Roles.Add(r);
+        }
+    }
+    await context.SaveChangesAsync();
+
+    // ج.1. إنشاء الصلاحيات الافتراضية إذا لم تكن موجودة
+    var defaultPermissions = new[]
+    {
+        new Permission { Name = "view_dashboard", Description = "عرض لوحة التحكم" },
+        new Permission { Name = "manage_users", Description = "إدارة المستخدمين" },
+        new Permission { Name = "manage_roles", Description = "إدارة الأدوار والصلاحيات" },
+        new Permission { Name = "view_inventory", Description = "عرض مخزون السيارات" },
+        new Permission { Name = "manage_inventory", Description = "إدارة مخزون السيارات" },
+        new Permission { Name = "view_sales", Description = "عرض عقود المبيعات" },
+        new Permission { Name = "manage_sales", Description = "إدارة عقود المبيعات" },
+        new Permission { Name = "view_purchases", Description = "عرض فواتير المشتريات" },
+        new Permission { Name = "manage_purchases", Description = "إدارة المشتريات" },
+        new Permission { Name = "view_installments", Description = "عرض الأقساط" },
+        new Permission { Name = "manage_installments", Description = "إدارة وتحصيل الأقساط" },
+        new Permission { Name = "view_accounting", Description = "عرض الحسابات والقيود اليومية" },
+        new Permission { Name = "manage_accounting", Description = "إدارة الحسابات، القيود وإغلاق الصندوق" },
+        new Permission { Name = "view_reports", Description = "عرض التقارير المالية والإدارية" },
+        new Permission { Name = "manage_settings", Description = "إدارة إعدادات النظام والنسخ الاحتياطي" }
+    };
+
+    foreach (var p in defaultPermissions)
+    {
+        var existingPerm = await context.Permissions.FirstOrDefaultAsync(dbP => dbP.Name == p.Name);
+        if (existingPerm == null)
+        {
+            context.Permissions.Add(p);
+        }
+    }
+    await context.SaveChangesAsync();
+
+    // ج.2. ربط الصلاحيات بالأدوار الافتراضية إذا لم تكن مرتبطة
+    var dbPermissions = await context.Permissions.ToListAsync();
+    var dbRoles = await context.Roles.ToListAsync();
+
+    foreach (var role in dbRoles)
+    {
+        var hasAnyPermissions = await context.RolePermissions.AnyAsync(rp => rp.RoleId == role.Id);
+        if (!hasAnyPermissions)
+        {
+            var allowedPermNames = new List<string> { "view_dashboard" };
+
+            if (role.Name == "Owner" || role.Name == "Admin")
+            {
+                allowedPermNames = dbPermissions.Select(p => p.Name).ToList();
+            }
+            else if (role.Name == "Accountant")
+            {
+                allowedPermNames.AddRange(new[] {
+                    "view_inventory", "view_sales", "manage_sales",
+                    "view_purchases", "manage_purchases", "view_installments", "manage_installments",
+                    "view_accounting", "manage_accounting", "view_reports"
+                });
+            }
+            else if (role.Name == "Sales")
+            {
+                allowedPermNames.AddRange(new[] {
+                    "view_inventory", "view_sales", "manage_sales",
+                    "view_installments", "manage_installments", "view_reports"
+                });
+            }
+            else if (role.Name == "Viewer")
+            {
+                allowedPermNames.AddRange(new[] {
+                    "view_inventory", "view_sales", "view_purchases",
+                    "view_installments", "view_accounting", "view_reports"
+                });
+            }
+
+            foreach (var permName in allowedPermNames)
+            {
+                var targetPerm = dbPermissions.FirstOrDefault(p => p.Name == permName);
+                if (targetPerm != null)
+                {
+                    context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = targetPerm.Id });
+                }
+            }
+        }
+    }
+    await context.SaveChangesAsync();
+
+
+    // ج. إنشاء المستخدم المدير الافتراضي أو تحديثه
     var adminUser = await context.Users.IgnoreQueryFilters()
         .FirstOrDefaultAsync(u => u.Username == "admin");
 
+    var ownerRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Owner");
+    // كلمة المرور الأولية تُقرأ من البيئة (AdminSettings:InitialPassword) وتُستخدم مرة واحدة فقط
+    // عند أول إنشاء للمستخدم admin. لا يُعاد ضبطها لمستخدم موجود.
+    var adminPassword = configuration["AdminSettings:InitialPassword"];
+    if (string.IsNullOrWhiteSpace(adminPassword))
+        adminPassword = "ChangeMe@Showroom2024!";
+
     if (adminUser == null)
     {
-        // كلمة المرور الأولية — يجب تغييرها فور تسجيل الدخول الأول
-        var initialPassword = configuration["AdminSettings:InitialPassword"] ?? "Admin@Showroom2024!";
         adminUser = new User
         {
             Username = "admin",
@@ -267,23 +379,43 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
             Email = "admin@showroom.local",
             DefaultBranchId = defaultBranchId,
             IsActive = true,
-            PasswordHash = identityService.HashPassword(initialPassword)
+            PasswordHash = identityService.HashPassword(adminPassword)
         };
 
         context.Users.Add(adminUser);
         await context.SaveChangesAsync();
-        Log.Information("تم إنشاء المستخدم admin للمرة الأولى. يرجى تغيير كلمة المرور فوراً.");
+
+        if (ownerRole != null)
+        {
+            context.UserRoles.Add(new UserRole { UserId = adminUser.Id, RoleId = ownerRole.Id });
+            await context.SaveChangesAsync();
+        }
+        Log.Information("تم إنشاء المستخدم admin بنجاح.");
     }
     else
     {
-        // إذا كان الهاش قديماً (SHA-256، لا يبدأ بـ $2) نُعيد تشفيره بـ BCrypt
-        if (!adminUser.PasswordHash.StartsWith("$2"))
+        // نضمن ربط دور المالك (Owner) للمستخدم admin
+        if (ownerRole != null)
         {
-            var migratedPassword = configuration["AdminSettings:InitialPassword"] ?? "Admin@Showroom2024!";
-            adminUser.PasswordHash = identityService.HashPassword(migratedPassword);
-            context.Users.Update(adminUser);
+            var hasRole = await context.UserRoles.AnyAsync(ur => ur.UserId == adminUser.Id && ur.RoleId == ownerRole.Id);
+            if (!hasRole)
+            {
+                context.UserRoles.Add(new UserRole { UserId = adminUser.Id, RoleId = ownerRole.Id });
+                await context.SaveChangesAsync();
+            }
+        }
+
+        // دعم إعادة ضبط كلمة المرور عبر متغير البيئة AdminSettings:ForceResetPassword=true
+        var forceReset = configuration["AdminSettings:ForceResetPassword"];
+        if (!string.IsNullOrWhiteSpace(forceReset) && forceReset.Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            adminUser.PasswordHash = identityService.HashPassword(adminPassword);
             await context.SaveChangesAsync();
-            Log.Warning("تم ترحيل كلمة مرور admin من SHA-256 إلى BCrypt. يرجى تغيير كلمة المرور فوراً.");
+            Log.Information("تم إعادة تعيين كلمة مرور admin بناءً على AdminSettings:ForceResetPassword=true.");
+        }
+        else
+        {
+            Log.Information("تم تأكيد دور المالك للمستخدم admin (دون تغيير كلمة المرور).");
         }
     }
 
@@ -320,5 +452,165 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
     catch (Exception ex)
     {
         Log.Warning(ex, "تعذر إنشاء جدول CashboxCloses.");
+    }
+
+    // و. إنشاء جدول المصروفات إذا لم يكن موجوداً (المشروع يعتمد EnsureCreated بلا هجرات)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Expenses"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""Title"" text NOT NULL DEFAULT '',
+                ""Amount"" numeric(18,2) NOT NULL DEFAULT 0,
+                ""Currency"" text NOT NULL DEFAULT 'IQD',
+                ""Category"" text,
+                ""Notes"" text,
+                ""ExpenseDate"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text,
+                ""LastModifiedAt"" timestamp with time zone,
+                ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            )
+        ");
+        Log.Information("تم التحقق من جدول Expenses أو إنشاؤه.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جدول Expenses.");
+    }
+
+    // ز. إضافة أعمدة حالة/عكس السندات لجدول المدفوعات (لدعم إلغاء السندات)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Payments"" ADD COLUMN IF NOT EXISTS ""Status"" text NOT NULL DEFAULT 'posted';
+            ALTER TABLE ""Payments"" ADD COLUMN IF NOT EXISTS ""ReversalOfId"" uuid;
+        ");
+        Log.Information("تم التحقق من أعمدة Status/ReversalOfId في جدول Payments.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر تعديل جدول Payments.");
+    }
+
+    // ط. إضافة أعمدة المواصفات التقنية لجدول Vehicles (العلامة التجارية، الفئة، الحالة، الوقود...)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Brand"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Trim"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Condition"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""PlateNumber"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""PlateStatus"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Mileage"" integer;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""EngineSize"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Cylinders"" integer;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Transmission"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""FuelType"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""ImportCountry"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""SeatCount"" integer;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""SeatMaterial"" text;
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Currency"" text NOT NULL DEFAULT 'IQD';
+            ALTER TABLE ""Vehicles"" ADD COLUMN IF NOT EXISTS ""Notes"" text;
+        ");
+        Log.Information("تم التحقق من أعمدة المواصفات التقنية في جدول Vehicles.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر تعديل جدول Vehicles بإضافة أعمدة المواصفات.");
+    }
+
+    // ح. إنشاء جدول الموظفين + عمود مندوب المبيعات في عقود البيع
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Employees"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""FullName"" text NOT NULL DEFAULT '',
+                ""Phone"" text NOT NULL DEFAULT '',
+                ""IdNumber"" text,
+                ""Address"" text,
+                ""Title"" text,
+                ""IsActive"" boolean NOT NULL DEFAULT true,
+                ""SignatureFilename"" text,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text,
+                ""LastModifiedAt"" timestamp with time zone,
+                ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""SalesRepId"" uuid;
+        ");
+        Log.Information("تم التحقق من جدول Employees وعمود SalesRepId.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جدول Employees.");
+    }
+
+    // ط. جداول موديول CRM (تفاعلات، صفقات، عمولات، أهداف)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""CrmInteractions"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""CustomerId"" uuid NOT NULL,
+                ""EmployeeId"" uuid,
+                ""InteractionType"" text NOT NULL DEFAULT 'call',
+                ""Notes"" text,
+                ""Outcome"" text,
+                ""FollowUpDate"" timestamp with time zone,
+                ""InteractionDate"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text, ""LastModifiedAt"" timestamp with time zone, ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ""Deals"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""CustomerId"" uuid NOT NULL,
+                ""VehicleId"" uuid,
+                ""AssignedToId"" uuid,
+                ""SaleId"" uuid,
+                ""Stage"" text NOT NULL DEFAULT 'lead',
+                ""ExpectedPrice"" numeric(18,2),
+                ""Currency"" text NOT NULL DEFAULT 'IQD',
+                ""Notes"" text,
+                ""LostReason"" text,
+                ""StageChangedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text, ""LastModifiedAt"" timestamp with time zone, ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ""EmployeeCommissions"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""EmployeeId"" uuid NOT NULL,
+                ""SaleId"" uuid,
+                ""Amount"" numeric(18,2) NOT NULL DEFAULT 0,
+                ""Currency"" text NOT NULL DEFAULT 'IQD',
+                ""IsPaid"" boolean NOT NULL DEFAULT false,
+                ""Description"" text,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text, ""LastModifiedAt"" timestamp with time zone, ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ""EmployeeTargets"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""EmployeeId"" uuid NOT NULL,
+                ""Period"" text NOT NULL DEFAULT '',
+                ""TargetSalesCount"" integer NOT NULL DEFAULT 0,
+                ""TargetRevenue"" numeric(18,2) NOT NULL DEFAULT 0,
+                ""TargetProfit"" numeric(18,2) NOT NULL DEFAULT 0,
+                ""Currency"" text NOT NULL DEFAULT 'IQD',
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text, ""LastModifiedAt"" timestamp with time zone, ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+        ");
+        Log.Information("تم التحقق من جداول CRM.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جداول CRM.");
     }
 }

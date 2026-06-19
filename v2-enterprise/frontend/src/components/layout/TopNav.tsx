@@ -33,6 +33,7 @@ const PATH_MAP: Record<string, string> = {
   'journal-entries': 'القيود اليومية',
   'trial-balance': 'ميزان المراجعة',
   'reports': 'مركز التقارير والتحليلات',
+  'notifications': 'الإشعارات والتنبيهات',
   'users': 'إدارة المستخدمين',
   'roles': 'الأدوار والصلاحيات',
   'system-health': 'صحة النظام',
@@ -139,7 +140,7 @@ export function TopNav({ collapsed, onToggleSidebar, onToggleMobile }: {
         {/* Live Datetime & Active Branch Info */}
         <div className="hidden md:flex items-center gap-1.5 rounded-full bg-secondary/40 border border-border/40 px-3 py-1 text-[11px] font-medium text-muted-foreground shrink-0 select-none">
           <span className="relative flex h-1.5 w-1.5 shrink-0">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-65 animate-ping" style={{ animationDuration: '2.5s' }} />
+            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-65 animate-ping [animation-duration:2.5s]" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </span>
           <span className="font-numeric">{timeStr}</span>

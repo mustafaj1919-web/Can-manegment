@@ -15,6 +15,7 @@ import { BrandModelSelect, type TrimSpec } from '@/components/forms/BrandModelSe
 import { useVinDecoder } from '@/lib/useVinDecoder'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { QuickSupplierDialog } from '@/components/purchases/QuickSupplierDialog'
 
 const PAYMENT_METHODS = [
   { value: 'Cash', label: 'نقدا' },
@@ -124,7 +125,7 @@ export default function NewPurchasePage() {
       vin:                 vin.trim(),
       plate_number:        plateNumber.trim(),
       mileage:             Number.parseInt(mileage || '0', 10),
-      seller_id:           Number.parseInt(sellerId, 10),
+      seller_id:           sellerId,
       purchase_price:      price,
       paid_amount:         paid,
       currency,
@@ -147,12 +148,15 @@ export default function NewPurchasePage() {
 
         {/* ── Section 1: Seller ── */}
         <SectionCard title="البائع">
+          <div className="mb-3 flex justify-end">
+            <QuickSupplierDialog onSuccess={(id) => { setSellerId(id); setErrors((e) => ({ ...e, sellerId: '' })) }} />
+          </div>
           {sellersLoading ? (
             <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
           ) : sellers.length === 0 ? (
             <div className="py-6 text-center">
               <AlertCircle className="mx-auto mb-2 h-6 w-6 text-cyan-400/60" />
-              <p className="text-sm text-muted-foreground">لا يوجد عملاء من نوع بائع</p>
+              <p className="text-sm text-muted-foreground">لا يوجد موردون مسجّلون بعد — أضِف موردًا للبدء.</p>
             </div>
           ) : (
             <div className="space-y-3">

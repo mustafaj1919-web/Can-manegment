@@ -65,8 +65,10 @@ export function MomComparisonWidget() {
     retry: 1,
   })
 
-  const subtitle = data
-    ? `${data.this_month.label} مقابل ${data.last_month.label}`
+  const valid = !!(data && data.this_month && data.last_month)
+  const changes = data?.changes ?? {}
+  const subtitle = valid
+    ? `${data!.this_month.label} مقابل ${data!.last_month.label}`
     : undefined
 
   return (
@@ -83,7 +85,9 @@ export function MomComparisonWidget() {
             <Skeleton key={i} className="h-8 rounded" />
           ))}
         </div>
-      ) : !data ? null : (
+      ) : !valid ? (
+        <div className="p-6 text-center text-xs text-muted-foreground/60">لا توجد بيانات كافية للمقارنة بعد</div>
+      ) : (
         <table className="w-full">
           <thead>
             <tr className="border-b border-border/40 bg-secondary/20 text-[10px] text-muted-foreground/60">
@@ -94,12 +98,12 @@ export function MomComparisonWidget() {
             </tr>
           </thead>
           <tbody>
-            <Row label="عدد المبيعات"   thisVal={data.this_month.sales_count}  lastVal={data.last_month.sales_count}  change={data.changes.sales_count} />
-            <Row label="الإيرادات"      thisVal={data.this_month.revenue}       lastVal={data.last_month.revenue}       change={data.changes.revenue} />
-            <Row label="مجمل الربح"     thisVal={data.this_month.gross_profit}  lastVal={data.last_month.gross_profit}  change={data.changes.gross_profit}  isProfit />
-            <Row label="المصاريف"       thisVal={data.this_month.expenses}      lastVal={data.last_month.expenses}      change={data.changes.expenses} />
-            <Row label="صافي الربح"     thisVal={data.this_month.net_profit}    lastVal={data.last_month.net_profit}    change={data.changes.net_profit}    isProfit />
-            <Row label="النقد المستلم"  thisVal={data.this_month.cash_in}       lastVal={data.last_month.cash_in}       change={data.changes.cash_in} />
+            <Row label="عدد المبيعات"   thisVal={data!.this_month.sales_count}  lastVal={data!.last_month.sales_count}  change={changes.sales_count} />
+            <Row label="الإيرادات"      thisVal={data!.this_month.revenue}       lastVal={data!.last_month.revenue}       change={changes.revenue} />
+            <Row label="مجمل الربح"     thisVal={data!.this_month.gross_profit}  lastVal={data!.last_month.gross_profit}  change={changes.gross_profit}  isProfit />
+            <Row label="المصاريف"       thisVal={data!.this_month.expenses}      lastVal={data!.last_month.expenses}      change={changes.expenses} />
+            <Row label="صافي الربح"     thisVal={data!.this_month.net_profit}    lastVal={data!.last_month.net_profit}    change={changes.net_profit}    isProfit />
+            <Row label="النقد المستلم"  thisVal={data!.this_month.cash_in}       lastVal={data!.last_month.cash_in}       change={changes.cash_in} />
           </tbody>
         </table>
       )}

@@ -180,6 +180,18 @@ export async function getSaleById(id: number | string): Promise<SaleDetail> {
   return get<SaleDetail>(`/Sales/${id}`)
 }
 
+// enum الباكيند: Cash=1, Bank=2, Cheque=3, Installment=4
+function mapPaymentMethod(method?: string): number {
+  switch (method) {
+    case 'Cash': return 1
+    case 'Bank transfer':
+    case 'Bank': return 2
+    case 'Cheque': return 3
+    case 'Installment': return 4
+    default: return 1
+  }
+}
+
 export async function createSale(payload: CreateSalePayload): Promise<{ id: number | string; invoice_number: string }> {
   // مطابقة الحقول لـ CreateSaleContractCommand المتوقع في الخلفية
   const body = {
@@ -190,9 +202,9 @@ export async function createSale(payload: CreateSalePayload): Promise<{ id: numb
     RegistrationFees: 0,
     Discount: payload.discount ?? 0,
     DownPayment: payload.paid_amount ?? 0,
-    PaymentMethod: payload.payment_method === 'Cash' ? 0 : 1, // Cash=0, Installment=1
+    PaymentMethod: mapPaymentMethod(payload.payment_method),
     InstallmentPeriodMonths: payload.number_of_months ?? 0,
-    ProfitRatePercentage: 0
+    ProfitRatePercentage: (payload as any).profit_rate ?? 0
   }
   const res = await post<any>('/Sales', body)
   return {

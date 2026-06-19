@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using MediatR;
 using FluentValidation;
+using CarShowroomManagementV2.Application.Common.Behaviors;
 
 namespace CarShowroomManagementV2.Application
 {
@@ -16,6 +17,9 @@ namespace CarShowroomManagementV2.Application
 
             // تسجيل FluentValidation للتحقق التلقائي من صحة مدخلات الـ API والـ Commands
             services.AddValidatorsFromAssembly(assembly);
+
+            // تفعيل تشغيل الـ validators داخل MediatR pipeline (كانت مسجّلة لكن لا تُنفَّذ)
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
             return services;
         }

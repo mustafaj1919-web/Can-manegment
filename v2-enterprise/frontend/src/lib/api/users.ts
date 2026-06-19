@@ -25,14 +25,14 @@ export interface CreateUserPayload {
   username: string
   password: string
   role: UserRole
-  branch_id?: number | null
+  branch_id?: number | string | null
   can_access_all_branches?: boolean
 }
 
 export interface UpdateUserPayload {
   username: string
   role: UserRole
-  branch_id?: number | null
+  branch_id?: number | string | null
   can_access_all_branches?: boolean
   is_active_user?: boolean
   password?: string
@@ -43,37 +43,31 @@ export interface ResetPasswordPayload {
 }
 
 export async function listUsers(params: UsersListParams = {}): Promise<UsersListResponse> {
-  return Promise.resolve({
-    total: 0,
-    page: params.page ?? 1,
-    per_page: params.per_page ?? 25,
-    roles: [],
-    items: []
-  })
+  return get<UsersListResponse>('/users', { params })
 }
 
 export async function getUser(id: number | string): Promise<User> {
-  return Promise.reject(new Error('المستخدم غير موجود'))
+  return get<User>(`/users/${id}`)
 }
 
 export async function createUser(payload: CreateUserPayload): Promise<User> {
-  return Promise.reject(new Error('إضافة مستخدمين غير متاحة حالياً'))
+  return post<User>('/users', payload)
 }
 
 export async function updateUser(id: number | string, payload: UpdateUserPayload): Promise<User> {
-  return Promise.reject(new Error('تعديل المستخدمين غير متاح حالياً'))
+  return put<User>(`/users/${id}`, payload)
 }
 
 export async function toggleUserActive(id: number | string): Promise<User> {
-  return Promise.reject(new Error('تعديل حالة المستخدم غير متاح حالياً'))
+  return post<User>(`/users/${id}/toggle-active`, {})
 }
 
 export async function resetUserPassword(id: number | string, payload: ResetPasswordPayload): Promise<{ success: boolean }> {
-  return Promise.reject(new Error('إعادة تعيين كلمة المرور غير متاح حالياً'))
+  return post<{ success: boolean }>(`/users/${id}/reset-password`, payload)
 }
 
 export async function deleteUser(id: number | string): Promise<{ success: boolean }> {
-  return Promise.reject(new Error('حذف المستخدم غير متاح حالياً'))
+  return del<{ success: boolean }>(`/users/${id}`)
 }
 
 export const ROLE_COLORS: Record<string, string> = {

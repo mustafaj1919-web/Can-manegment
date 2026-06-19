@@ -62,7 +62,7 @@ const REPORT_LINKS = [
     color: 'amber' as const,
     title: 'ربحية السيارات',
     description: 'صافي الربح وهامش الربح المالي لكل سيارة',
-    available: false,
+    available: true,
   },
   {
     href: '/reports/cashbox-movement',
@@ -70,7 +70,7 @@ const REPORT_LINKS = [
     color: 'emerald' as const,
     title: 'حركة الصندوق التفصيلية',
     description: 'الحركات والعمليات النقدية التفصيلية للصندوق',
-    available: false,
+    available: true,
   },
   {
     href: '/reports/bank-movement',
@@ -78,7 +78,7 @@ const REPORT_LINKS = [
     color: 'indigo' as const,
     title: 'حركة البنك',
     description: 'الحركات والعمليات البنكية التفصيلية',
-    available: false,
+    available: true,
   },
   {
     href: '/reports/cost-center',
@@ -86,7 +86,15 @@ const REPORT_LINKS = [
     color: 'indigo' as const,
     title: 'تقرير مراكز التكلفة',
     description: 'الإيرادات والمصاريف لكل مركز تكلفة',
-    available: false,
+    available: true,
+  },
+  {
+    href: '/reports/branch-comparison',
+    icon: Building2,
+    color: 'indigo' as const,
+    title: 'مقارنة الفروع',
+    description: 'الأداء المالي والتشغيلي لكل فرع بالتفصيل',
+    available: true,
   },
   {
     href: '/reports/accounting-rules',
@@ -94,7 +102,7 @@ const REPORT_LINKS = [
     color: 'amber' as const,
     title: 'فحص قواعد المحاسبة',
     description: 'التحقق من توازن وسلامة القيود المحاسبية',
-    available: false,
+    available: true,
   },
 ]
 

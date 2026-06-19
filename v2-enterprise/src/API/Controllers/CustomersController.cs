@@ -33,12 +33,22 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, customerId = id, message = "تم تسجيل العميل وإنشاء حسابه المالي بنجاح." });
         }
 
+        // 1.ب تعديل بيانات عميل موجود
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCustomerCommand command)
+        {
+            command.Id = id;
+            var customerId = await Mediator.Send(command);
+            return Ok(new { success = true, customerId, message = "تم تحديث بيانات العميل بنجاح." });
+        }
+
         // 2. قائمة العملاء
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] int page = 1,
             [FromQuery] int per_page = 25,
-            [FromQuery] string? search = null)
+            [FromQuery] string? search = null,
+            [FromQuery] string? customer_type = null)
         {
             if (page < 1) page = 1;
             if (per_page < 1 || per_page > 100) per_page = 25;
@@ -56,10 +66,26 @@ namespace CarShowroomManagementV2.API.Controllers
                 ).ToList();
             }
 
+            if (!string.IsNullOrWhiteSpace(customer_type))
+            {
+                all = all.Where(c => c.CustomerType.Equals(customer_type, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
             var total = all.Count;
             var data = all.Skip((page - 1) * per_page).Take(per_page).ToList();
 
             return Ok(new { success = true, total, page, per_page, data });
+        }
+
+        // 2.ب جلب عميل واحد بمعرّفه
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var all = await Mediator.Send(new GetCustomersListQuery());
+            var customer = all.FirstOrDefault(c => c.Id == id);
+            if (customer == null)
+                return NotFound(new { success = false, message = "العميل غير موجود." });
+            return Ok(new { success = true, data = customer });
         }
 
         // 3. كشف حساب أستاذ مساعد للعميل
@@ -80,10 +106,51 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, data = statement });
         }
 
+        // 5. قائمة مستندات العميل
+        [HttpGet("{id}/documents")]
+        public async Task<IActionResult> ListDocuments(Guid id)
+        {
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
+            if (customer == null)
+                return NotFound(new { success = false, message = "العميل غير موجود." });
+
+            var docs = await _context.CustomerDocuments
+                .Where(d => d.CustomerId == id)
+                .OrderByDescending(d => d.UploadedAt)
+                .Select(d => new
+                {
+                    id             = d.Id,
+                    document_type  = d.DocumentType,
+                    filename       = d.FileName,
+                    original_filename = d.OriginalFileName,
+                    uploaded_at    = d.UploadedAt
+                })
+                .ToListAsync();
+
+            return Ok(new { success = true, data = docs });
+        }
+
+        // 5.ب حذف مستند
+        [HttpDelete("{id}/documents/{docId}")]
+        public async Task<IActionResult> DeleteDocument(Guid id, Guid docId)
+        {
+            var doc = await _context.CustomerDocuments.FirstOrDefaultAsync(d => d.Id == docId && d.CustomerId == id);
+            if (doc == null)
+                return NotFound(new { success = false, message = "المستند غير موجود." });
+
+            var storagePath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "private", "customers");
+            var fullPath = Path.Combine(storagePath, doc.FileName);
+            if (System.IO.File.Exists(fullPath)) System.IO.File.Delete(fullPath);
+
+            _context.CustomerDocuments.Remove(doc);
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, message = "تم حذف المستند." });
+        }
+
         private static readonly string[] AllowedDocExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
         private const long MaxDocBytes = 20 * 1024 * 1024; // 20 MB
 
-        // 5. رفع مستند للعميل
+        // 6. رفع مستند للعميل
         [HttpPost("{id}/documents")]
         public async Task<IActionResult> UploadDocument(Guid id, [FromForm] string documentType, IFormFile file)
         {

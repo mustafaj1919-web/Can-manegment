@@ -125,7 +125,7 @@ namespace CarShowroomManagementV2.UnitTests.Sales
             await SeedAccountAsync(context, Guid.NewGuid(), "1201", "مخزون السيارات للمعرض", AccountType.Asset, branchId);
             await SeedAccountAsync(context, Guid.NewGuid(), "4101", "إيرادات مبيعات السيارات", AccountType.Revenue, branchId);
             await SeedAccountAsync(context, Guid.NewGuid(), "5101", "تكلفة السيارات المباعة COGS", AccountType.Expense, branchId);
-            await SeedAccountAsync(context, Guid.NewGuid(), "1101", "صندوق النقدية الرئيسي", AccountType.Asset, branchId);
+            await SeedAccountAsync(context, Guid.NewGuid(), "111001", "صندوق النقدية الرئيسي", AccountType.Asset, branchId);
             await SeedAccountAsync(context, Guid.NewGuid(), "2202", "ضريبة المبيعات المستحقة", AccountType.Liability, branchId);
             await SeedAccountAsync(context, Guid.NewGuid(), "2203", "أمانات رسوم التسجيل", AccountType.Liability, branchId);
             await SeedAccountAsync(context, Guid.NewGuid(), "2301", "إيرادات أقساط مؤجلة", AccountType.Liability, branchId);

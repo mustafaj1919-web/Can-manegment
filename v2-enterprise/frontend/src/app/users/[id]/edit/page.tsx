@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export default function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const userId = parseInt(id, 10)
+  const userId = id
 
   const { data: user, isLoading, isError } = useQuery({
     queryKey: ['user', userId],

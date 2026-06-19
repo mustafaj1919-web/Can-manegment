@@ -8,10 +8,15 @@ import {
   AlertTriangle, ArrowRight, Calendar, Car, CheckCircle2, ChevronDown,
   Clock, CreditCard, Edit, ExternalLink, FileText,
   MapPin, Phone, Printer, RefreshCw, Shield, TrendingUp, User, Wallet, XCircle,
+  Upload, Trash2, Eye, Download,
 } from 'lucide-react'
 import { cn, formatDate, formatMoney } from '@/lib/utils'
-import { getCustomerById, getCustomerStatement, DOC_TYPE_LABEL } from '@/lib/api/customers'
-import type { StatementSaleItem, StatementSchedule } from '@/lib/api/customers'
+import {
+  getCustomerById, getCustomerStatement, getCustomerDocuments,
+  uploadCustomerDocument, deleteCustomerDocument, getDocumentUrl,
+  DOC_TYPE_LABEL, DOCUMENT_SLOTS,
+} from '@/lib/api/customers'
+import type { StatementSaleItem, StatementSchedule, CustomerDocumentType } from '@/lib/api/customers'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 
@@ -117,6 +122,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const qc = useQueryClient()
   const [tab, setTab] = useState('overview')
   const [expandedSale, setExpandedSale] = useState<number | null>(null)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [uploadDocType, setUploadDocType] = useState<CustomerDocumentType>('id_front')
 
   const { data: customer, isLoading, isError } = useQuery({
     queryKey: ['customer', id],
@@ -133,6 +140,38 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     retry: 1,
     enabled: !!id,
   })
+
+  const { data: documents = [], refetch: refetchDocs } = useQuery({
+    queryKey: ['customer-documents', id],
+    queryFn: () => getCustomerDocuments(id),
+    staleTime: 30_000,
+    enabled: !!id,
+  })
+
+  async function handleDocUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingDoc(true)
+    try {
+      await uploadCustomerDocument(id, uploadDocType, file)
+      await refetchDocs()
+    } catch (err) {
+      console.error('Upload failed:', err)
+    } finally {
+      setUploadingDoc(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleDocDelete(docId: number | string) {
+    if (!confirm('هل تريد حذف هذا المستند؟')) return
+    try {
+      await deleteCustomerDocument(id, docId)
+      await refetchDocs()
+    } catch (err) {
+      console.error('Delete failed:', err)
+    }
+  }
 
   if (isLoading) return <PageSkeleton />
 
@@ -172,9 +211,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <h1 className="text-[22px] font-black tracking-tight">{customer.name}</h1>
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 <span className={cn('text-[11px] font-bold px-2 py-0.5 rounded-full border',
-                  customer.customer_type === 'Buyer' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  customer.customer_type === 'Individual' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                 )}>
-                  {customer.customer_type === 'Buyer' ? 'مشتري' : 'بائع'}
+                  {customer.customer_type === 'Individual' ? 'فرد' : 'شركة'}
                 </span>
                 <span className={cn('text-[11px] font-bold', health.color)}>{health.label}</span>
                 <HealthDots score={health.score} color={health.color} />
@@ -462,30 +501,111 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
             {/* DOCUMENTS */}
             {tab === 'documents' && (
-              <div>
-                {!customer.documents || customer.documents.length === 0 ? (
-                  <div className="flex flex-col items-center py-20 gap-3 text-muted-foreground">
-                    <Shield className="h-12 w-12 opacity-20" />
-                    <p className="text-sm font-family-cairo">لا توجد مستندات</p>
+              <div className="space-y-4">
+                {/* Upload Panel */}
+                <div className="rounded-xl border border-border/40 bg-secondary/20 p-4">
+                  <p className="text-xs font-semibold text-foreground mb-3">رفع مستند جديد</p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex-1 min-w-[160px]">
+                      <label className="mb-1 block text-[10px] text-muted-foreground">نوع المستند</label>
+                      <select
+                        value={uploadDocType}
+                        onChange={e => setUploadDocType(e.target.value as CustomerDocumentType)}
+                        aria-label="نوع المستند"
+                        className="h-9 w-full rounded-lg border border-border/50 bg-secondary/30 px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      >
+                        {DOCUMENT_SLOTS.map(slot => (
+                          <option key={slot.type} value={slot.type}>{slot.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] text-muted-foreground">الملف (PDF, JPG, PNG)</label>
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          className="sr-only"
+                          onChange={handleDocUpload}
+                          disabled={uploadingDoc}
+                          aria-label="رفع ملف مستند"
+                        />
+                        <span className={cn(
+                          'flex h-9 items-center gap-2 rounded-lg border px-4 text-xs font-semibold transition-colors',
+                          uploadingDoc
+                            ? 'border-border/30 bg-secondary/20 text-muted-foreground cursor-not-allowed'
+                            : 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer'
+                        )}>
+                          {uploadingDoc
+                            ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" />جاري الرفع...</>
+                            : <><Upload className="h-3.5 w-3.5" />اختر ملف</>}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Documents Grid */}
+                {documents.length === 0 ? (
+                  <div className="flex flex-col items-center py-16 gap-3 text-muted-foreground">
+                    <Shield className="h-10 w-10 opacity-20" />
+                    <p className="text-sm">لا توجد مستندات مرفوعة</p>
+                    <p className="text-xs opacity-60">ارفع وثائق الهوية والمستمسكات من الأعلى</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {customer.documents.map((doc: any) => (
-                      <a key={doc.id} href={doc.file_path ? `/uploads/${doc.file_path}` : '#'} target="_blank" rel="noreferrer"
-                        className="group rounded-xl border border-subtle bg-bg-surface p-4 hover:border-primary/40 hover:bg-primary/[0.02] transition-colors"
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                            <FileText className="h-4 w-4 text-primary" />
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {documents.map(doc => {
+                      const ext = (doc.original_filename ?? doc.filename ?? '').split('.').pop()?.toLowerCase() ?? ''
+                      const isImg = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
+                      const isPdf = ext === 'pdf'
+                      const viewUrl = getDocumentUrl(doc.filename)
+                      return (
+                        <div key={doc.id} className="group rounded-xl border border-border/40 bg-bg-surface p-4 hover:border-primary/30 hover:bg-primary/[0.02] transition-colors">
+                          <div className="flex items-start gap-3">
+                            <div className={cn(
+                              'h-10 w-10 shrink-0 rounded-lg flex items-center justify-center border',
+                              isPdf ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                    : isImg ? 'bg-sky-500/10 border-sky-500/20 text-sky-400'
+                                    : 'bg-primary/10 border-primary/20 text-primary'
+                            )}>
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-foreground truncate">
+                                {getDocumentTypeLabel(doc.document_type)}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {doc.original_filename ?? doc.filename}
+                              </p>
+                              {doc.uploaded_at && (
+                                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                  {formatDate(doc.uploaded_at)}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[12px] font-bold truncate">{getDocumentTypeLabel(doc.doc_type)}</p>
-                            {doc.created_at && <p className="text-[10px] text-muted-foreground">{formatDate(doc.created_at)}</p>}
+                          <div className="mt-3 flex gap-2">
+                            <a
+                              href={viewUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/40 bg-secondary/30 px-3 py-1.5 text-[11px] font-semibold text-foreground hover:bg-secondary/60 transition-colors"
+                            >
+                              {isImg ? <Eye className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+                              {isImg ? 'عرض' : 'تحميل'}
+                            </a>
+                            <button
+                              type="button"
+                              aria-label="حذف المستند"
+                              onClick={() => handleDocDelete(doc.id)}
+                              className="flex items-center gap-1 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-[11px] font-semibold text-rose-400 hover:bg-rose-500/20 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </div>
-                        {doc.notes && <p className="text-[11px] text-muted-foreground">{doc.notes}</p>}
-                      </a>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

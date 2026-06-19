@@ -192,21 +192,60 @@ BEGIN
 
 -- ── Vehicles (5 demo cars) ──────────────────────────────────────────────────
 INSERT INTO ""Vehicles""
-  (""Id"",""Model"",""ChassisNumber"",""EngineNumber"",""Color"",""Year"",
+  (""Id"",""Brand"",""Model"",""Trim"",""ChassisNumber"",""EngineNumber"",""Color"",""Year"",
+   ""Condition"",""PlateNumber"",""PlateStatus"",""Mileage"",""EngineSize"",""Cylinders"",
+   ""Transmission"",""FuelType"",""ImportCountry"",""SeatCount"",""Currency"",
    ""PurchaseCost"",""CustomDuties"",""MaintenanceCost"",""BookValue"",
    ""TargetSellingPrice"",""IsSold"",""Status"",""CreatedAt"",""CreatedBy"",""BranchId"")
 VALUES
-  (v1,'Toyota Camry 2024','DEMO-VIN-CAM-001','2AZ-FE-001','White',2024,
+  (v1,'Toyota','Camry','LE','DEMO-VIN-CAM-001','2AZ-FE-001','White',2024,
+   'New','11-A-12345','Registered',0,'2.5',4,
+   'Automatic','Gasoline','Japan',5,'IQD',
    25000000,2000000,500000,27500000,32000000,false,'Available',now_ts,admin_id,branch_id),
-  (v2,'Kia Sportage 2023','DEMO-VIN-KIA-002','G4NA-789','Black',2023,
+  (v2,'Kia','Sportage','EX','DEMO-VIN-KIA-002','G4NA-789','Black',2023,
+   'Used','22-B-99876','Registered',18500,'1.6',4,
+   'Automatic','Gasoline','Korea',5,'IQD',
    20000000,1500000,300000,21800000,26000000,false,'Available',now_ts-INTERVAL '10 days',admin_id,branch_id),
-  (v3,'Hyundai Tucson 2022','DEMO-VIN-HYN-003','G4KD-456','Silver',2022,
+  (v3,'Hyundai','Tucson','Smart','DEMO-VIN-HYN-003','G4KD-456','Silver',2022,
+   'Used','33-C-44567','Registered',32000,'2.0',4,
+   'Automatic','Gasoline','Korea',5,'IQD',
    18000000,1200000,800000,20000000,24000000,true,'Sold',now_ts-INTERVAL '5 days',admin_id,branch_id),
-  (v4,'Toyota Corolla 2023','DEMO-VIN-COR-004','1ZR-FE-222','Red',2023,
+  (v4,'Toyota','Corolla','SE','DEMO-VIN-COR-004','1ZR-FE-222','Red',2023,
+   'New','44-D-77890','Registered',5000,'1.8',4,
+   'Automatic','Gasoline','Japan',5,'IQD',
    15000000,1000000,200000,16200000,20000000,false,'Available',now_ts-INTERVAL '20 days',admin_id,branch_id),
-  (v5,'BMW X5 2023','DEMO-VIN-BMW-005','N55-001','Black',2023,
+  (v5,'BMW','X5','xDrive40i','DEMO-VIN-BMW-005','N55-001','Black',2023,
+   'New','55-E-33210','Registered',8000,'3.0',6,
+   'Automatic','Gasoline','Germany',7,'IQD',
    45000000,3500000,600000,49100000,58000000,false,'Available',now_ts-INTERVAL '3 days',admin_id,branch_id)
 ON CONFLICT (""Id"") DO NOTHING;
+
+-- Update existing demo vehicles with spec fields (in case they were seeded before specs were added)
+UPDATE ""Vehicles"" SET
+  ""Brand""='Toyota',""Trim""='LE',""Condition""='New',""PlateNumber""='11-A-12345',
+  ""PlateStatus""='Registered',""Mileage""=0,""EngineSize""='2.5',""Cylinders""=4,
+  ""Transmission""='Automatic',""FuelType""='Gasoline',""ImportCountry""='Japan',""SeatCount""=5,""Currency""='IQD'
+WHERE ""Id""=v1 AND ""Brand"" IS NULL;
+UPDATE ""Vehicles"" SET
+  ""Brand""='Kia',""Trim""='EX',""Condition""='Used',""PlateNumber""='22-B-99876',
+  ""PlateStatus""='Registered',""Mileage""=18500,""EngineSize""='1.6',""Cylinders""=4,
+  ""Transmission""='Automatic',""FuelType""='Gasoline',""ImportCountry""='Korea',""SeatCount""=5,""Currency""='IQD'
+WHERE ""Id""=v2 AND ""Brand"" IS NULL;
+UPDATE ""Vehicles"" SET
+  ""Brand""='Hyundai',""Trim""='Smart',""Condition""='Used',""PlateNumber""='33-C-44567',
+  ""PlateStatus""='Registered',""Mileage""=32000,""EngineSize""='2.0',""Cylinders""=4,
+  ""Transmission""='Automatic',""FuelType""='Gasoline',""ImportCountry""='Korea',""SeatCount""=5,""Currency""='IQD'
+WHERE ""Id""=v3 AND ""Brand"" IS NULL;
+UPDATE ""Vehicles"" SET
+  ""Brand""='Toyota',""Trim""='SE',""Condition""='New',""PlateNumber""='44-D-77890',
+  ""PlateStatus""='Registered',""Mileage""=5000,""EngineSize""='1.8',""Cylinders""=4,
+  ""Transmission""='Automatic',""FuelType""='Gasoline',""ImportCountry""='Japan',""SeatCount""=5,""Currency""='IQD'
+WHERE ""Id""=v4 AND ""Brand"" IS NULL;
+UPDATE ""Vehicles"" SET
+  ""Brand""='BMW',""Trim""='xDrive40i',""Condition""='New',""PlateNumber""='55-E-33210',
+  ""PlateStatus""='Registered',""Mileage""=8000,""EngineSize""='3.0',""Cylinders""=6,
+  ""Transmission""='Automatic',""FuelType""='Gasoline',""ImportCountry""='Germany',""SeatCount""=7,""Currency""='IQD'
+WHERE ""Id""=v5 AND ""Brand"" IS NULL;
 
 -- ── Accounts for demo entities ───────────────────────────────────────────────
 INSERT INTO ""Accounts"" (""Id"",""AccountCode"",""Name"",""Type"",""IsActive"",""BranchId"",""CreatedBy"",""CreatedAt"")

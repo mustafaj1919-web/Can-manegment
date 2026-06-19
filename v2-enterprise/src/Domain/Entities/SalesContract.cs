@@ -25,6 +25,7 @@ namespace CarShowroomManagementV2.Domain.Entities
 
         public PaymentMethod PaymentMethod { get; set; } // Cash or Installment
         public string Status { get; set; } = "Active"; // Active, Cancelled
+        public Guid? SalesRepId { get; set; } // مندوب المبيعات (موظف) المسؤول عن العقد
 
         // علاقات التنقل
         public virtual Customer? Customer { get; set; }

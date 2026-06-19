@@ -285,6 +285,7 @@ function QuickPayRow({ planId, currency, onCancel, onSuccess }: {
           <select
             value={paymentMethod}
             onChange={(e) => setPaymentMethod(e.target.value)}
+            aria-label="طريقة الدفع"
             className="w-full h-8 text-xs bg-card border border-border/50 rounded-md px-2 focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="Cash">نقداً</option>

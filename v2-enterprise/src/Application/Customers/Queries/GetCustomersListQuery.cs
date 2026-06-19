@@ -22,10 +22,16 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
         public string? Address { get; set; }
         public string? IdType { get; set; }
         public string IdNumber { get; set; } = string.Empty;
+        public DateTime? IdIssueDate { get; set; }
+        public DateTime? IdExpiryDate { get; set; }
+        public string? Nationality { get; set; }
+        public DateTime? DateOfBirth { get; set; }
         public string CustomerType { get; set; } = string.Empty;
+        public string? Notes { get; set; }
         public Guid AccountId { get; set; }
         public string AccountCode { get; set; } = string.Empty;
         public Guid BranchId { get; set; }
+        public DateTime? CreatedAt { get; set; }
     }
 
     public class GetCustomersListQueryHandler : IRequestHandler<GetCustomersListQuery, List<CustomerDto>>
@@ -50,10 +56,16 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                     Address = c.Address,
                     IdType = c.IdType,
                     IdNumber = c.IdNumber,
+                    IdIssueDate = c.IdIssueDate,
+                    IdExpiryDate = c.IdExpiryDate,
+                    Nationality = c.Nationality,
+                    DateOfBirth = c.DateOfBirth,
                     CustomerType = c.CustomerType,
+                    Notes = c.Notes,
                     AccountId = c.AccountId,
                     AccountCode = c.Account != null ? c.Account.AccountCode : string.Empty,
-                    BranchId = c.BranchId
+                    BranchId = c.BranchId,
+                    CreatedAt = c.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
         }

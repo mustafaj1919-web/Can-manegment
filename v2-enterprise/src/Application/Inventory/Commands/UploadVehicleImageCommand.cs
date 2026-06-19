@@ -9,14 +9,20 @@ using CarShowroomManagementV2.Domain.Entities;
 
 namespace CarShowroomManagementV2.Application.Inventory.Commands
 {
-    public class UploadVehicleImageCommand : IRequest<Guid>
+    public class VehicleImageResult
+    {
+        public Guid Id { get; set; }
+        public string FileName { get; set; } = string.Empty;
+    }
+
+    public class UploadVehicleImageCommand : IRequest<VehicleImageResult>
     {
         public Guid VehicleId { get; set; }
         public string OriginalFileName { get; set; } = string.Empty;
         public byte[] FileBytes { get; set; } = Array.Empty<byte>();
     }
 
-    public class UploadVehicleImageCommandHandler : IRequestHandler<UploadVehicleImageCommand, Guid>
+    public class UploadVehicleImageCommandHandler : IRequestHandler<UploadVehicleImageCommand, VehicleImageResult>
     {
         private readonly IApplicationDbContext _context;
 
@@ -25,7 +31,7 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
             _context = context;
         }
 
-        public async Task<Guid> Handle(UploadVehicleImageCommand request, CancellationToken cancellationToken)
+        public async Task<VehicleImageResult> Handle(UploadVehicleImageCommand request, CancellationToken cancellationToken)
         {
             var vehicle = await _context.Vehicles
                 .FirstOrDefaultAsync(v => v.Id == request.VehicleId, cancellationToken);
@@ -58,7 +64,7 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
             _context.VehicleImages.Add(image);
             await _context.SaveChangesAsync(cancellationToken);
 
-            return image.Id;
+            return new VehicleImageResult { Id = image.Id, FileName = secureFileName };
         }
     }
 }

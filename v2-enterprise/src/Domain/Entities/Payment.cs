@@ -16,6 +16,9 @@ namespace CarShowroomManagementV2.Domain.Entities
         public Guid ContraAccountId { get; set; } // الحساب المقابل (مثل العميل أو المورد)
         public Guid? JournalEntryId { get; set; } // القيد المحاسبي المولد تلقائياً
 
+        public string Status { get; set; } = "posted"; // posted | cancelled
+        public Guid? ReversalOfId { get; set; } // إن كان هذا السند عكسًا لسند آخر
+
         // علاقات التنقل
         public virtual Account? Account { get; set; }
         public virtual Account? ContraAccount { get; set; }

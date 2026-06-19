@@ -116,7 +116,7 @@ function TrialCard({ icon: Icon, label, value, tone }: { icon: ElementType; labe
 
 interface AccountFormProps {
   mode: 'add' | 'edit'
-  initial?: Partial<AccountPayload & { id: number }>
+  initial?: Partial<AccountPayload>
   allAccounts: Array<{ id: number; code: string; name: string }>
   onClose: () => void
   onSuccess: () => void
@@ -127,10 +127,10 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
   const [name, setName]         = useState(initial?.name ?? '')
   const [type, setType]         = useState<string>(initial?.type ?? '')
   const [clf, setClf]           = useState<string>(initial?.classification ?? '')
-  const [parentId, setParentId] = useState<string>(String(initial?.parent_id ?? ''))
+  const [parentCode, setParentCode] = useState<string>(initial?.parent_code ?? '')
 
   const createMut = useMutation({ mutationFn: createAccount, onSuccess: () => { toast.success('تم إضافة الحساب بنجاح'); onSuccess() }, onError: (e) => toast.error(extractApiError(e)) })
-  const updateMut = useMutation({ mutationFn: ({ id, ...p }: AccountPayload & { id: number }) => updateAccount(id, p), onSuccess: () => { toast.success('تم تعديل الحساب بنجاح'); onSuccess() }, onError: (e) => toast.error(extractApiError(e)) })
+  const updateMut = useMutation({ mutationFn: ({ code, ...p }: AccountPayload) => updateAccount(code, p), onSuccess: () => { toast.success('تم تعديل الحساب بنجاح'); onSuccess() }, onError: (e) => toast.error(extractApiError(e)) })
 
   const isPending = createMut.isPending || updateMut.isPending
 
@@ -141,12 +141,12 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
       name: name.trim(),
       type: type as AccountPayload['type'],
       classification: (clf as AccountClassification) || undefined,
-      parent_id: parentId ? Number(parentId) : null,
+      parent_code: parentCode || null,
     }
     if (mode === 'add') {
       createMut.mutate(payload)
-    } else if (initial?.id) {
-      updateMut.mutate({ id: initial.id, ...payload })
+    } else {
+      updateMut.mutate(payload)
     }
   }
 
@@ -155,7 +155,7 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }} className="glass w-full max-w-md rounded-xl border border-border/50 p-6 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">{mode === 'add' ? 'إضافة حساب جديد' : 'تعديل الحساب'}</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40 hover:text-foreground transition-colors"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40 hover:text-foreground transition-colors"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -177,12 +177,12 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
           </div>
           <div>
             <label className="mb-1.5 block text-xs text-muted-foreground">الحساب الأب</label>
-            <Select value={parentId} onValueChange={setParentId}>
+            <Select value={parentCode} onValueChange={setParentCode}>
               <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="بدون أب (حساب رئيسي)" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="">بدون أب (حساب رئيسي)</SelectItem>
                 {allAccounts.map(a => (
-                  <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                  <SelectItem key={a.id} value={a.code}>{a.code} — {a.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -365,7 +365,7 @@ export default function ChartOfAccountsPage() {
   const [search, setSearch]       = useState('')
   const [activeClf, setActiveClf] = useState<string>('')
   const [expanded, setExpanded]   = useState<Set<number>>(new Set())
-  const [dialog, setDialog]       = useState<null | { mode: 'add' | 'edit'; initial?: Partial<AccountPayload & { id: number }> }>(null)
+  const [dialog, setDialog]       = useState<null | { mode: 'add' | 'edit'; initial?: Partial<AccountPayload> }>(null)
   const [deleteTarget, setDeleteTarget] = useState<ChartAccountNode | null>(null)
 
   const { data, isLoading, isError } = useQuery({ queryKey: ['chart-of-accounts'], queryFn: getChartOfAccounts, staleTime: 60_000, retry: 1 })
@@ -378,7 +378,7 @@ export default function ChartOfAccountsPage() {
   })
 
   const reactivateMut = useMutation({
-    mutationFn: (id: number) => updateAccount(id, { is_active: true }),
+    mutationFn: (code: string) => updateAccount(code, { is_active: true }),
     onSuccess: () => { toast.success('تمت إعادة تفعيل الحساب'); qc.invalidateQueries({ queryKey: ['chart-of-accounts'] }) },
     onError: (e) => toast.error(extractApiError(e)),
   })
@@ -573,10 +573,10 @@ export default function ChartOfAccountsPage() {
                       search={search}
                       expanded={expanded}
                       onToggle={toggleExpand}
-                      onEdit={(n) => setDialog({ mode: 'edit', initial: { id: n.id, code: n.code, name: n.name, type: n.type, classification: n.classification, parent_id: n.parent_id } })}
+                      onEdit={(n) => setDialog({ mode: 'edit', initial: { code: n.code, name: n.name, type: n.type, classification: n.classification, parent_code: n.parent_code } })}
                       onDelete={setDeleteTarget}
-                      onReactivate={(n) => reactivateMut.mutate(n.id)}
-                      onAddChild={(n) => setDialog({ mode: 'add', initial: { parent_id: n.id, type: n.type } })}
+                      onReactivate={(n) => reactivateMut.mutate(n.code)}
+                      onAddChild={(n) => setDialog({ mode: 'add', initial: { parent_code: n.code, type: n.type } })}
                     />
                   ))}
                   {visibleRoots.length === 0 && (
@@ -613,7 +613,7 @@ export default function ChartOfAccountsPage() {
               <h3 className="mb-1.5 text-sm font-bold text-foreground">أرشفة الحساب</h3>
               <p className="mb-5 text-xs text-muted-foreground">هل تريد أرشفة الحساب <span className="font-semibold text-foreground">{deleteTarget.code} — {deleteTarget.name}</span>؟ سيبقى الحساب وسجله المحاسبي محفوظين ويمكن إعادة تفعيله لاحقاً.</p>
               <div className="flex gap-2">
-                <Button size="sm" variant="destructive" disabled={deleteMut.isPending} onClick={() => deleteMut.mutate(deleteTarget.id)} className="flex-1">
+                <Button size="sm" variant="destructive" disabled={deleteMut.isPending} onClick={() => deleteMut.mutate(deleteTarget.code)} className="flex-1">
                   {deleteMut.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'أرشفة'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(null)} className="flex-1 border border-border/50">إلغاء</Button>

@@ -111,20 +111,21 @@
     --interactive-press-scale: 0.983;
 
     /* ── Shadows ── */
-    --shadow-xs: none;
-    --shadow-sm: none;
-    --shadow-md: none;
-    --shadow-lg: none;
-    --shadow-xl: none;
-    --elevated-shadow: none;
-    --interactive-shadow: none;
-    --card-hover-shadow: none;
+    /* Dark mode — depth through shadow, not light */
+    --shadow-xs: 0 1px 3px rgba(0,0,0,0.5), 0 1px 1px rgba(0,0,0,0.4);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 4px 18px rgba(0,0,0,0.6), 0 2px 5px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.65), 0 4px 10px rgba(0,0,0,0.35);
+    --shadow-xl: 0 16px 52px rgba(0,0,0,0.75), 0 8px 18px rgba(0,0,0,0.45);
+    --elevated-shadow: var(--shadow-md);
+    --interactive-shadow: var(--shadow-lg);
+    --card-hover-shadow: 0 10px 36px rgba(0,0,0,0.7), 0 3px 8px rgba(0,0,0,0.35);
 
-    --glow-primary: rgba(230, 57, 70, 0.15); /* red glow */
-    --glow-gold:    rgba(244, 165, 34, 0.15); /* gold glow */
-    --glow-success: rgba(16,185,129, 0.04);
-    --glow-warning: rgba(245,158,11, 0.04);
-    --glow-danger:  rgba(244,63,94, 0.04);
+    --glow-primary: rgba(230, 57, 70, 0.22);
+    --glow-gold:    rgba(244, 165, 34, 0.22);
+    --glow-success: rgba(16,185,129, 0.14);
+    --glow-warning: rgba(245,158,11, 0.14);
+    --glow-danger:  rgba(244,63,94, 0.14);
 
     /* ── Layout ── */
     --sidebar-width:           260px; /* RevAuto Sidebar is 260px */
@@ -261,7 +262,7 @@
     min-height: 100vh;
     /* Subtle red halo at the top — matches the automotive brand */
     background:
-      radial-gradient(ellipse 65% 26% at 50% 0%, rgba(230, 57, 70,0.02) 0%, transparent 65%),
+      radial-gradient(ellipse 80% 35% at 50% 0%, rgba(230, 57, 70, 0.07) 0%, transparent 68%),
       hsl(var(--background));
     background-attachment: fixed;
   }
@@ -272,10 +273,11 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    opacity: 0.3;
-    background-image: radial-gradient(rgba(148, 163, 184, 0.13) 0.6px, transparent 0.6px);
-    background-size: 18px 18px;
-    mask-image: linear-gradient(to bottom, black, transparent 58%);
+    opacity: 0.55;
+    background-image: radial-gradient(rgba(148, 163, 184, 0.11) 0.6px, transparent 0.6px);
+    background-size: 20px 20px;
+    -webkit-mask-image: linear-gradient(to bottom, black, transparent 62%);
+    mask-image: linear-gradient(to bottom, black, transparent 62%);
   }
 
   html.light body {
@@ -470,11 +472,27 @@
 @layer components {
 
   .showroom-sidebar {
-    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.02);
+    box-shadow:
+      inset -1px 0 0 rgba(255,255,255,0.03),
+      var(--shadow-xl);
   }
 
   html.light .showroom-sidebar {
-    box-shadow: 8px 0 30px rgba(15, 23, 42, 0.025);
+    box-shadow: 12px 0 40px rgba(15, 23, 42, 0.06);
+  }
+
+  /* Sidebar ambient glow at top */
+  .sidebar-top-glow {
+    position: absolute;
+    inset-x: 0;
+    top: 0;
+    height: 200px;
+    background: radial-gradient(ellipse 85% 55% at 50% 0%, rgba(230, 57, 70, 0.13) 0%, transparent 72%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  html.light .sidebar-top-glow {
+    background: radial-gradient(ellipse 85% 55% at 50% 0%, rgba(230, 57, 70, 0.07) 0%, transparent 72%);
   }
 
   .dashboard-command-header {
@@ -486,24 +504,29 @@
     overflow: hidden;
     min-height: 176px;
     padding: 1.75rem 2rem;
-    border: 1px solid var(--border-card);
+    border: 1px solid rgba(230, 57, 70, 0.12);
     border-radius: 14px;
     background:
-      linear-gradient(120deg, hsl(var(--card)) 0%, hsl(var(--card)) 62%, hsl(var(--primary) / 0.055) 100%);
+      radial-gradient(ellipse 60% 80% at 100% 50%, rgba(230, 57, 70, 0.07) 0%, transparent 65%),
+      linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)) 58%, rgba(230, 57, 70, 0.04) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      var(--shadow-lg),
+      0 0 60px rgba(230, 57, 70, 0.04);
   }
 
   .dashboard-command-header::after {
     content: '';
     position: absolute;
-    inset-inline-end: -60px;
-    top: -85px;
-    width: 300px;
-    height: 300px;
-    border: 1px solid hsl(var(--primary) / 0.12);
+    inset-inline-end: -50px;
+    top: -80px;
+    width: 280px;
+    height: 280px;
+    border: 1px solid hsl(var(--primary) / 0.16);
     border-radius: 50%;
     box-shadow:
-      0 0 0 42px hsl(var(--primary) / 0.025),
-      0 0 0 84px hsl(var(--primary) / 0.018);
+      0 0 0 40px hsl(var(--primary) / 0.035),
+      0 0 0 80px hsl(var(--primary) / 0.022);
   }
 
   @media (max-width: 900px) {
@@ -711,8 +734,7 @@
     @apply max-w-screen-2xl mx-auto px-4 sm:px-5 lg:px-7 pb-10;
     padding-top: 20px;
     background-image:
-      radial-gradient(circle at 50% 0%, rgba(230, 57, 70, 0.015) 0%, transparent 65%),
-      linear-gradient(to bottom, rgba(7,7,7,0) 0%, rgba(7,7,7,0.5) 100%);
+      radial-gradient(circle at 50% 0%, rgba(230, 57, 70, 0.04) 0%, transparent 60%);
   }
 
   html.light .page-container {
@@ -2421,8 +2443,8 @@ html.light .shimmer-effect {
 /* Premium glass card styles */
 .premium-glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
   border: 1px solid var(--border-card);
   box-shadow: var(--shadow-md);
   transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);

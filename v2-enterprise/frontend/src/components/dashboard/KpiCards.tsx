@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Car, RefreshCw, TrendingUp, Wallet, ArrowUpLeft } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatMoney } from '@/lib/utils'
 import { getDashboardStats } from '@/lib/api/dashboard'
@@ -18,95 +19,153 @@ interface KpiCardProps {
   critical?: boolean
   rawNumber?: number
   formatNumber?: (n: number) => string
+  index: number
 }
 
-const GRADIENTS = {
-  red: 'bg-gradient-to-br from-[#e63946] to-[#e63946]/20 border border-[#e63946]/30 text-white',
-  emerald: 'bg-gradient-to-br from-[#10b981] to-[#10b981]/20 border border-[#10b981]/30 text-[#10b981]',
-  amber: 'bg-gradient-to-br from-[#f4a522] to-[#f4a522]/20 border border-[#f4a522]/30 text-[#f4a522]',
-  blue: 'bg-gradient-to-br from-[#e63946] to-[#e63946]/20 border border-[#e63946]/30 text-white',
+const TONE = {
+  red: {
+    accent:    '#e63946',
+    glow:      'rgba(230,57,70,0.20)',
+    hoverGlow: 'rgba(230,57,70,0.32)',
+    iconBg:    'rgba(230,57,70,0.12)',
+    iconBorder:'rgba(230,57,70,0.22)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(230,57,70,0.8) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(230,57,70,0.08) 0%, transparent 100%)',
+    numColor:  '#fff',
+  },
+  emerald: {
+    accent:    '#10b981',
+    glow:      'rgba(16,185,129,0.16)',
+    hoverGlow: 'rgba(16,185,129,0.26)',
+    iconBg:    'rgba(16,185,129,0.10)',
+    iconBorder:'rgba(16,185,129,0.20)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.7) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(16,185,129,0.07) 0%, transparent 100%)',
+    numColor:  '#10b981',
+  },
+  amber: {
+    accent:    '#f4a522',
+    glow:      'rgba(244,165,34,0.18)',
+    hoverGlow: 'rgba(244,165,34,0.28)',
+    iconBg:    'rgba(244,165,34,0.10)',
+    iconBorder:'rgba(244,165,34,0.22)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(244,165,34,0.75) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(244,165,34,0.07) 0%, transparent 100%)',
+    numColor:  '#f4a522',
+  },
+  blue: {
+    accent:    '#e63946',
+    glow:      'rgba(230,57,70,0.16)',
+    hoverGlow: 'rgba(230,57,70,0.26)',
+    iconBg:    'rgba(230,57,70,0.10)',
+    iconBorder:'rgba(230,57,70,0.20)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(230,57,70,0.7) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(230,57,70,0.06) 0%, transparent 100%)',
+    numColor:  '#fff',
+  },
 }
 
-const BORDERS = {
-  red: 'border-s-[#e63946]',
-  emerald: 'border-s-[#10b981]',
-  amber: 'border-s-[#f4a522]',
-  blue: 'border-s-[#e63946]',
-}
-
-function KpiCard({ label, value, note, href, icon: Icon, tone, critical, rawNumber, formatNumber: fmt }: KpiCardProps) {
-  const animated = useCountUp({ end: rawNumber ?? 0, duration: 1000, enabled: rawNumber !== undefined })
+function KpiCard({ label, value, note, href, icon: Icon, tone, critical, rawNumber, formatNumber: fmt, index }: KpiCardProps) {
+  const animated = useCountUp({ end: rawNumber ?? 0, duration: 900, enabled: rawNumber !== undefined })
   const displayValue = rawNumber !== undefined && fmt ? fmt(animated) : value
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'group relative min-h-[148px] overflow-hidden rounded-xl border border-border-default border-s-[3px] bg-bg-surface/60 backdrop-blur-md p-5 transition-all duration-200 ease-out',
-        BORDERS[tone],
-        critical ? 'hover:border-rose-500/50' : 'hover:border-border-strong',
-        'hover:bg-bg-surface hover:scale-[1.01] shadow-sm hover:shadow-md'
-      )}
-    >
-      {/* Top Gradient Overlay Line */}
-      <div className={cn(
-        "absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-primary/20 to-transparent",
-        tone === 'red' && "via-[#e63946]/25",
-        tone === 'emerald' && "via-[#10b981]/25",
-        tone === 'amber' && "via-[#f4a522]/25",
-        tone === 'blue' && "via-[#e63946]/25"
-      )} />
+  const t = TONE[tone]
 
-      <div className="flex items-start justify-between gap-4">
-        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', GRADIENTS[tone])}>
-          <Icon className="h-4.5 w-4.5" />
-        </div>
-        {tone === 'red' && (
-          <div className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-0.5 border border-rose-500/20 text-[9px] font-black text-rose-500 uppercase tracking-wider animate-pulse">
-            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping shrink-0" />
-            <span>مخاطر عالية</span>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.08, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <Link
+        href={href}
+        className="group relative flex min-h-[160px] flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-[#111111] p-5 transition-all duration-200"
+        style={{
+          boxShadow: `0 0 0 1px rgba(255,255,255,0.04) inset, 0 4px 24px ${t.glow}`,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow =
+            `0 0 0 1px ${t.accent}30 inset, 0 8px 36px ${t.hoverGlow}`
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow =
+            `0 0 0 1px rgba(255,255,255,0.04) inset, 0 4px 24px ${t.glow}`
+        }}
+      >
+        {/* Top shimmer line */}
+        <div
+          className="absolute inset-x-0 top-0 h-[1.5px]"
+          style={{ background: t.topLine }}
+        />
+
+        {/* Bottom ambient fog */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-20"
+          style={{ background: t.bottomFog }}
+        />
+
+        {/* Header: icon + arrow */}
+        <div className="flex items-start justify-between">
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: t.iconBg, border: `1px solid ${t.iconBorder}` }}
+          >
+            <Icon className="h-4 w-4" style={{ color: t.accent }} />
           </div>
-        )}
-        <ArrowUpLeft className={cn(
-          "h-4 w-4 transition-all group-hover:-translate-x-0.5 group-hover:-translate-y-0.5",
-          tone === 'emerald' && "text-[#10b981]/40 group-hover:text-[#10b981]",
-          tone === 'red' && "text-rose-500/40 group-hover:text-rose-500",
-          tone === 'amber' && "text-[#f4a522]/40 group-hover:text-[#f4a522]",
-          tone === 'blue' && "text-[#e63946]/40 group-hover:text-[#e63946]"
-        )} />
-      </div>
-      <div className="mt-5">
-        <p className="text-[11px] font-bold text-muted-foreground">{label}</p>
-        <p className={cn('mt-1.5 text-[40px] font-black font-numeric leading-none tracking-tight text-white', critical && 'text-[#e63946]')}>
+
+          {critical && tone === 'red' && (
+            <div className="flex items-center gap-1.5 rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-400">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              تنبيه
+            </div>
+          )}
+          {!critical && (
+            <ArrowUpLeft
+              className="h-3.5 w-3.5 opacity-0 transition-all duration-200 group-hover:opacity-40 group-hover:-translate-x-0.5 group-hover:-translate-y-0.5"
+              style={{ color: t.accent }}
+            />
+          )}
+        </div>
+
+        {/* Label */}
+        <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+          {label}
+        </p>
+
+        {/* Big number — the hero */}
+        <p
+          className="mt-1 font-black leading-none tracking-tight"
+          style={{
+            color: t.numColor,
+            fontSize: 'clamp(28px, 3.5vw, 46px)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
           {displayValue}
         </p>
-        <p className="mt-2 text-[10px] leading-4 text-muted-foreground/75">{note}</p>
-        
-        {/* RevAuto Engine Progress Meter */}
-        <div className="mt-4 w-full h-[3px] bg-white/5 rounded-full overflow-hidden">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all duration-1000",
-              tone === 'red' && "bg-[#e63946] shadow-[0_0_8px_#e63946]",
-              tone === 'emerald' && "bg-[#10b981] shadow-[0_0_8px_#10b981]",
-              tone === 'amber' && "bg-[#f4a522] shadow-[0_0_8px_#f4a522]",
-              tone === 'blue' && "bg-[#e63946] shadow-[0_0_8px_#e63946]"
-            )}
-            style={{ width: tone === 'red' ? '25%' : tone === 'emerald' ? '75%' : tone === 'amber' ? '50%' : '65%' }}
-          />
-        </div>
-      </div>
-    </Link>
+
+        {/* Note */}
+        <p className="mt-auto pt-3 text-[10px] leading-relaxed text-muted-foreground/60">
+          {note}
+        </p>
+      </Link>
+    </motion.div>
   )
 }
 
-function CardSkeleton() {
+function CardSkeleton({ index }: { index: number }) {
   return (
-    <div className="min-h-[154px] rounded-xl border border-border-subtle bg-bg-surface/60 backdrop-blur-md p-5">
-      <Skeleton className="h-10 w-10 rounded-xl" />
-      <Skeleton className="mt-5 h-3 w-24 rounded" />
-      <Skeleton className="mt-2 h-7 w-32 rounded" />
-      <Skeleton className="mt-2 h-3 w-36 rounded" />
-    </div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: index * 0.06 }}
+    >
+      <div className="min-h-[160px] rounded-xl border border-white/[0.05] bg-[#111111] p-5 space-y-4">
+        <Skeleton className="h-9 w-9 rounded-lg" />
+        <Skeleton className="mt-4 h-2.5 w-20 rounded" />
+        <Skeleton className="mt-1 h-9 w-28 rounded" />
+        <Skeleton className="mt-auto h-2 w-36 rounded" />
+      </div>
+    </motion.div>
   )
 }
 
@@ -122,7 +181,7 @@ export function KpiCards() {
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => <CardSkeleton key={index} />)}
+        {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} index={i} />)}
       </div>
     )
   }
@@ -143,7 +202,7 @@ export function KpiCards() {
   }
 
   const overdue = data?.overdue_installments ?? 0
-  const cards: KpiCardProps[] = [
+  const cards: Omit<KpiCardProps, 'index'>[] = [
     {
       label: 'السيارات المتاحة',
       value: `${data?.available_cars ?? 0}`,
@@ -189,7 +248,7 @@ export function KpiCards() {
 
   return (
     <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-      {cards.map((card) => <KpiCard key={card.label} {...card} />)}
+      {cards.map((card, i) => <KpiCard key={card.label} {...card} index={i} />)}
     </div>
   )
 }

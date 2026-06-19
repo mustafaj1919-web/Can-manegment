@@ -71,7 +71,7 @@ export interface PurchasesListParams {
 }
 
 export interface SellerOption {
-  id: number
+  id: string
   name: string
   full_name?: string | null
   phone?: string | null
@@ -87,7 +87,7 @@ export interface CreatePurchasePayload {
   vin: string
   plate_number: string
   mileage: number
-  seller_id: number
+  seller_id: string
   purchase_price: number
   paid_amount?: number
   currency: 'USD' | 'IQD'
@@ -125,12 +125,17 @@ export async function getPurchaseById(id: number | string): Promise<PurchaseDeta
 }
 
 export async function createPurchase(payload: CreatePurchasePayload): Promise<{ id: number | string; invoice_number: string }> {
-  // مطابقة أسماء حقول الطلب إلى PascalCase لـ .NET Command
+  // مطابقة أسماء حقول الطلب إلى PascalCase لـ CreatePurchaseCommand في الـ backend.
+  // الـ backend ينشئ سيارة جديدة مع فاتورة الشراء، لذا يجب إرسال بيانات السيارة كاملة.
   const body = {
-    VehicleId: (payload as any).car_id,
-    SupplierId: payload.seller_id,
+    SupplierId: payload.seller_id,                 // Guid (نص) — وليس رقمًا
     PurchaseCost: payload.purchase_price,
-    PaymentMethod: payload.payment_method === 'Cash' ? 0 : 1 // Cash=0, Bank=1
+    PaymentMethod: payload.payment_method === 'Cash' ? 1 : 2, // enum: Cash=1, Bank/آجل=2
+    Model: payload.model,
+    ChassisNumber: payload.vin,
+    Color: payload.color,
+    Year: payload.manufacturing_year,
+    TargetSellingPrice: payload.purchase_price,    // قيمة مبدئية = التكلفة (تُعدّل لاحقًا)
   }
   const res = await post<any>('/Purchases', body)
   return {
@@ -140,11 +145,32 @@ export async function createPurchase(payload: CreatePurchasePayload): Promise<{ 
 }
 
 export async function getSellers(): Promise<SellerOption[]> {
-  const data = await get<any>('/Customers?customer_type=Seller&per_page=200')
-  if (data && data.success && data.data) {
-    return Array.isArray(data.data) ? data.data : (data.data.items ?? [])
+  // البائعون (الموردون) مصدرهم جدول Suppliers وليس Customers.
+  const data = await get<any>('/Suppliers?per_page=200')
+  const rows = (data && data.success && data.data)
+    ? (Array.isArray(data.data) ? data.data : (data.data.items ?? []))
+    : (data?.items ?? [])
+  return rows
+}
+
+export interface CreateSupplierPayload {
+  name: string
+  phone: string
+  address?: string
+  notes?: string
+}
+
+export async function createSupplier(payload: CreateSupplierPayload): Promise<{ id: string }> {
+  const body = {
+    Name: payload.name,
+    // كود فريد يُولَّد تلقائيًا (الباكيند يتطلب كودًا غير فارغ)
+    Code: `SUP-${Date.now().toString(36).toUpperCase()}`,
+    Phone: payload.phone,
+    Address: payload.address,
+    Notes: payload.notes,
   }
-  return data.items ?? []
+  const res = await post<any>('/Suppliers', body)
+  return { id: res.supplierId ?? res.id ?? '' }
 }
 
 /* ─── Cancel Purchase ────────────────────────────────────────────────────── */

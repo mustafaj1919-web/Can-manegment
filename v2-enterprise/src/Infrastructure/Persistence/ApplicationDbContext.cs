@@ -41,6 +41,12 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
         public DbSet<InstallmentPlan> InstallmentPlans => Set<InstallmentPlan>();
         public DbSet<Installment> Installments => Set<Installment>();
         public DbSet<CashboxClose> CashboxCloses => Set<CashboxClose>();
+        public DbSet<Expense> Expenses => Set<Expense>();
+        public DbSet<Employee> Employees => Set<Employee>();
+        public DbSet<CrmInteraction> CrmInteractions => Set<CrmInteraction>();
+        public DbSet<Deal> Deals => Set<Deal>();
+        public DbSet<EmployeeCommission> EmployeeCommissions => Set<EmployeeCommission>();
+        public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -217,6 +223,21 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
 
             modelBuilder.Entity<Installment>()
                 .HasQueryFilter(i => i.BranchId == _currentUserService.BranchId);
+
+            modelBuilder.Entity<Expense>()
+                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+
+            modelBuilder.Entity<Employee>()
+                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+
+            modelBuilder.Entity<CrmInteraction>()
+                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+            modelBuilder.Entity<Deal>()
+                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+            modelBuilder.Entity<EmployeeCommission>()
+                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+            modelBuilder.Entity<EmployeeTarget>()
+                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

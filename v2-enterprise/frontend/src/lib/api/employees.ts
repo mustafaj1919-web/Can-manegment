@@ -35,40 +35,62 @@ export interface EmployeePayload {
 
 /* ─── API functions ──────────────────────────────────────────────────────── */
 
+function mapEmployeeBody(p: EmployeePayload) {
+  return {
+    FullName: p.full_name,
+    Phone: p.phone,
+    IdNumber: p.id_number,
+    Address: p.address,
+    Title: p.title,
+    IsActive: p.is_active ?? true,
+  }
+}
+
 export async function getEmployees(params: {
   page?: number; per_page?: number; search?: string; active_only?: boolean
 } = {}): Promise<EmployeesListResponse> {
-  return Promise.resolve({
-    total: 0,
-    page: params.page ?? 1,
-    per_page: params.per_page ?? 50,
-    items: []
-  })
+  const qs = new URLSearchParams()
+  if (params.page)        qs.set('page', String(params.page))
+  if (params.per_page)    qs.set('per_page', String(params.per_page))
+  if (params.search)      qs.set('search', params.search)
+  if (params.active_only) qs.set('active_only', 'true')
+  const res = await get<any>(`/Employees${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const data = (res && res.success && res.data) ? res.data : res
+  return {
+    total: data?.total ?? 0,
+    page: data?.page ?? params.page ?? 1,
+    per_page: data?.per_page ?? params.per_page ?? 50,
+    items: data?.items ?? [],
+  }
 }
 
-export async function getEmployeeById(id: number): Promise<Employee> {
-  return Promise.reject(new Error('الموظف غير موجود'))
+export async function getEmployeeById(id: number | string): Promise<Employee> {
+  const res = await get<any>(`/Employees/${id}`)
+  return (res && res.success && res.data) ? res.data : res
 }
 
 export async function createEmployee(payload: EmployeePayload): Promise<Employee> {
-  return Promise.reject(new Error('إضافة الموظفين غير متاحة حالياً'))
+  const res = await post<any>('/Employees', mapEmployeeBody(payload))
+  return { id: res.employeeId, ...payload } as any
 }
 
-export async function updateEmployee(id: number, payload: EmployeePayload): Promise<Employee> {
-  return Promise.reject(new Error('تعديل الموظفين غير متاح حالياً'))
+export async function updateEmployee(id: number | string, payload: EmployeePayload): Promise<Employee> {
+  const res = await put<any>(`/Employees/${id}`, mapEmployeeBody(payload))
+  return { id: res.employeeId ?? id, ...payload } as any
 }
 
-export async function deleteEmployee(id: number): Promise<void> {
-  return Promise.reject(new Error('حذف الموظفين غير متاح حالياً'))
+export async function deleteEmployee(id: number | string): Promise<void> {
+  await apiClient.delete(`/Employees/${id}`)
 }
 
-export async function setSaleRep(saleId: string, employeeId: number | null): Promise<{
-  sales_rep_id: number | null
+export async function setSaleRep(saleId: string, employeeId: number | string | null): Promise<{
+  sales_rep_id: string | null
   sales_rep_name: string | null
   sales_rep_phone: string | null
   sales_rep_id_number: string | null
   sales_rep_title: string | null
   sales_rep_address: string | null
 }> {
-  return Promise.reject(new Error('تعيين مندوب المبيعات غير متاح حالياً'))
+  const res = await put<any>(`/Employees/sales-rep/${saleId}`, { EmployeeId: employeeId })
+  return res
 }

@@ -70,7 +70,7 @@ export function QuickCustomerDialog({ onSuccess }: QuickCustomerDialogProps) {
       name: name.trim(),
       phone: phone.trim(),
       id_number: idNumber.trim(),
-      customer_type: 'Buyer',
+      customer_type: 'Individual',
       address: address.trim() || undefined,
     })
   }

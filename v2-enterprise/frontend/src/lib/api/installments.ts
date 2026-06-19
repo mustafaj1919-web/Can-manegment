@@ -138,7 +138,13 @@ export async function payInstallmentSchedule(
   scheduleId: number | string,
   payload: PaySchedulePayload
 ): Promise<PayScheduleResponse> {
-  return post<PayScheduleResponse>(`/Installments/schedules/${scheduleId}/payment`, payload)
+  // تحويل لـ PascalCase ليطابق PaySchedulePayloadDto (snake_case مثل payment_method لا يُربَط).
+  const body = {
+    Amount: payload.amount,
+    PaymentMethod: payload.payment_method || 'Cash',
+    Notes: payload.notes,
+  }
+  return post<PayScheduleResponse>(`/Installments/schedules/${scheduleId}/payment`, body)
 }
 
 /* ─── Contracts ──────────────────────────────────────────────────────────── */

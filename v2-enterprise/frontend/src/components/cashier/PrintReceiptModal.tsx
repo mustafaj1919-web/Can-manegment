@@ -11,6 +11,75 @@ import {
 } from '@/components/ui/dialog'
 import { formatMoney, formatDate } from '@/lib/utils'
 
+function tafqeet(num: number, currency: string = 'IQD'): string {
+  if (num === 0) return 'صفر'
+
+  const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة', 'عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر']
+  const tens = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون']
+  const hundreds = ['', 'مائة', 'مائتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة']
+
+  const convertThreeDigits = (n: number): string => {
+    let result = ''
+    const h = Math.floor(n / 100)
+    const t = Math.floor((n % 100) / 10)
+    const o = n % 10
+
+    if (h > 0) {
+      result += hundreds[h]
+    }
+
+    if (t > 0 || o > 0) {
+      if (result !== '') result += ' و '
+      if (t === 0) {
+        result += ones[o]
+      } else if (t === 1) {
+        result += ones[10 + o]
+      } else {
+        if (o > 0) {
+          result += ones[o] + ' و '
+        }
+        result += tens[t]
+      }
+    }
+    return result
+  }
+
+  let words = ''
+  const billion = Math.floor(num / 1000000000)
+  const million = Math.floor((num % 1000000000) / 1000000)
+  const thousand = Math.floor((num % 1000000) / 1000)
+  const remainder = Math.floor(num % 1000)
+
+  if (billion > 0) {
+    if (billion === 1) words += 'مليار'
+    else if (billion === 2) words += 'ملياران'
+    else words += convertThreeDigits(billion) + ' مليارات'
+  }
+
+  if (million > 0) {
+    if (words !== '') words += ' و '
+    if (million === 1) words += 'مليون'
+    else if (million === 2) words += 'مليونان'
+    else words += convertThreeDigits(million) + ' ملايين'
+  }
+
+  if (thousand > 0) {
+    if (words !== '') words += ' و '
+    if (thousand === 1) words += 'ألف'
+    else if (thousand === 2) words += 'ألفان'
+    else if (thousand >= 3 && thousand <= 10) words += convertThreeDigits(thousand) + ' آلاف'
+    else words += convertThreeDigits(thousand) + ' ألف'
+  }
+
+  if (remainder > 0) {
+    if (words !== '') words += ' و '
+    words += convertThreeDigits(remainder)
+  }
+
+  const currencyName = currency === 'USD' ? 'دولار أمريكي' : 'دينار عراقي'
+  return words ? `${words} ${currencyName} لا غير` : ''
+}
+
 interface PrintReceiptModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -25,6 +94,211 @@ export function PrintReceiptModal({ open, onOpenChange, type, data }: PrintRecei
 
   const handlePrint = () => {
     if (typeof window === 'undefined') return
+
+    if (type === 'payment') {
+      const win = window.open('', '_blank', 'width=450,height=600')
+      if (!win) return
+
+      const buyerName = data.buyer_name || data.customer_name || data.buyerName || 'المشتري'
+      const amountVal = data.amount ?? data.paid_amount ?? 0
+      const curr = data.currency ?? 'IQD'
+      const amountStr = formatMoney(amountVal, curr)
+      const amountWords = tafqeet(amountVal, curr)
+      const notesStr = data.notes || data.description || 'سداد دفعة قسط مستحقة'
+      const paymentDate = formatDate(data.payment_date ?? new Date())
+      const paymentMethod = data.payment_method === 'Bank' ? 'تحويل بنكي' : 'نقدي'
+      const receiptNo = data.paymentId || data.id || '-'
+
+      const remainingHtml = data.plan_remaining !== undefined 
+        ? `<div class="remaining-box">
+             <span class="label">المتبقي الإجمالي على الخطة:</span>
+             <span class="value">${formatMoney(data.plan_remaining, 'IQD')}</span>
+           </div>`
+        : ''
+
+      win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>سند قبض #${receiptNo}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page {
+      size: 80mm auto;
+      margin: 4mm;
+    }
+    body {
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      direction: rtl;
+      background: #fff;
+      color: #111;
+      padding: 5px;
+      font-size: 11px;
+      line-height: 1.6;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .receipt-container {
+      width: 72mm;
+      margin: 0 auto;
+      border: 1px solid #111;
+      padding: 10px;
+      border-radius: 4px;
+      background: #fff;
+      position: relative;
+    }
+    .receipt-header {
+      text-align: center;
+      border-bottom: 2px double #111;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+    .receipt-header h2 {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 2px;
+      color: #111;
+    }
+    .receipt-header .title-badge {
+      display: inline-block;
+      border: 1px solid #111;
+      padding: 1px 8px;
+      font-size: 10px;
+      font-weight: bold;
+      margin-top: 3px;
+      background: #f9f9f9;
+    }
+    .receipt-header p.meta {
+      font-size: 8px;
+      color: #333;
+      margin-top: 3px;
+    }
+    .receipt-body {
+      margin-bottom: 10px;
+    }
+    .receipt-row {
+      display: flex;
+      align-items: flex-end;
+      margin: 6px 0;
+    }
+    .receipt-label {
+      color: #111;
+      font-weight: bold;
+      white-space: nowrap;
+      margin-left: 5px;
+    }
+    .receipt-value {
+      flex-grow: 1;
+      border-bottom: 1px dotted #333;
+      padding-bottom: 1px;
+      font-weight: bold;
+      font-size: 10px;
+    }
+    .receipt-value.amount {
+      font-size: 12px;
+      font-weight: 800;
+      color: #000;
+    }
+    .receipt-value.words {
+      font-size: 9px;
+      font-weight: normal;
+      font-style: italic;
+    }
+    .remaining-box {
+      margin-top: 8px;
+      padding: 5px;
+      border: 1px dashed #111;
+      background-color: #fafafa;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 9px;
+    }
+    .remaining-box .label {
+      color: #444;
+      font-weight: bold;
+    }
+    .remaining-box .value {
+      font-weight: 800;
+      color: #b91c1c;
+      margin-right: 4px;
+      font-size: 10px;
+    }
+    .signatures {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 28px;
+      text-align: center;
+      font-size: 8px;
+    }
+    .sig-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .sig-line {
+      width: 90%;
+      border-top: 1px solid #111;
+      margin-top: 20px;
+      padding-top: 2px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt-container">
+    <div class="receipt-header">
+      <h2>شركة الأصدقاء لتجارة السيارات</h2>
+      <div class="title-badge">سند قبض</div>
+      <p class="meta">رقم السند: #${receiptNo} &nbsp;|&nbsp; التاريخ: ${paymentDate}</p>
+    </div>
+    
+    <div class="receipt-body">
+      <div class="receipt-row">
+        <span class="receipt-label">استلمنا من السيد/ة:</span>
+        <span class="receipt-value">${buyerName}</span>
+      </div>
+      
+      <div class="receipt-row">
+        <span class="receipt-label">مبلغاً وقدره (رقماً):</span>
+        <span class="receipt-value amount">${amountStr}</span>
+      </div>
+      
+      <div class="receipt-row">
+        <span class="receipt-label">المبلغ كتابةً:</span>
+        <span class="receipt-value words">${amountWords || '................................................................'}</span>
+      </div>
+      
+      <div class="receipt-row">
+        <span class="receipt-label">وذلك عن:</span>
+        <span class="receipt-value">${notesStr}</span>
+      </div>
+      
+      <div class="receipt-row">
+        <span class="receipt-label">طريقة الدفع:</span>
+        <span class="receipt-value">${paymentMethod}</span>
+      </div>
+    </div>
+    
+    ${remainingHtml}
+    
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-line">توقيع المسدد (العميل)</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line">توقيع المستلم (أمين الصندوق)</div>
+      </div>
+    </div>
+  </div>
+  <script>window.onload = () => { window.print(); window.close(); }<\/script>
+</body>
+</html>`)
+      win.document.close()
+      return
+    }
+
     const content = printRef.current?.innerHTML
     if (!content) return
 
@@ -195,6 +469,13 @@ ${content}
                 <span className="text-muted-foreground shrink-0">مبلغاً وقدره:</span>
                 <span className="font-bold border-b border-dashed border-border/80 pb-0.5 flex-1 font-numeric text-emerald-400 text-sm">
                   {formatMoney(data.amount ?? data.paid_amount ?? 0, data.currency ?? 'IQD')}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground shrink-0">المبلغ كتابةً:</span>
+                <span className="font-medium border-b border-dashed border-border/80 pb-0.5 flex-1 italic text-muted-foreground/80">
+                  {tafqeet(data.amount ?? data.paid_amount ?? 0, data.currency ?? 'IQD') || '................................................................'}
                 </span>
               </div>
 

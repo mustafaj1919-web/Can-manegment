@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using CarShowroomManagementV2.Application.Common.Interfaces;
+using CarShowroomManagementV2.Domain.Enums;
 
 namespace CarShowroomManagementV2.Application.Customers.Queries
 {
@@ -16,22 +17,84 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
         public DateTime? EndDate { get; set; }
     }
 
+    public class CustomerSummaryDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public string CustomerType { get; set; } = string.Empty;
+    }
+
+    public class StatementSummaryDto
+    {
+        public int SalesCount { get; set; }
+        public decimal TotalSalesAmount { get; set; }
+        public decimal TotalPaidAmount { get; set; }
+        public decimal TotalRemaining { get; set; }
+        public decimal TotalOverdue { get; set; }
+        public DateTime? LastPaymentDate { get; set; }
+        public string Currency { get; set; } = "IQD";
+    }
+
+    public class StatementScheduleDto
+    {
+        public Guid Id { get; set; }
+        public int InstallmentNumber { get; set; }
+        public DateTime? DueDate { get; set; }
+        public decimal Amount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public string Currency { get; set; } = "IQD";
+        public string Status { get; set; } = string.Empty;
+        public DateTime? PaymentDate { get; set; }
+    }
+
+    public class StatementInstallmentPlanDto
+    {
+        public Guid Id { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public string Currency { get; set; } = "IQD";
+        public int? NumberOfMonths { get; set; }
+        public decimal InstallmentAmount { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public decimal OverdueAmount { get; set; }
+        public List<StatementScheduleDto> Schedules { get; set; } = new();
+    }
+
+    public class StatementPaymentDto
+    {
+        public Guid Id { get; set; }
+        public string? PaymentMethod { get; set; }
+        public DateTime? PaymentDate { get; set; }
+        public decimal Amount { get; set; }
+        public string Currency { get; set; } = "IQD";
+    }
+
+    public class StatementSaleItemDto
+    {
+        public Guid Id { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime? SaleDate { get; set; }
+        public string? CarName { get; set; }
+        public string? CarVin { get; set; }
+        public decimal SellingPrice { get; set; }
+        public string Currency { get; set; } = "IQD";
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public string PaymentMethod { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public bool HasInstallment { get; set; }
+        public StatementInstallmentPlanDto? InstallmentPlan { get; set; }
+        public List<StatementPaymentDto> Payments { get; set; } = new();
+    }
+
     public class CustomerStatementDto
     {
-        public Guid CustomerId { get; set; }
-        public string CustomerName { get; set; } = string.Empty;
-        public string FullName { get; set; } = string.Empty;
-        public string Phone { get; set; } = string.Empty;
-        public string Address { get; set; } = string.Empty;
-        public string AccountCode { get; set; } = string.Empty;
-        
-        public DateTime StatementStartDate { get; set; }
-        public DateTime StatementEndDate { get; set; }
-
-        public decimal OpeningBalance { get; set; } // الرصيد قبل تاريخ البداية
-        public decimal TotalDebits { get; set; }    // إجمالي المبيعات/المدينات خلال الفترة
-        public decimal TotalCredits { get; set; }   // إجمالي المقبوضات/المدفوعات خلال الفترة
-        public decimal EndingBalance { get; set; }  // الرصيد النهائي المستحق
+        public CustomerSummaryDto Customer { get; set; } = null!;
+        public StatementSummaryDto Summary { get; set; } = null!;
+        public List<StatementSaleItemDto> Sales { get; set; } = new();
     }
 
     public class GetCustomerStatementQueryHandler : IRequestHandler<GetCustomerStatementQuery, CustomerStatementDto>
@@ -54,50 +117,138 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 throw new KeyNotFoundException("العميل غير موجود.");
             }
 
-            var accountId = customer.AccountId;
             var startDate = request.StartDate ?? DateTime.MinValue;
             var endDate = request.EndDate ?? DateTime.MaxValue;
 
-            // 1. حساب الرصيد الافتتاحي (Opening Balance)
-            var openingDebit = await _context.JournalLines
-                .Include(l => l.JournalEntry)
-                .Where(l => l.AccountId == accountId && l.JournalEntry != null && l.JournalEntry.IsPosted && l.JournalEntry.EntryDate < startDate)
-                .SumAsync(l => l.Debit, cancellationToken);
+            // جلب عقود المبيعات المرتبطة بالعميل بالكامل مع السيارات وخطط التقسيط والأقساط المجدولة
+            var salesContracts = await _context.SalesContracts
+                .Include(sc => sc.Vehicle)
+                .Include(sc => sc.InstallmentPlan)
+                    .ThenInclude(ip => ip.Installments)
+                .Where(sc => sc.CustomerId == customer.Id && sc.SaleDate >= startDate && sc.SaleDate <= endDate)
+                .ToListAsync(cancellationToken);
 
-            var openingCredit = await _context.JournalLines
-                .Include(l => l.JournalEntry)
-                .Where(l => l.AccountId == accountId && l.JournalEntry != null && l.JournalEntry.IsPosted && l.JournalEntry.EntryDate < startDate)
-                .SumAsync(l => l.Credit, cancellationToken);
+            // جلب سندات القبض المدفوعة من العميل
+            var payments = await _context.Payments
+                .Where(p => p.ContraAccountId == customer.AccountId && p.Status == "posted")
+                .ToListAsync(cancellationToken);
 
-            var openingBalance = openingDebit - openingCredit;
+            var salesList = new List<StatementSaleItemDto>();
 
-            // 2. حساب إجمالي الحركات المدينة والدائنة خلال الفترة
-            var periodDebit = await _context.JournalLines
-                .Include(l => l.JournalEntry)
-                .Where(l => l.AccountId == accountId && l.JournalEntry != null && l.JournalEntry.IsPosted && l.JournalEntry.EntryDate >= startDate && l.JournalEntry.EntryDate <= endDate)
-                .SumAsync(l => l.Debit, cancellationToken);
+            foreach (var sc in salesContracts)
+            {
+                var scPayments = new List<StatementPaymentDto>();
 
-            var periodCredit = await _context.JournalLines
-                .Include(l => l.JournalEntry)
-                .Where(l => l.AccountId == accountId && l.JournalEntry != null && l.JournalEntry.IsPosted && l.JournalEntry.EntryDate >= startDate && l.JournalEntry.EntryDate <= endDate)
-                .SumAsync(l => l.Credit, cancellationToken);
+                // إضافة الدفعة المقدمة كـ دفعة سداد أولى إن وجدت
+                if (sc.DownPayment > 0)
+                {
+                    scPayments.Add(new StatementPaymentDto
+                    {
+                        Id = sc.Id,
+                        PaymentMethod = sc.PaymentMethod == PaymentMethod.Installment ? "دفعة مقدمة عقد تقسيط" : "دفع نقدي كلي/مقدم",
+                        PaymentDate = sc.SaleDate,
+                        Amount = sc.DownPayment,
+                        Currency = "IQD"
+                    });
+                }
 
-            var endingBalance = openingBalance + periodDebit - periodCredit;
+                // ربط السندات المحصلة التي تحتوي في وصفها على رقم العقد
+                var matchedPayments = payments
+                    .Where(p => p.Description != null && p.Description.Contains(sc.ContractNumber))
+                    .Select(p => new StatementPaymentDto
+                    {
+                        Id = p.Id,
+                        PaymentMethod = p.Method == PaymentMethod.Cash ? "نقداً" : p.Method.ToString(),
+                        PaymentDate = p.CreatedAt,
+                        Amount = p.Amount,
+                        Currency = "IQD"
+                    });
+                scPayments.AddRange(matchedPayments);
+
+                var totalPaidFromPayments = scPayments.Sum(p => p.Amount);
+                var remaining = sc.NetPrice - totalPaidFromPayments;
+                if (remaining < 0) remaining = 0;
+
+                StatementInstallmentPlanDto? planDto = null;
+                if (sc.PaymentMethod == PaymentMethod.Installment && sc.InstallmentPlan != null)
+                {
+                    var plan = sc.InstallmentPlan;
+                    var schedules = plan.Installments.Select(i => new StatementScheduleDto
+                    {
+                        Id = i.Id,
+                        InstallmentNumber = i.InstallmentNumber,
+                        DueDate = i.DueDate,
+                        Amount = i.Amount,
+                        PaidAmount = i.PaidAmount,
+                        RemainingAmount = i.Amount - i.PaidAmount,
+                        Currency = "IQD",
+                        Status = i.Status,
+                        PaymentDate = i.PaymentDate
+                    }).OrderBy(i => i.InstallmentNumber).ToList();
+
+                    var planPaid = plan.Installments.Sum(i => i.PaidAmount);
+                    var planOverdue = plan.Installments
+                        .Where(i => i.Status == "Overdue" || (i.Status == "Pending" && i.DueDate < DateTime.UtcNow))
+                        .Sum(i => i.Amount - i.PaidAmount);
+
+                    planDto = new StatementInstallmentPlanDto
+                    {
+                        Id = plan.Id,
+                        TotalAmount = plan.TotalPlanAmount,
+                        PaidAmount = planPaid,
+                        RemainingAmount = plan.TotalPlanAmount - planPaid,
+                        Currency = "IQD",
+                        NumberOfMonths = plan.InstallmentPeriodMonths,
+                        InstallmentAmount = plan.MonthlyInstallmentAmount,
+                        Status = plan.Status,
+                        OverdueAmount = planOverdue,
+                        Schedules = schedules
+                    };
+                }
+
+                salesList.Add(new StatementSaleItemDto
+                {
+                    Id = sc.Id,
+                    InvoiceNumber = sc.ContractNumber,
+                    SaleDate = sc.SaleDate,
+                    CarName = sc.Vehicle != null ? $"{sc.Vehicle.Model} {sc.Vehicle.Year}" : "سيارة غير محددة",
+                    CarVin = sc.Vehicle?.ChassisNumber,
+                    SellingPrice = sc.NetPrice,
+                    Currency = "IQD",
+                    PaidAmount = totalPaidFromPayments,
+                    RemainingAmount = sc.PaymentMethod == PaymentMethod.Installment && planDto != null ? planDto.RemainingAmount : remaining,
+                    PaymentMethod = sc.PaymentMethod == PaymentMethod.Installment ? "تقسيط" : "نقداً",
+                    Status = sc.Status,
+                    HasInstallment = sc.PaymentMethod == PaymentMethod.Installment,
+                    InstallmentPlan = planDto,
+                    Payments = scPayments.OrderBy(p => p.PaymentDate).ToList()
+                });
+            }
+
+            var summaryDto = new StatementSummaryDto
+            {
+                SalesCount = salesList.Count,
+                TotalSalesAmount = salesList.Sum(s => s.SellingPrice),
+                TotalPaidAmount = salesList.Sum(s => s.PaidAmount),
+                TotalRemaining = salesList.Sum(s => s.RemainingAmount),
+                TotalOverdue = salesList.Sum(s => s.InstallmentPlan?.OverdueAmount ?? 0),
+                LastPaymentDate = payments.OrderByDescending(p => p.CreatedAt).FirstOrDefault()?.CreatedAt,
+                Currency = "IQD"
+            };
+
+            var customerSummary = new CustomerSummaryDto
+            {
+                Id = customer.Id,
+                Name = customer.Name,
+                Phone = customer.Phone,
+                CustomerType = customer.CustomerType
+            };
 
             return new CustomerStatementDto
             {
-                CustomerId = customer.Id,
-                CustomerName = customer.Name,
-                FullName = customer.FullName ?? customer.Name,
-                Phone = customer.Phone,
-                Address = customer.Address ?? string.Empty,
-                AccountCode = customer.Account?.AccountCode ?? string.Empty,
-                StatementStartDate = startDate,
-                StatementEndDate = endDate,
-                OpeningBalance = openingBalance,
-                TotalDebits = periodDebit,
-                TotalCredits = periodCredit,
-                EndingBalance = endingBalance
+                Customer = customerSummary,
+                Summary = summaryDto,
+                Sales = salesList
             };
         }
     }
