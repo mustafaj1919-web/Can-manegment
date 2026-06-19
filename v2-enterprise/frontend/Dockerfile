@@ -10,7 +10,10 @@ RUN npm ci
 
 COPY . .
 
-# Set build environment variables
+# Accept backend URL at build time (needed by next.config.js rewrites for SSR)
+ARG BACKEND_URL=http://v2-enterprise-api:8080
+ENV BACKEND_URL=$BACKEND_URL
+
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NODE_ENV production
 
