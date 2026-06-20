@@ -17,13 +17,13 @@ export async function getDashboard() {
 export async function getInventory(params={}){
   const qs = new URLSearchParams(params)
   const res = await fetch(`/api/inventory?${qs.toString()}`)
-  if(!res.ok) return { total:0, items:[] }
+  if(!res.ok) throw new Error(`فشل تحميل المخزون: ${res.status}`)
   return res.json()
 }
 
 export async function getCustomers(params={}){
   const qs = new URLSearchParams(params)
   const res = await fetch(`/api/customers?${qs.toString()}`)
-  if(!res.ok) return { total:0, items:[] }
+  if(!res.ok) throw new Error(`فشل تحميل العملاء: ${res.status}`)
   return res.json()
 }

@@ -72,13 +72,6 @@ namespace CarShowroomManagementV2.API.Controllers
                 }
             }
 
-            // إعطاء صلاحيات كاملة للمسؤول الافتراضي (admin) في حال لم يتم تهيئة جدول الصلاحيات بعد
-            if (user.Username == "admin" && permissions.Count == 0)
-            {
-                roleName = "Owner";
-                permissions = new List<string> { "all" };
-            }
-
             var branchesList = await _context.Branches
                 .Where(b => b.IsActive)
                 .Select(b => new
@@ -152,11 +145,6 @@ namespace CarShowroomManagementV2.API.Controllers
                 }
             }
 
-            if (user.Username == "admin" && permissions.Count == 0)
-            {
-                roleName = "Owner";
-                permissions = new List<string> { "all" };
-            }
 
             var branchesList = await _context.Branches
                 .Where(b => b.IsActive)
@@ -200,6 +188,9 @@ namespace CarShowroomManagementV2.API.Controllers
         [HttpPost("switch-branch")]
         public async Task<IActionResult> SwitchBranch([FromForm] Guid branch_id)
         {
+            if (branch_id == Guid.Empty)
+                return BadRequest(new { success = false, message = "معرّف الفرع غير صالح." });
+
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
             {
@@ -254,11 +245,6 @@ namespace CarShowroomManagementV2.API.Controllers
                 }
             }
 
-            if (user.Username == "admin" && permissions.Count == 0)
-            {
-                roleName = "Owner";
-                permissions = new List<string> { "all" };
-            }
 
             var branchesList = await _context.Branches
                 .Where(b => b.IsActive)

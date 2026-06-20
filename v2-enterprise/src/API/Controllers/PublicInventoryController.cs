@@ -46,75 +46,32 @@ namespace CarShowroomManagementV2.API.Controllers
                 : Ok(new { success = true, data = MapVehicle(vehicle) });
         }
 
-        private static object MapVehicle(PublicVehicleDto vehicle)
+        private static object MapVehicle(Guid id, Guid branchId, string brand, string model, int year,
+            string color, decimal? sellingPrice, string status, DateTime createdAt,
+            IEnumerable<PublicVehiclePhotoDto> photoList)
         {
-            var photos = vehicle.Photos.Select(MapPhoto).ToList();
+            var photos = photoList.Select(MapPhoto).ToList();
             return new
             {
-                id = vehicle.Id,
-                branch_id = vehicle.BranchId,
-                brand = vehicle.Brand,
-                model = vehicle.Model,
-                manufacturing_year = vehicle.Year,
-                trim = (string?)null,
-                condition = "Used",
-                color = vehicle.Color,
-                vin = string.Empty,
-                plate_number = string.Empty,
-                plate_status = (string?)null,
-                mileage = (int?)null,
-                engine_size = (string?)null,
-                cylinders = (int?)null,
-                transmission = (string?)null,
-                fuel_type = (string?)null,
-                import_country = (string?)null,
-                seat_count = (int?)null,
-                seat_material = (string?)null,
-                purchase_price = 0,
-                selling_price = vehicle.SellingPrice,
-                currency = "IQD",
-                status = vehicle.Status,
-                notes = (string?)null,
-                created_at = vehicle.CreatedAt,
-                photos,
-                cover_photo = photos.FirstOrDefault()
+                id, branch_id = branchId, brand, model, manufacturing_year = year,
+                trim = (string?)null, condition = "Used", color,
+                vin = string.Empty, plate_number = string.Empty,
+                plate_status = (string?)null, mileage = (int?)null,
+                engine_size = (string?)null, cylinders = (int?)null,
+                transmission = (string?)null, fuel_type = (string?)null,
+                import_country = (string?)null, seat_count = (int?)null,
+                seat_material = (string?)null, purchase_price = 0,
+                selling_price = sellingPrice, currency = "IQD",
+                status, notes = (string?)null, created_at = createdAt,
+                photos, cover_photo = photos.FirstOrDefault()
             };
         }
 
-        private static object MapVehicle(PublicVehicleDetailsDto vehicle)
-        {
-            var photos = vehicle.Photos.Select(MapPhoto).ToList();
-            return new
-            {
-                id = vehicle.Id,
-                branch_id = vehicle.BranchId,
-                brand = vehicle.Brand,
-                model = vehicle.Model,
-                manufacturing_year = vehicle.Year,
-                trim = (string?)null,
-                condition = "Used",
-                color = vehicle.Color,
-                vin = string.Empty,
-                plate_number = string.Empty,
-                plate_status = (string?)null,
-                mileage = (int?)null,
-                engine_size = (string?)null,
-                cylinders = (int?)null,
-                transmission = (string?)null,
-                fuel_type = (string?)null,
-                import_country = (string?)null,
-                seat_count = (int?)null,
-                seat_material = (string?)null,
-                purchase_price = 0,
-                selling_price = vehicle.SellingPrice,
-                currency = "IQD",
-                status = vehicle.Status,
-                notes = (string?)null,
-                created_at = vehicle.CreatedAt,
-                photos,
-                cover_photo = photos.FirstOrDefault()
-            };
-        }
+        private static object MapVehicle(PublicVehicleDto v) =>
+            MapVehicle(v.Id, v.BranchId, v.Brand, v.Model, v.Year, v.Color, v.SellingPrice, v.Status, v.CreatedAt, v.Photos);
+
+        private static object MapVehicle(PublicVehicleDetailsDto v) =>
+            MapVehicle(v.Id, v.BranchId, v.Brand, v.Model, v.Year, v.Color, v.SellingPrice, v.Status, v.CreatedAt, v.Photos);
 
         private static object MapPhoto(PublicVehiclePhotoDto photo) => new
         {

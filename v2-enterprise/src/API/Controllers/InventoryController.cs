@@ -17,7 +17,45 @@ namespace CarShowroomManagementV2.API.Controllers
     public class InventoryController : ApiControllerBase
     {
         private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
-        private const long MaxImageBytes = 10 * 1024 * 1024; // 10 MB
+        private const long MaxImageBytes = 5 * 1024 * 1024; // 5 MB
+        private const int MaxImageDimension = 4000; // max width or height in pixels
+
+        private static bool TryGetImageDimensions(byte[] bytes, string ext, out int width, out int height)
+        {
+            width = height = 0;
+            try
+            {
+                if (ext is ".jpg" or ".jpeg")
+                {
+                    // JPEG: scan for SOF marker (0xFF 0xC0 / 0xC2)
+                    for (int i = 2; i < bytes.Length - 8; i++)
+                    {
+                        if (bytes[i] == 0xFF && (bytes[i + 1] == 0xC0 || bytes[i + 1] == 0xC2))
+                        {
+                            height = (bytes[i + 5] << 8) | bytes[i + 6];
+                            width  = (bytes[i + 7] << 8) | bytes[i + 8];
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (ext == ".png" && bytes.Length >= 24)
+                {
+                    width  = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+                    height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+                    return true;
+                }
+                if (ext == ".webp" && bytes.Length >= 30)
+                {
+                    // WebP VP8 chunk
+                    width  = ((bytes[26] | (bytes[27] << 8)) & 0x3FFF) + 1;
+                    height = ((bytes[28] | (bytes[29] << 8)) & 0x3FFF) + 1;
+                    return true;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
 
         private static bool IsValidImageMagicBytes(byte[] bytes, string ext)
         {
@@ -40,38 +78,61 @@ namespace CarShowroomManagementV2.API.Controllers
         [HttpGet("profitability-report")]
         public async Task<IActionResult> GetProfitabilityReport([FromQuery] bool onlySold = false)
         {
-            var vehicles = await _context.Vehicles.ToListAsync();
-            var costs = await _context.VehicleCosts.ToListAsync();
-            var contracts = await _context.SalesContracts.ToListAsync();
+            var contractMap = await _context.SalesContracts
+                .GroupBy(sc => sc.VehicleId)
+                .Select(g => new { VehicleId = g.Key, SalePrice = g.Select(sc => sc.SalePrice).FirstOrDefault() })
+                .ToDictionaryAsync(x => x.VehicleId, x => x.SalePrice);
 
-            var cars = new List<dynamic>();
-            foreach (var v in vehicles)
-            {
-                var vCosts = costs.Where(c => c.VehicleId == v.Id).ToList();
-                var costsTotal = vCosts.Where(c => c.CostType != "purchase").Sum(c => c.Amount);
-                var totalCost = v.PurchaseCost + costsTotal;
-                var contract = contracts.FirstOrDefault(c => c.VehicleId == v.Id);
-                decimal? sellingPrice = contract?.SalePrice;
-                decimal? netProfit = sellingPrice.HasValue ? sellingPrice.Value - totalCost : (decimal?)null;
-                decimal? profitPct = (netProfit.HasValue && totalCost > 0) ? Math.Round(netProfit.Value / totalCost * 100, 1) : (decimal?)null;
-                if (onlySold && contract == null) continue;
-                cars.Add(new {
-                    car_id = v.Id, brand = "", model = v.Model, year = v.Year, vin = v.ChassisNumber, status = v.Status,
-                    purchase_price_iqd = v.PurchaseCost, costs_total_iqd = costsTotal, total_cost_iqd = totalCost,
-                    selling_price_iqd = sellingPrice, net_profit_iqd = netProfit, profit_pct = profitPct,
-                    cost_breakdown = vCosts.GroupBy(c => c.CostType).ToDictionary(g => g.Key, g => g.Sum(x => x.Amount)),
-                    costs = vCosts.Select(c => new { id = c.Id, cost_type = c.CostType, amount = c.Amount, currency = c.Currency, description = c.Description, created_at = c.CreatedAt }).ToList()
+            var vehicleQuery = _context.Vehicles
+                .Select(v => new
+                {
+                    v.Id, v.Model, v.Brand, v.Year, v.ChassisNumber, v.Status, v.PurchaseCost,
+                    ExtraCosts = v.DetailedCosts
+                        .Where(c => c.CostType != "purchase")
+                        .Sum(c => c.Amount),
+                    CostBreakdown = v.DetailedCosts
+                        .Where(c => c.CostType != "purchase")
+                        .GroupBy(c => c.CostType)
+                        .Select(g => new { Type = g.Key, Total = g.Sum(x => x.Amount) }),
+                    CostItems = v.DetailedCosts
+                        .Where(c => c.CostType != "purchase")
+                        .Select(c => new { id = c.Id, cost_type = c.CostType, amount = c.Amount, currency = c.Currency, description = c.Description, created_at = c.CreatedAt }),
                 });
-            }
-            var sold = cars.Where(c => c.selling_price_iqd != null).ToList();
-            var profits = sold.Where(c => c.net_profit_iqd != null).Select(c => (decimal)c.net_profit_iqd).ToList();
-            var ordered = sold.OrderByDescending(c => (decimal?)c.net_profit_iqd ?? 0).ToList();
+
+            if (onlySold)
+                vehicleQuery = vehicleQuery.Where(v => contractMap.Keys.Contains(v.Id));
+
+            var rows = await vehicleQuery.ToListAsync();
+
+            var cars = rows.Select(v =>
+            {
+                var totalCost = v.PurchaseCost + v.ExtraCosts;
+                decimal? sellingPrice = contractMap.TryGetValue(v.Id, out var sp) ? sp : null;
+                decimal? netProfit = sellingPrice.HasValue ? sellingPrice.Value - totalCost : null;
+                decimal? profitPct = (netProfit.HasValue && totalCost > 0)
+                    ? Math.Round(netProfit.Value / totalCost * 100, 1) : null;
+                return new
+                {
+                    car_id = v.Id, brand = v.Brand ?? "", model = v.Model, year = v.Year,
+                    vin = v.ChassisNumber, status = v.Status,
+                    purchase_price_iqd = v.PurchaseCost, costs_total_iqd = v.ExtraCosts,
+                    total_cost_iqd = totalCost, selling_price_iqd = sellingPrice,
+                    net_profit_iqd = netProfit, profit_pct = profitPct,
+                    cost_breakdown = v.CostBreakdown.ToDictionary(g => g.Type, g => g.Total),
+                    costs = v.CostItems.ToList()
+                };
+            }).ToList();
+
+            var sold = cars.Where(c => c.selling_price_iqd.HasValue).ToList();
+            var profits = sold.Where(c => c.net_profit_iqd.HasValue).Select(c => c.net_profit_iqd!.Value).ToList();
+            var ordered = sold.OrderByDescending(c => c.net_profit_iqd ?? 0).ToList();
+
             return Ok(new { success = true, data = new {
                 cars,
                 summary = new {
                     most_profitable = ordered.Take(5),
                     least_profitable = ordered.AsEnumerable().Reverse().Take(5),
-                    losing = sold.Where(c => c.net_profit_iqd != null && (decimal)c.net_profit_iqd < 0),
+                    losing = sold.Where(c => c.net_profit_iqd < 0),
                     avg_profit_iqd = profits.Count > 0 ? Math.Round(profits.Average(), 2) : 0,
                     avg_profit_pct = 0,
                     total_cars = cars.Count,
@@ -175,6 +236,13 @@ namespace CarShowroomManagementV2.API.Controllers
             var fileBytes = memoryStream.ToArray();
             if (!IsValidImageMagicBytes(fileBytes, ext))
                 return BadRequest(new { success = false, message = "محتوى الملف لا يطابق نوع الصورة المتوقع. يرجى رفع ملف صورة حقيقي." });
+
+            // رفض الصور التي تتجاوز الحجم الآمن (5 MB يكفي لصور السيارات بدقة عالية)
+            // التحقق من الأبعاد يتم عبر magic bytes لأن System.Drawing غير متوفر على Linux
+            if (!TryGetImageDimensions(fileBytes, ext, out var width, out var height))
+                return BadRequest(new { success = false, message = "تعذّر قراءة أبعاد الصورة. تأكد من أنها ملف صورة صالح." });
+            if (width > MaxImageDimension || height > MaxImageDimension)
+                return BadRequest(new { success = false, message = $"أبعاد الصورة كبيرة جداً. الحد الأقصى {MaxImageDimension}×{MaxImageDimension} بكسل." });
 
             var command = new UploadVehicleImageCommand
             {

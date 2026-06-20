@@ -179,33 +179,33 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, documentId = documentId, message = "تم رفع وحفظ مستند العميل بنجاح." });
         }
 
-        // 6. تحميل المستند المحمي أمنياً وعزله بالفرع
-        [HttpGet("documents/{fileName}")]
-        public async Task<IActionResult> DownloadDocument(string fileName)
+        // 6. تحميل المستند المحمي أمنياً — مرتبط بمعرّف العميل لمنع تخمين أسماء الملفات
+        [HttpGet("{id}/documents/{fileName}")]
+        public async Task<IActionResult> DownloadDocument(Guid id, string fileName)
         {
-            // جلب سجل المستند مع التحقق من الفرع للعميل المرتبط به
+            // رفض أي محاولة directory traversal
+            if (fileName.Contains('/') || fileName.Contains('\\') || fileName.Contains(".."))
+                return BadRequest(new { success = false, message = "اسم الملف غير صالح." });
+
             var document = await _context.CustomerDocuments
                 .Include(d => d.Customer)
-                .FirstOrDefaultAsync(d => d.FileName == fileName);
+                .FirstOrDefaultAsync(d => d.CustomerId == id && d.FileName == fileName);
 
             if (document == null || document.Customer == null)
-            {
                 return NotFound(new { success = false, message = "المستند غير موجود." });
-            }
 
-            // التحقق من تطابق فرع المستخدم مع فرع العميل صاحب المستند
             if (document.Customer.BranchId != _currentUserService.BranchId)
-            {
-                return Forbid(); // منع الوصول لبيانات فروع أخرى
-            }
+                return Forbid();
 
             var storagePath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "private", "customers");
-            var fullFilePath = Path.Combine(storagePath, fileName);
+            var fullFilePath = Path.GetFullPath(Path.Combine(storagePath, fileName));
+
+            // التحقق إن المسار النهائي لا يخرج من مجلد التخزين
+            if (!fullFilePath.StartsWith(Path.GetFullPath(storagePath)))
+                return BadRequest(new { success = false, message = "مسار الملف غير صالح." });
 
             if (!System.IO.File.Exists(fullFilePath))
-            {
                 return NotFound(new { success = false, message = "ملف المستند غير موجود على القرص." });
-            }
 
             var contentType = "application/octet-stream";
             var originalFileName = document.OriginalFileName ?? "document";

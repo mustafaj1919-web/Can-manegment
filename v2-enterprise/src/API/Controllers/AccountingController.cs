@@ -284,14 +284,14 @@ namespace CarShowroomManagementV2.API.Controllers
         // 5. استعلام كشف حساب العميل
         [HttpGet("customer-ledger")]
         public async Task<IActionResult> GetCustomerLedger(
-            [FromQuery] Guid customerId, 
-            [FromQuery] DateTime? fromDate, 
-            [FromQuery] DateTime? toDate, 
+            [FromQuery] Guid customerId,
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int per_page = 10)
         {
             if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 10;
+            if (per_page < 1 || per_page > 100) per_page = 10;
 
             var result = await Mediator.Send(new GetCustomerLedgerQuery
             {
@@ -299,7 +299,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 FromDate = fromDate,
                 ToDate = toDate,
                 Page = page,
-                PageSize = pageSize
+                PageSize = per_page
             });
             return Ok(new
             {
@@ -313,12 +313,12 @@ namespace CarShowroomManagementV2.API.Controllers
         public async Task<IActionResult> GetSupplierLedger(
             [FromQuery] Guid supplierId, 
             [FromQuery] DateTime? fromDate, 
-            [FromQuery] DateTime? toDate, 
+            [FromQuery] DateTime? toDate,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int per_page = 10)
         {
             if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 10;
+            if (per_page < 1 || per_page > 100) per_page = 10;
 
             var result = await Mediator.Send(new GetSupplierLedgerQuery
             {
@@ -326,7 +326,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 FromDate = fromDate,
                 ToDate = toDate,
                 Page = page,
-                PageSize = pageSize
+                PageSize = per_page
             });
             return Ok(new
             {

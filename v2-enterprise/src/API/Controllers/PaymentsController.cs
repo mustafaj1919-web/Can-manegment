@@ -38,14 +38,19 @@ namespace CarShowroomManagementV2.API.Controllers
             if (page < 1) page = 1;
             if (per_page < 1 || per_page > 200) per_page = 25;
 
+            var isReceipt = string.Equals(type, "receipt", StringComparison.OrdinalIgnoreCase);
+            var isPayment = string.Equals(type, "payment", StringComparison.OrdinalIgnoreCase);
+            if (type != null && !isReceipt && !isPayment)
+                return BadRequest(new { success = false, message = "نوع السند غير صالح. القيم المسموحة: receipt, payment." });
+
             var query = _context.Payments
                 .Include(p => p.Account)
                 .Include(p => p.ContraAccount)
                 .AsQueryable();
 
-            if (string.Equals(type, "receipt", StringComparison.OrdinalIgnoreCase))
+            if (isReceipt)
                 query = query.Where(p => p.Type == PaymentType.Receipt);
-            else if (string.Equals(type, "payment", StringComparison.OrdinalIgnoreCase))
+            else if (isPayment)
                 query = query.Where(p => p.Type == PaymentType.Payment);
 
             var rows = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
