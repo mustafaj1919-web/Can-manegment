@@ -9,7 +9,7 @@ using CarShowroomManagementV2.Application.Common.Interfaces;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin,Accountant")]
     public class SuppliersController : ApiControllerBase
     {
         private readonly IApplicationDbContext _context;

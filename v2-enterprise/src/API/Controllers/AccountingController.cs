@@ -12,7 +12,7 @@ using CarShowroomManagementV2.Domain.Enums;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin,Accountant,Viewer")]
     public class AccountingController : ApiControllerBase
     {
         private readonly IApplicationDbContext _context;
@@ -35,6 +35,7 @@ namespace CarShowroomManagementV2.API.Controllers
         };
 
         // 1. إنشاء قيد محاسبي مزدوج
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpPost("journal-entry")]
         public async Task<IActionResult> CreateJournalEntry([FromBody] CreateJournalEntryCommand command)
         {
@@ -54,6 +55,7 @@ namespace CarShowroomManagementV2.API.Controllers
         }
 
         // ─── إدارة شجرة الحسابات (بالكود) ───
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpPost("accounts")]
         public async Task<IActionResult> CreateAccount([FromBody] AccountDto dto)
         {
@@ -86,6 +88,7 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, accountId = account.Id, code = account.AccountCode, message = "تم إضافة الحساب بنجاح." });
         }
 
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpPut("accounts/{code}")]
         public async Task<IActionResult> UpdateAccount(string code, [FromBody] AccountDto dto)
         {
@@ -98,6 +101,7 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, code = account.AccountCode, is_active = account.IsActive, message = "تم تعديل الحساب بنجاح." });
         }
 
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpDelete("accounts/{code}")]
         public async Task<IActionResult> DeactivateAccount(string code)
         {
@@ -108,6 +112,7 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, is_active = false, message = "تم إيقاف الحساب بنجاح." });
         }
 
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpPost("recompute-balances")]
         public IActionResult RecomputeBalances()
         {
@@ -159,6 +164,7 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, data = new { total, page, per_page, items } });
         }
 
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpPost("journal-entries/{id}/reverse")]
         public async Task<IActionResult> ReverseJournalEntry(Guid id)
         {
@@ -191,6 +197,7 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, id = reversal.Id, reference_number = reversal.EntryNumber, original_id = entry.Id, message = "تم عكس القيد بنجاح." });
         }
 
+        [Authorize(Roles = "Owner,Admin,Accountant")]
         [HttpPost("journal-entries/{id}/post")]
         public async Task<IActionResult> PostJournalEntry(Guid id)
         {

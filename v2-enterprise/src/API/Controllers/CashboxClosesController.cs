@@ -9,7 +9,7 @@ using CarShowroomManagementV2.Domain.Entities;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin,Accountant")]
     [Route("api/cashbox-closes")]
     public class CashboxClosesController : ApiControllerBase
     {

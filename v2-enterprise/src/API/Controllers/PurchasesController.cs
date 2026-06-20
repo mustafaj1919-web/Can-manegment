@@ -10,7 +10,7 @@ using CarShowroomManagementV2.Domain.Entities;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin,Accountant")]
     public class PurchasesController : ApiControllerBase
     {
         private readonly IApplicationDbContext _context;

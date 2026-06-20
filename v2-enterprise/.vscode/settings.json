@@ -1,0 +1,8 @@
+{
+  "dotnet.dotnetPath": "/usr/local/share/dotnet/dotnet",
+  "omnisharp.dotnetPath": "/usr/local/share/dotnet/dotnet",
+  "csharp.dotnet.server.useOmnisharp": false,
+  "terminal.integrated.env.osx": {
+    "PATH": "${env:PATH}:/usr/local/share/dotnet:/Users/aldulimi/.dotnet/tools"
+  }
+}
