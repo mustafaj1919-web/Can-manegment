@@ -6,6 +6,9 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, Banknote, ReceiptText, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { getCashbox } from '@/lib/api/accounting'
 import { getCashDashboard } from '@/lib/api/vouchers'
+import { CashForecastPanel } from '@/components/accounting/CashForecastPanel'
+import { SmartAlertsPanel } from '@/components/accounting/SmartAlertsPanel'
+import { SectionCard } from '@/components/shared/SectionCard'
 import { cn, formatDate, formatMoney, translateStatus } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -190,6 +193,16 @@ export default function CashboxPage() {
           </div>
         </>
       )}
+
+      {/* Smart Alerts */}
+      <SectionCard title="التنبيهات الذكية">
+        <SmartAlertsPanel />
+      </SectionCard>
+
+      {/* Cash Flow Forecast */}
+      <SectionCard title="توقعات التدفق النقدي">
+        <CashForecastPanel />
+      </SectionCard>
     </div>
   )
 }

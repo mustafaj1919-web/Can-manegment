@@ -10,6 +10,9 @@ import {
 } from 'lucide-react'
 import { getReports } from '@/lib/api/reports'
 import { cn, formatDate, formatMoney } from '@/lib/utils'
+import { FinancialInsightsPanel } from '@/components/accounting/FinancialInsightsPanel'
+import { SmartAlertsPanel } from '@/components/accounting/SmartAlertsPanel'
+import { SectionCard } from '@/components/shared/SectionCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -308,6 +311,16 @@ export default function AccountingPage() {
           </div>
         </div>
       )}
+
+      {/* Smart Insights + Alerts */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <SectionCard title="الرؤى المالية الذكية">
+          <FinancialInsightsPanel />
+        </SectionCard>
+        <SectionCard title="التنبيهات الذكية">
+          <SmartAlertsPanel />
+        </SectionCard>
+      </div>
     </div>
   )
 }

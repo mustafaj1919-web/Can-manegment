@@ -543,3 +543,84 @@ export async function getDepreciationReport(month: number, year: number): Promis
   const res = await get<any>(`/Accounting/depreciation-report?month=${month}&year=${year}`)
   return (res?.success && res?.data) ? res.data : res
 }
+
+// ─── Smart Alerts ───────────────────────────────────────────────────────────
+
+export interface SmartAlert {
+  id: string
+  severity: 'error' | 'warning' | 'info'
+  category: string
+  title: string
+  message: string
+  amount?: number
+  count?: number
+  increase_percent?: number
+  threshold?: number
+}
+
+export interface AlertsResponse {
+  success: boolean
+  count: number
+  alerts: SmartAlert[]
+}
+
+export async function getSmartAlerts(cashThreshold = 1000000): Promise<AlertsResponse> {
+  const res = await get<any>(`/Accounting/alerts?cashThreshold=${cashThreshold}`)
+  if (res && res.success !== undefined) return res
+  return { success: true, count: 0, alerts: [] }
+}
+
+// ─── Financial Insights ──────────────────────────────────────────────────────
+
+export interface FinancialInsights {
+  period: { month: number; year: number; month_name: string }
+  this_month: { revenue: number; expenses: number; net_profit: number }
+  last_month: { revenue: number; expenses: number; net_profit: number }
+  changes: { revenue_pct: number; expense_pct: number; profit_pct: number }
+  top_expenses: Array<{ account_code: string; account_name: string; amount: number }>
+  insights: string[]
+}
+
+export async function getFinancialInsights(): Promise<FinancialInsights | null> {
+  try {
+    const res = await get<any>('/Accounting/insights')
+    return res ?? null
+  } catch {
+    return null
+  }
+}
+
+// ─── Cash Flow Forecast ──────────────────────────────────────────────────────
+
+export interface CashForecastItem {
+  due_date: string
+  amount: number
+  customer_name?: string
+  supplier_name?: string
+  installment_number?: number
+  invoice_number?: string
+}
+
+export interface CashForecast {
+  days: number
+  current_cash: number
+  current_bank: number
+  total_current: number
+  expected_inflow: number
+  expected_outflow: number
+  net_forecast: number
+  is_healthy: boolean
+  inflow_count: number
+  outflow_count: number
+  inflow_items: CashForecastItem[]
+  outflow_items: CashForecastItem[]
+}
+
+export async function getCashForecast(days = 30): Promise<CashForecast | null> {
+  try {
+    const res = await get<any>(`/Accounting/cash-forecast?days=${days}`)
+    return res ?? null
+  } catch {
+    return null
+  }
+}

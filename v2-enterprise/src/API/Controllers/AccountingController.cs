@@ -692,6 +692,275 @@ namespace CarShowroomManagementV2.API.Controllers
                 })
             });
         }
+
+        // ─── تنبيهات ذكية ───
+        [HttpGet("alerts")]
+        public async Task<IActionResult> GetAlerts([FromQuery] decimal cashThreshold = 1000000)
+        {
+            var branchId = _currentUserService.BranchId;
+            var now = DateTime.UtcNow;
+            var alertsList = new System.Collections.Generic.List<object>();
+
+            // 1. رصيد الصندوق المنخفض
+            var cashAccount = await _context.Accounts.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId);
+            if (cashAccount != null)
+            {
+                var cashBalance = await _context.JournalLines
+                    .Where(l => l.AccountId == cashAccount.Id)
+                    .SumAsync(l => l.Debit - l.Credit);
+                if (cashBalance < cashThreshold)
+                    alertsList.Add(new { id = "low_cash", severity = "warning", category = "صندوق",
+                        title = "رصيد الصندوق منخفض",
+                        message = $"الرصيد الحالي {cashBalance:N0} د.ع — أقل من الحد الأدنى {cashThreshold:N0} د.ع",
+                        amount = cashBalance, threshold = cashThreshold });
+            }
+
+            // 2. الأقساط المتأخرة
+            var overdueInstallments = await _context.Installments
+                .IgnoreQueryFilters()
+                .Where(i => i.BranchId == branchId
+                    && (i.Status == "Pending" || i.Status == "PartiallyPaid")
+                    && i.DueDate < now)
+                .ToListAsync();
+            if (overdueInstallments.Any())
+            {
+                var overdueAmount = overdueInstallments.Sum(i => i.Amount - i.PaidAmount);
+                alertsList.Add(new { id = "overdue_installments", severity = "error", category = "أقساط",
+                    title = $"{overdueInstallments.Count} قسط متأخر عن السداد",
+                    message = $"إجمالي المتأخرات: {overdueAmount:N0} د.ع",
+                    count = overdueInstallments.Count, amount = overdueAmount });
+            }
+
+            // 3. فواتير موردين غير مسددة منذ أكثر من 30 يوم
+            var thirtyDaysAgo = now.AddDays(-30);
+            var unpaidPurchases = await _context.Purchases
+                .IgnoreQueryFilters()
+                .Where(p => p.BranchId == branchId && p.Status == "Active"
+                    && p.AmountPaid < p.PurchaseCost && p.PurchaseDate < thirtyDaysAgo)
+                .ToListAsync();
+            if (unpaidPurchases.Any())
+            {
+                var unpaidAmount = unpaidPurchases.Sum(p => p.PurchaseCost - p.AmountPaid);
+                alertsList.Add(new { id = "overdue_suppliers", severity = "warning", category = "موردون",
+                    title = $"{unpaidPurchases.Count} فاتورة مورد متأخرة",
+                    message = $"فواتير تجاوزت 30 يوماً — إجمالي المتبقي: {unpaidAmount:N0} د.ع",
+                    count = unpaidPurchases.Count, amount = unpaidAmount });
+            }
+
+            // 4. ارتفاع مفاجئ في المصاريف (هذا الشهر vs متوسط 3 أشهر سابقة)
+            var startOfThisMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var startOf3MonthsAgo = startOfThisMonth.AddMonths(-3);
+            var expenseAccountIds = await _context.Accounts.IgnoreQueryFilters()
+                .Where(a => a.BranchId == branchId && a.Type == CarShowroomManagementV2.Domain.Enums.AccountType.Expense && a.IsActive)
+                .Select(a => a.Id).ToListAsync();
+
+            if (expenseAccountIds.Any())
+            {
+                var thisMonthExp = await _context.JournalLines
+                    .Include(l => l.JournalEntry)
+                    .Where(l => expenseAccountIds.Contains(l.AccountId)
+                        && l.JournalEntry != null && l.JournalEntry.IsPosted
+                        && l.JournalEntry.BranchId == branchId
+                        && l.JournalEntry.EntryDate >= startOfThisMonth)
+                    .SumAsync(l => l.Debit - l.Credit);
+
+                var last3MonthsExp = await _context.JournalLines
+                    .Include(l => l.JournalEntry)
+                    .Where(l => expenseAccountIds.Contains(l.AccountId)
+                        && l.JournalEntry != null && l.JournalEntry.IsPosted
+                        && l.JournalEntry.BranchId == branchId
+                        && l.JournalEntry.EntryDate >= startOf3MonthsAgo
+                        && l.JournalEntry.EntryDate < startOfThisMonth)
+                    .SumAsync(l => l.Debit - l.Credit);
+
+                if (last3MonthsExp > 0)
+                {
+                    var avgMonthly = last3MonthsExp / 3m;
+                    if (avgMonthly > 0 && thisMonthExp > avgMonthly * 1.2m)
+                    {
+                        var increasePercent = Math.Round((thisMonthExp - avgMonthly) / avgMonthly * 100, 1);
+                        alertsList.Add(new { id = "expense_spike", severity = "info", category = "مصاريف",
+                            title = "ارتفاع في المصاريف",
+                            message = $"مصاريف هذا الشهر أعلى من المتوسط بنسبة {increasePercent}%",
+                            current = thisMonthExp, average = avgMonthly, increase_percent = increasePercent });
+                    }
+                }
+            }
+
+            return Ok(new { success = true, count = alertsList.Count, alerts = alertsList });
+        }
+
+        // ─── رؤى مالية ذكية ───
+        [HttpGet("insights")]
+        public async Task<IActionResult> GetFinancialInsights()
+        {
+            var branchId = _currentUserService.BranchId;
+            var now = DateTime.UtcNow;
+            var startOfThisMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var startOfLastMonth = startOfThisMonth.AddMonths(-1);
+            var endOfLastMonth = startOfThisMonth.AddTicks(-1);
+
+            var revenueIds = await _context.Accounts.IgnoreQueryFilters()
+                .Where(a => a.BranchId == branchId && a.Type == CarShowroomManagementV2.Domain.Enums.AccountType.Revenue && a.IsActive)
+                .Select(a => a.Id).ToListAsync();
+            var expenseIds = await _context.Accounts.IgnoreQueryFilters()
+                .Where(a => a.BranchId == branchId && a.Type == CarShowroomManagementV2.Domain.Enums.AccountType.Expense && a.IsActive)
+                .Select(a => a.Id).ToListAsync();
+
+            async Task<decimal> SumLines(System.Collections.Generic.List<Guid> ids, DateTime from, DateTime to)
+            {
+                if (!ids.Any()) return 0;
+                return await _context.JournalLines
+                    .Include(l => l.JournalEntry)
+                    .Where(l => ids.Contains(l.AccountId)
+                        && l.JournalEntry != null && l.JournalEntry.IsPosted
+                        && l.JournalEntry.BranchId == branchId
+                        && l.JournalEntry.EntryDate >= from && l.JournalEntry.EntryDate <= to)
+                    .SumAsync(l => l.Debit - l.Credit);
+            }
+
+            var thisMonthRevenue = await SumLines(revenueIds, startOfThisMonth, now);
+            var lastMonthRevenue = await SumLines(revenueIds, startOfLastMonth, endOfLastMonth);
+            // Revenue is credit-nature: negate
+            thisMonthRevenue = -thisMonthRevenue;
+            lastMonthRevenue = -lastMonthRevenue;
+
+            var thisMonthExpenses = await SumLines(expenseIds, startOfThisMonth, now);
+            var lastMonthExpenses = await SumLines(expenseIds, startOfLastMonth, endOfLastMonth);
+
+            // Top 3 expense accounts this month
+            var topExpenses = expenseIds.Any()
+                ? await _context.JournalLines
+                    .Include(l => l.JournalEntry)
+                    .Include(l => l.Account)
+                    .Where(l => expenseIds.Contains(l.AccountId)
+                        && l.JournalEntry != null && l.JournalEntry.IsPosted
+                        && l.JournalEntry.BranchId == branchId
+                        && l.JournalEntry.EntryDate >= startOfThisMonth)
+                    .GroupBy(l => new { l.AccountId, l.Account!.Name, l.Account.AccountCode })
+                    .Select(g => new { account_code = g.Key.AccountCode, account_name = g.Key.Name, amount = g.Sum(l => l.Debit - l.Credit) })
+                    .OrderByDescending(x => x.amount)
+                    .Take(3)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<object>() as dynamic;
+
+            var thisNetProfit = thisMonthRevenue - thisMonthExpenses;
+            var lastNetProfit = lastMonthRevenue - lastMonthExpenses;
+
+            decimal Pct(decimal current, decimal previous) =>
+                previous == 0 ? 0 : Math.Round((current - previous) / Math.Abs(previous) * 100, 1);
+
+            var revenueChangePct = Pct(thisMonthRevenue, lastMonthRevenue);
+            var expenseChangePct = Pct(thisMonthExpenses, lastMonthExpenses);
+            var profitChangePct  = Pct(thisNetProfit, lastNetProfit);
+
+            // نص الرؤى
+            var insights = new System.Collections.Generic.List<string>();
+            if (lastMonthRevenue > 0)
+            {
+                if (revenueChangePct > 10) insights.Add($"الإيرادات ارتفعت {revenueChangePct}% مقارنة بالشهر الماضي");
+                else if (revenueChangePct < -10) insights.Add($"الإيرادات انخفضت {Math.Abs(revenueChangePct)}% مقارنة بالشهر الماضي");
+                else insights.Add($"الإيرادات مستقرة ({(revenueChangePct >= 0 ? "+" : "")}{revenueChangePct}%)");
+            }
+            if (lastMonthExpenses > 0 && expenseChangePct > 20)
+                insights.Add($"المصاريف ارتفعت {expenseChangePct}% — راجع بنود الإنفاق");
+            if (thisNetProfit > 0) insights.Add($"صافي الربح هذا الشهر {thisNetProfit:N0} د.ع");
+            else if (thisNetProfit < 0) insights.Add($"خسارة هذا الشهر {Math.Abs(thisNetProfit):N0} د.ع — يستوجب المراجعة");
+
+            return Ok(new {
+                success = true,
+                period = new { month = now.Month, year = now.Year, month_name = new[] {"","يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"}[now.Month] },
+                this_month = new { revenue = thisMonthRevenue, expenses = thisMonthExpenses, net_profit = thisNetProfit },
+                last_month = new { revenue = lastMonthRevenue, expenses = lastMonthExpenses, net_profit = lastNetProfit },
+                changes = new { revenue_pct = revenueChangePct, expense_pct = expenseChangePct, profit_pct = profitChangePct },
+                top_expenses = topExpenses,
+                insights
+            });
+        }
+
+        // ─── توقع التدفق النقدي ───
+        [HttpGet("cash-forecast")]
+        public async Task<IActionResult> GetCashForecast([FromQuery] int days = 30)
+        {
+            if (days < 1 || days > 365) days = 30;
+            var branchId = _currentUserService.BranchId;
+            var now = DateTime.UtcNow;
+            var forecastEnd = now.AddDays(days);
+
+            // الأقساط المستحقة في الفترة (وارد متوقع)
+            var dueInstallments = await _context.Installments
+                .IgnoreQueryFilters()
+                .Include(i => i.InstallmentPlan)
+                    .ThenInclude(p => p!.SalesContract)
+                        .ThenInclude(sc => sc!.Customer)
+                .Where(i => i.BranchId == branchId
+                    && (i.Status == "Pending" || i.Status == "PartiallyPaid")
+                    && i.DueDate >= now && i.DueDate <= forecastEnd)
+                .OrderBy(i => i.DueDate)
+                .Select(i => new {
+                    due_date = i.DueDate,
+                    amount = i.Amount - i.PaidAmount,
+                    customer_name = i.InstallmentPlan != null && i.InstallmentPlan.SalesContract != null && i.InstallmentPlan.SalesContract.Customer != null
+                        ? i.InstallmentPlan.SalesContract.Customer.FullName : "عميل",
+                    installment_number = i.InstallmentNumber
+                })
+                .ToListAsync();
+
+            // فواتير موردين غير مسددة (صادر مستحق)
+            var unpaidPurchases = await _context.Purchases
+                .IgnoreQueryFilters()
+                .Include(p => p.Supplier)
+                .Where(p => p.BranchId == branchId && p.Status == "Active"
+                    && p.AmountPaid < p.PurchaseCost)
+                .OrderBy(p => p.PurchaseDate)
+                .Select(p => new {
+                    due_date = p.PurchaseDate,
+                    amount = p.PurchaseCost - p.AmountPaid,
+                    supplier_name = p.Supplier != null ? p.Supplier.Name : "مورد",
+                    invoice_number = p.PurchaseNumber
+                })
+                .Take(50)
+                .ToListAsync();
+
+            // الرصيد الحالي للصندوق
+            var cashAccount = await _context.Accounts.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId);
+            var currentCash = cashAccount != null
+                ? await _context.JournalLines
+                    .Where(l => l.AccountId == cashAccount.Id)
+                    .SumAsync(l => l.Debit - l.Credit)
+                : 0;
+
+            var bankAccount = await _context.Accounts.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(a => a.AccountCode == "112001" && a.BranchId == branchId);
+            var currentBank = bankAccount != null
+                ? await _context.JournalLines
+                    .Where(l => l.AccountId == bankAccount.Id)
+                    .SumAsync(l => l.Debit - l.Credit)
+                : 0;
+
+            var totalInflow  = dueInstallments.Sum(i => i.amount);
+            var totalOutflow = unpaidPurchases.Sum(p => p.amount);
+            var netForecast  = currentCash + currentBank + totalInflow - totalOutflow;
+
+            return Ok(new {
+                success = true,
+                days,
+                current_cash = currentCash,
+                current_bank = currentBank,
+                total_current = currentCash + currentBank,
+                expected_inflow = totalInflow,
+                expected_outflow = totalOutflow,
+                net_forecast = netForecast,
+                is_healthy = netForecast > 0,
+                inflow_count = dueInstallments.Count,
+                outflow_count = unpaidPurchases.Count,
+                inflow_items = dueInstallments,
+                outflow_items = unpaidPurchases
+            });
+        }
+
     }
 
     public record ComputeDepreciationRequest(int Month, int Year, decimal? AnnualRatePercent);
