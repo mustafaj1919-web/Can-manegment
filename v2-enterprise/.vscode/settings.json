@@ -1,7 +1,18 @@
 {
   "dotnet.dotnetPath": "/usr/local/share/dotnet/dotnet",
+  "dotnet.server.useOmnisharp": false,
   "omnisharp.dotnetPath": "/usr/local/share/dotnet/dotnet",
   "csharp.dotnet.server.useOmnisharp": false,
+  "dotnetAcquisitionExtension.existingDotnetPath": [
+    {
+      "extensionId": "ms-dotnettools.csharp",
+      "path": "/usr/local/share/dotnet/dotnet"
+    },
+    {
+      "extensionId": "ms-dotnettools.csdevkit",
+      "path": "/usr/local/share/dotnet/dotnet"
+    }
+  ],
   "terminal.integrated.env.osx": {
     "PATH": "${env:PATH}:/usr/local/share/dotnet:/Users/aldulimi/.dotnet/tools"
   }

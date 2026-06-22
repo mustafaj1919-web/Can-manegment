@@ -13,10 +13,12 @@ namespace CarShowroomManagementV2.API.Controllers
     public class SuppliersController : ApiControllerBase
     {
         private readonly IApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
 
-        public SuppliersController(IApplicationDbContext context)
+        public SuppliersController(IApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
         }
 
         // 1. قائمة الموردين مع البحث والترقيم
@@ -74,7 +76,99 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, supplierId = id, message = "تم تسجيل المورد وإنشاء حسابه المالي بنجاح." });
         }
 
-        // 3. صرف دفعة مالية للمورد
+        // 3. تفاصيل مورد واحد
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            if (id == Guid.Empty)
+                return BadRequest(new { success = false, message = "معرف المورد غير صالح." });
+
+            var branchId = _currentUserService.BranchId;
+            var s = await _context.Suppliers
+                .Include(x => x.Account)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Id == id && x.BranchId == branchId);
+
+            if (s == null)
+                return NotFound(new { success = false, message = "المورد غير موجود." });
+
+            var purchasesCount = await _context.Purchases
+                .CountAsync(p => p.SupplierId == id);
+
+            var totalPurchased = await _context.Purchases
+                .Where(p => p.SupplierId == id)
+                .SumAsync(p => (decimal?)p.PurchaseCost) ?? 0;
+
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id = s.Id,
+                    name = s.Name,
+                    code = s.Code,
+                    phone = s.Phone,
+                    address = s.Address,
+                    notes = s.Notes,
+                    account_id = s.AccountId,
+                    account_code = s.Account != null ? s.Account.AccountCode : string.Empty,
+                    branch_id = s.BranchId,
+                    is_active = s.IsActive,
+                    purchases_count = purchasesCount,
+                    total_purchased = totalPurchased
+                }
+            });
+        }
+
+        // 4. تعديل بيانات مورد
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSupplierRequest request)
+        {
+            if (id == Guid.Empty)
+                return BadRequest(new { success = false, message = "معرف المورد غير صالح." });
+
+            var branchId = _currentUserService.BranchId;
+            var supplier = await _context.Suppliers
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.Id == id && s.BranchId == branchId);
+
+            if (supplier == null)
+                return NotFound(new { success = false, message = "المورد غير موجود." });
+
+            supplier.Name = request.Name ?? supplier.Name;
+            supplier.Phone = request.Phone ?? supplier.Phone;
+            supplier.Address = request.Address;
+            supplier.Notes = request.Notes;
+
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, message = "تم تحديث بيانات المورد بنجاح." });
+        }
+
+        // 5. تعطيل مورد (حذف ناعم)
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Deactivate(Guid id)
+        {
+            if (id == Guid.Empty)
+                return BadRequest(new { success = false, message = "معرف المورد غير صالح." });
+
+            var branchId = _currentUserService.BranchId;
+            var supplier = await _context.Suppliers
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.Id == id && s.BranchId == branchId);
+
+            if (supplier == null)
+                return NotFound(new { success = false, message = "المورد غير موجود." });
+
+            var hasPurchases = await _context.Purchases.AnyAsync(p => p.SupplierId == id);
+            if (hasPurchases)
+                return BadRequest(new { success = false, message = "لا يمكن حذف مورد مرتبط بفواتير شراء." });
+
+            supplier.IsActive = false;
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, message = "تم تعطيل المورد بنجاح." });
+        }
+
+        // 6. صرف دفعة مالية للمورد
         [HttpPost("{id}/pay")]
         public async Task<IActionResult> Pay(Guid id, [FromBody] PaySupplierCommand command)
         {
@@ -85,4 +179,6 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, paymentId = paymentId, message = "تم صرف المبلغ للمورد وتوليد سند الصرف والقيد المحاسبي بنجاح." });
         }
     }
+
+    public record UpdateSupplierRequest(string? Name, string? Phone, string? Address, string? Notes);
 }

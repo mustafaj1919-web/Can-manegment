@@ -27,6 +27,7 @@ import {
   Activity,
   Users,
   Bell,
+  Truck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
@@ -93,6 +94,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/inventory', label: 'مخزون السيارات', icon: Car },
       { href: '/sales', label: 'المبيعات', icon: TrendingUp, roles: SALES_ROLES },
       { href: '/purchases', label: 'المشتريات', icon: ShoppingBag, roles: FINANCE_ROLES },
+      { href: '/suppliers', label: 'الموردون', icon: Truck, roles: FINANCE_ROLES },
       { href: '/customers', label: 'العملاء', icon: Users, roles: SALES_ROLES },
       { href: '/installments', label: 'الأقساط والتحصيل', icon: CalendarDays, roles: FINANCE_ROLES, alert: true },
       { href: '/risk', label: 'مراقبة المخاطر', icon: ShieldAlert, roles: FINANCE_ROLES },

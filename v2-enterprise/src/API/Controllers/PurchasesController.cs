@@ -192,5 +192,20 @@ namespace CarShowroomManagementV2.API.Controllers
             var id = await Mediator.Send(command);
             return Ok(new { success = true, purchaseId = id, message = "تم تسجيل فاتورة الشراء وتوليد القيد المحاسبي الموزون بنجاح." });
         }
+
+        // 4. شراء جماعي — نفس المورد والموديل بأرقام شاصي مختلفة
+        [HttpPost("bulk")]
+        public async Task<IActionResult> BulkCreate([FromBody] BulkCreatePurchaseCommand command)
+        {
+            var result = await Mediator.Send(command);
+            return Ok(new
+            {
+                success = true,
+                created_count = result.CreatedCount,
+                purchase_ids = result.PurchaseIds,
+                errors = result.Errors,
+                message = $"تم تسجيل {result.CreatedCount} سيارة بنجاح." + (result.Errors.Any() ? $" ({result.Errors.Count} خطأ)" : "")
+            });
+        }
     }
 }
