@@ -362,6 +362,39 @@ namespace CarShowroomManagementV2.API.Controllers
             var list = await Mediator.Send(new GetOverdueInstallmentsQuery());
             return Ok(new { success = true, data = list });
         }
+
+        // POST /api/Installments/send-reminders
+        [HttpPost("send-reminders")]
+        public async Task<IActionResult> SendOverdueReminders([FromServices] IEmailService emailService)
+        {
+            var branchId = _currentUserService.BranchId;
+            var now = DateTime.UtcNow;
+
+            var overdue = await _context.Installments
+                .IgnoreQueryFilters()
+                .Include(i => i.InstallmentPlan)
+                    .ThenInclude(p => p!.SalesContract)
+                        .ThenInclude(sc => sc!.Customer)
+                .Where(i => i.BranchId == branchId
+                    && (i.Status == "Pending" || i.Status == "PartiallyPaid")
+                    && i.DueDate < now)
+                .ToListAsync();
+
+            int sent = 0, skipped = 0;
+            foreach (var inst in overdue)
+            {
+                var customer = inst.InstallmentPlan?.SalesContract?.Customer;
+                if (customer == null || string.IsNullOrWhiteSpace(customer.Email)) { skipped++; continue; }
+
+                await emailService.SendOverdueInstallmentReminderAsync(
+                    customer.Email, customer.FullName ?? customer.Name,
+                    inst.InstallmentNumber, inst.Amount - inst.PaidAmount, inst.DueDate);
+                sent++;
+            }
+
+            return Ok(new { success = true, sent, skipped, total = overdue.Count,
+                message = $"تم إرسال {sent} تذكير. تخطي {skipped} (بدون بريد إلكتروني)." });
+        }
     }
 
     public class PaySchedulePayloadDto

@@ -9,6 +9,7 @@ namespace CarShowroomManagementV2.Domain.Entities
         public string Name { get; set; } = string.Empty; // الاسم التجاري أو المختصر
         public string? FullName { get; set; } // الاسم الكامل للعميل
         public string Phone { get; set; } = string.Empty;
+        public string? Email { get; set; }
         public string? Address { get; set; }
         public string? IdType { get; set; } // نوع الهوية (البطاقة الوطنية، جواز سفر...)
         public string IdNumber { get; set; } = string.Empty; // رقم الهوية الفريد

@@ -32,6 +32,7 @@ import {
   Calendar,
   RefreshCw,
   TrendingDown,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
@@ -108,6 +109,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'المالية والمحاسبة',
     accent: 'emerald',
     items: [
+      { href: '/kpi', label: 'لوحة المؤشرات KPI', icon: BarChart3, roles: FINANCE_ROLES },
       { href: '/cashbox', label: 'الصندوق والحركة', icon: Wallet, roles: FINANCE_ROLES },
       { href: '/vouchers', label: 'السندات', icon: ReceiptText, roles: FINANCE_ROLES },
       { href: '/accounting', label: 'المحاسبة', icon: Calculator, roles: FINANCE_ROLES },

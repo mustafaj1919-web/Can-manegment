@@ -677,4 +677,17 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
     {
         Log.Warning(ex, "تعذر إنشاء جداول السنة المالية.");
     }
+
+    // إضافة عمود Email لجدول العملاء
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""Email"" text;
+        ");
+        Log.Information("تم التحقق من عمود Email في جدول Customers.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر تعديل جدول Customers بإضافة عمود Email.");
+    }
 }

@@ -178,6 +178,70 @@ namespace CarShowroomManagementV2.API.Controllers
             var paymentId = await Mediator.Send(command);
             return Ok(new { success = true, paymentId = paymentId, message = "تم صرف المبلغ للمورد وتوليد سند الصرف والقيد المحاسبي بنجاح." });
         }
+
+        // GET /api/Suppliers/{id}/ledger?from=&to=
+        [HttpGet("{id}/ledger")]
+        public async Task<IActionResult> GetSupplierLedger(Guid id, [FromQuery] string? from = null, [FromQuery] string? to = null)
+        {
+            var branchId = _currentUserService.BranchId;
+
+            var supplier = await _context.Suppliers
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.Id == id && s.BranchId == branchId);
+            if (supplier == null) return NotFound(new { success = false, message = "المورد غير موجود" });
+
+            var fromDate = from != null ? DateTime.TryParse(from, out var fd) ? fd.ToUniversalTime() : DateTime.MinValue : DateTime.MinValue;
+            var toDate   = to != null ? DateTime.TryParse(to, out var td) ? td.ToUniversalTime() : DateTime.UtcNow : DateTime.UtcNow;
+
+            // جلب حركات الحساب
+            var lines = await _context.JournalLines
+                .Include(l => l.JournalEntry)
+                .Where(l => l.AccountId == supplier.AccountId
+                    && l.JournalEntry != null && l.JournalEntry.IsPosted
+                    && l.JournalEntry.EntryDate >= fromDate && l.JournalEntry.EntryDate <= toDate)
+                .OrderBy(l => l.JournalEntry!.EntryDate)
+                .Select(l => new {
+                    date = l.JournalEntry!.EntryDate,
+                    entry_number = l.JournalEntry.EntryNumber,
+                    description = l.Description ?? l.JournalEntry.Description,
+                    debit = l.Debit,
+                    credit = l.Credit,
+                    reference_type = l.JournalEntry.ReferenceType
+                })
+                .ToListAsync();
+
+            // رصيد متراكم
+            decimal running = 0;
+            var rows = lines.Select(l => {
+                running += l.credit - l.debit; // حساب مورد طبيعته دائن
+                return new {
+                    l.date,
+                    l.entry_number,
+                    l.description,
+                    l.debit,
+                    l.credit,
+                    running_balance = running,
+                    l.reference_type
+                };
+            }).ToList();
+
+            var totalDebit  = lines.Sum(l => l.debit);
+            var totalCredit = lines.Sum(l => l.credit);
+            var balance     = totalCredit - totalDebit;
+
+            // إجمالي المشتريات غير المسددة
+            var unpaidAmount = await _context.Purchases.IgnoreQueryFilters()
+                .Where(p => p.SupplierId == id && p.Status == "Active" && p.AmountPaid < p.PurchaseCost)
+                .SumAsync(p => p.PurchaseCost - p.AmountPaid);
+
+            return Ok(new {
+                success = true,
+                supplier = new { id = supplier.Id, name = supplier.Name, phone = supplier.Phone, account_id = supplier.AccountId },
+                period = new { from = fromDate, to = toDate },
+                summary = new { total_debit = totalDebit, total_credit = totalCredit, balance, unpaid_purchases = unpaidAmount },
+                entries = rows
+            });
+        }
     }
 
     public record UpdateSupplierRequest(string? Name, string? Phone, string? Address, string? Notes);

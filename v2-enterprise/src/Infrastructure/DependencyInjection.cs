@@ -6,6 +6,7 @@ using CarShowroomManagementV2.Application.Common.Interfaces;
 using CarShowroomManagementV2.Infrastructure.Persistence;
 using CarShowroomManagementV2.Infrastructure.Persistence.Interceptors;
 using CarShowroomManagementV2.Infrastructure.Identity;
+using CarShowroomManagementV2.Infrastructure.Services;
 
 namespace CarShowroomManagementV2.Infrastructure
 {
@@ -33,6 +34,9 @@ namespace CarShowroomManagementV2.Infrastructure
             // تسجيل خدمة المستخدم الحالي والهوية والمصادقة
             services.AddScoped<ICurrentUserService, CurrentUserService>();
             services.AddScoped<IdentityService>();
+
+            // تسجيل خدمة البريد الإلكتروني
+            services.AddScoped<IEmailService, SmtpEmailService>();
 
             return services;
         }

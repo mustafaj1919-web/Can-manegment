@@ -116,3 +116,34 @@ export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<
   }
   return post<BulkPurchaseResult>('/Purchases/bulk', body)
 }
+
+// ─── Supplier Ledger ─────────────────────────────────────────────────────────
+
+export interface SupplierLedgerEntry {
+  date: string
+  entry_number: string
+  description: string
+  debit: number
+  credit: number
+  running_balance: number
+  reference_type: string
+}
+
+export interface SupplierLedger {
+  supplier: { id: string; name: string; phone: string; account_id: string }
+  period: { from: string; to: string }
+  summary: { total_debit: number; total_credit: number; balance: number; unpaid_purchases: number }
+  entries: SupplierLedgerEntry[]
+}
+
+export async function getSupplierLedger(id: string, from?: string, to?: string): Promise<SupplierLedger | null> {
+  const qs = new URLSearchParams()
+  if (from) qs.set('from', from)
+  if (to)   qs.set('to', to)
+  try {
+    const res = await get<any>(`/Suppliers/${id}/ledger${qs.toString() ? `?${qs.toString()}` : ''}`)
+    return res ?? null
+  } catch {
+    return null
+  }
+}
