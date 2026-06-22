@@ -448,3 +448,36 @@ export function getAccountingRulesCheck(): Promise<AccountingRulesCheckResult> {
     missing_reference_number: []
   })
 }
+
+/* ─── Account Movement ──────────────────────────────────────────────────── */
+
+export interface AccountMovementRow {
+  date: string
+  journal_ref: string
+  voucher_number: string
+  description: string
+  inflow: number
+  outflow: number
+  balance: number
+}
+
+export interface AccountMovementResponse {
+  account_code: string
+  account_name: string
+  rows: AccountMovementRow[]
+  total_inflow: number
+  total_outflow: number
+  final_balance: number
+}
+
+export async function getAccountMovement(
+  accountCode: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<AccountMovementResponse> {
+  const qs = new URLSearchParams({ account_code: accountCode })
+  if (dateFrom) qs.set('start_date', dateFrom)
+  if (dateTo) qs.set('end_date', dateTo)
+  const res = await get<any>(`/Accounting/account-movement?${qs.toString()}`)
+  return (res?.success && res?.data) ? res.data : res
+}

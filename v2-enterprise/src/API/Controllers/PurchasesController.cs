@@ -230,6 +230,13 @@ namespace CarShowroomManagementV2.API.Controllers
             if (cashAccount == null)
                 return BadRequest(new { success = false, message = $"حساب الصرف ({accountCode}) غير موجود في هذا الفرع." });
 
+            // التحقق من كفاية رصيد الحساب
+            var accountBalance = await _context.JournalLines
+                .Where(l => l.AccountId == cashAccount.Id)
+                .SumAsync(l => l.Debit - l.Credit);
+            if (accountBalance < request.Amount)
+                return BadRequest(new { success = false, message = $"رصيد الحساب ({cashAccount.AccountCode} - {cashAccount.Name}) غير كافٍ. المتاح: {accountBalance:N0}، المطلوب: {request.Amount:N0}." });
+
             var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
             if (dbContext == null) return StatusCode(500);
 

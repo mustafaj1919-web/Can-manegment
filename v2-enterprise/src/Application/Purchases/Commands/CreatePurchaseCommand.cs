@@ -195,6 +195,13 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
                 if (!isPartialPayment && cashOrBankAccountId.HasValue)
                 {
+                    // التحقق من كفاية رصيد الصندوق/البنك للدفع الكامل
+                    var availableBalance = await _context.JournalLines
+                        .Where(l => l.AccountId == cashOrBankAccountId.Value)
+                        .SumAsync(l => l.Debit - l.Credit, cancellationToken);
+                    if (availableBalance < purchaseCost)
+                        throw new InvalidOperationException($"رصيد الحساب غير كافٍ. المتاح: {availableBalance:N0}، المطلوب: {purchaseCost:N0}.");
+
                     // دفع كامل نقداً أو بنكياً: دائن الصندوق/البنك مباشرة
                     mainCreditAccountId = cashOrBankAccountId.Value;
                     mainCreditDesc = $"دفع قيمة الشراء للسيارة {vehicle.Model} عبر {cashOrBankDesc}";
@@ -247,6 +254,13 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 // 6. إذا كان الدفع جزئياً — قيد الدفعة الأولى: مدين المورد / دائن الصندوق أو البنك
                 if (isPartialPayment && paidAmount > 0 && cashOrBankAccountId.HasValue)
                 {
+                    // التحقق من كفاية رصيد الصندوق/البنك للدفعة الأولى
+                    var availableBalance = await _context.JournalLines
+                        .Where(l => l.AccountId == cashOrBankAccountId.Value)
+                        .SumAsync(l => l.Debit - l.Credit, cancellationToken);
+                    if (availableBalance < paidAmount)
+                        throw new InvalidOperationException($"رصيد الحساب غير كافٍ للدفعة الأولى. المتاح: {availableBalance:N0}، المطلوب: {paidAmount:N0}.");
+
                     var totalEntriesCount2 = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
                     var payEntryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount2 + 1:D5}";
 

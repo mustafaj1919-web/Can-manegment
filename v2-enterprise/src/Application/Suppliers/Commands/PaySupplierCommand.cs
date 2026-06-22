@@ -64,6 +64,13 @@ namespace CarShowroomManagementV2.Application.Suppliers.Commands
                 throw new InvalidOperationException($"حساب الصرف المحدد ({request.CreditAccountCode}) غير موجود في هذا الفرع.");
             }
 
+            // التحقق من كفاية رصيد حساب الدفع قبل الصرف
+            var accountBalance = await _context.JournalLines
+                .Where(l => l.AccountId == creditAccount.Id)
+                .SumAsync(l => l.Debit - l.Credit, cancellationToken);
+            if (accountBalance < request.Amount)
+                throw new InvalidOperationException($"رصيد الحساب ({creditAccount.AccountCode} - {creditAccount.Name}) غير كافٍ. المتاح: {accountBalance:N0}، المطلوب: {request.Amount:N0}.");
+
             var dbContext = _context as DbContext;
             if (dbContext == null)
             {

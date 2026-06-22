@@ -1,10 +1,11 @@
 'use client'
 
 import { useMemo, useState, type ElementType, type ReactNode } from 'react'
+import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet,
+  AlertCircle, BookOpen, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet,
   GitBranch, Layers3, ListTree, Plus, RefreshCw, Scale, Search,
   TrendingDown, TrendingUp, Archive, ArchiveRestore, Pencil, XCircle, Check, X,
 } from 'lucide-react'
@@ -313,6 +314,13 @@ function TreeRow({ node, depth, search, expanded, onToggle, onEdit, onDelete, on
         {/* Actions */}
         <td className="px-3 py-2.5 whitespace-nowrap">
           <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity [tr:hover_&]:opacity-100">
+            {node.is_active && (
+              <Link href={`/chart-of-accounts/${node.code}`} title="كشف حساب">
+                <button className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-violet-400 hover:bg-violet-400/10 transition-colors">
+                  <BookOpen className="h-3 w-3" />
+                </button>
+              </Link>
+            )}
             {node.is_active && (
               <button onClick={() => onAddChild(node)} title="إضافة حساب فرعي" className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-cyan-400 hover:bg-cyan-400/10 transition-colors">
                 <Plus className="h-3 w-3" />
