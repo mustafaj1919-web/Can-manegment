@@ -1,20 +1,25 @@
 'use client'
 
-import { use } from 'react'
+import { use, useState } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Calendar, Car, Hash, Phone, User } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, Calendar, Car, Hash, Phone, User, PlusCircle, Loader2 } from 'lucide-react'
 import { cn, formatDate, formatMoney, formatNumber, getStatusVariant, translateStatus } from '@/lib/utils'
-import { getPurchaseById } from '@/lib/api/purchases'
+import { getPurchaseById, addPurchasePayment } from '@/lib/api/purchases'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { toast } from 'sonner'
 
 const METHOD_LABELS: Record<string, string> = {
-  Cash: 'نقدا',
+  Cash: 'نقداً',
+  Bank: 'حوالة مصرفية',
+  Cheque: 'شيك / آجل',
   Installment: 'أقساط',
-  'Bank transfer': 'حوالة مصرفية',
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value?: string | number | null }) {
@@ -30,9 +35,105 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
   )
 }
 
+function AddPaymentForm({
+  purchaseId,
+  remaining,
+  currency,
+  onSuccess,
+}: {
+  purchaseId: string
+  remaining: number
+  currency: string
+  onSuccess: () => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [method, setMethod] = useState('Cash')
+  const [notes, setNotes] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      addPurchasePayment(purchaseId, {
+        amount: Number(amount),
+        payment_method: method,
+        notes: notes || undefined,
+      }),
+    onSuccess: (res) => {
+      toast.success(`تم تسجيل الدفعة. المتبقي: ${formatMoney(res.remaining_amount, currency as any)}`)
+      onSuccess()
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'حدث خطأ أثناء تسجيل الدفعة')
+    },
+  })
+
+  const parsed = Number(amount)
+  const isValid = parsed > 0 && parsed <= remaining
+
+  return (
+    <div className="space-y-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+      <p className="text-xs font-semibold text-amber-400">تسجيل دفعة جديدة</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">
+            المبلغ * (الحد الأقصى: {formatMoney(remaining, currency as any)})
+          </Label>
+          <Input
+            type="number"
+            min="0.01"
+            step="any"
+            max={remaining}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="font-numeric bg-secondary/30 border-border/60"
+            placeholder="0"
+          />
+          {parsed > remaining && (
+            <p className="mt-1 text-[11px] text-rose-400">المبلغ يتجاوز المتبقي</p>
+          )}
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">طريقة الدفع</Label>
+          <Select value={method} onValueChange={setMethod}>
+            <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Cash">نقداً</SelectItem>
+              <SelectItem value="Bank">حوالة مصرفية</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label className="mb-1.5 block text-xs text-muted-foreground">ملاحظات (اختياري)</Label>
+          <Input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="bg-secondary/30 border-border/60"
+            placeholder="دفعة شهر..."
+          />
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button
+          onClick={() => mutation.mutate()}
+          disabled={!isValid || mutation.isPending}
+          size="sm"
+          className="gap-1.5 bg-amber-600 text-white hover:bg-amber-500"
+        >
+          {mutation.isPending ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" />جاري التسجيل...</>
+          ) : (
+            <><PlusCircle className="h-3.5 w-3.5" />تسجيل الدفعة</>
+          )}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function PurchaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = use(params)
   const id = rawId
+  const queryClient = useQueryClient()
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
 
   const { data: purchase, isLoading, isError } = useQuery({
     queryKey: ['purchase', id],
@@ -71,6 +172,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
     ? `${purchase.car.brand} ${purchase.car.model} ${purchase.car.manufacturing_year}`
     : `سيارة #${purchase.car_id ?? '-'}`
   const sellerName = purchase.seller?.full_name || purchase.seller?.name || `بائع #${purchase.seller_id ?? '-'}`
+  const hasRemaining = (purchase.remaining_amount ?? 0) > 0
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -102,10 +204,26 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
         </SectionCard>
       </div>
 
-      <SectionCard title="السعر والدفع" contentClassName="px-5 py-1">
+      <SectionCard
+        title="السعر والدفع"
+        contentClassName="px-5 py-1"
+        action={
+          hasRemaining && purchase.status !== 'Cancelled' ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowPaymentForm((v) => !v)}
+              className="gap-1.5 text-amber-400 hover:text-amber-300"
+            >
+              <PlusCircle className="h-4 w-4" />
+              {showPaymentForm ? 'إلغاء' : 'إضافة دفعة'}
+            </Button>
+          ) : null
+        }
+      >
         <div className="divide-y divide-border/30">
           <div className="flex items-center justify-between py-3">
-            <span className="text-xs text-muted-foreground">سعر الشراء</span>
+            <span className="text-xs text-muted-foreground">سعر الشراء الإجمالي</span>
             <span className="font-numeric text-sm font-bold text-foreground">
               {formatMoney(purchase.purchase_price, purchase.currency)}
             </span>
@@ -118,7 +236,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
           </div>
           <div className="flex items-center justify-between py-3">
             <span className="text-xs text-muted-foreground">المتبقي</span>
-            <span className={cn('font-numeric text-sm font-bold', purchase.remaining_amount > 0 ? 'text-rose-300' : 'text-emerald-300')}>
+            <span className={cn('font-numeric text-sm font-bold', hasRemaining ? 'text-rose-300' : 'text-emerald-300')}>
               {formatMoney(purchase.remaining_amount, purchase.currency)}
             </span>
           </div>
@@ -129,6 +247,20 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
             </span>
           </div>
         </div>
+
+        {showPaymentForm && (
+          <div className="pb-3">
+            <AddPaymentForm
+              purchaseId={id}
+              remaining={purchase.remaining_amount ?? 0}
+              currency={purchase.currency}
+              onSuccess={() => {
+                setShowPaymentForm(false)
+                queryClient.invalidateQueries({ queryKey: ['purchase', id] })
+              }}
+            />
+          </div>
+        )}
       </SectionCard>
 
     </div>

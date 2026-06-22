@@ -549,6 +549,20 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
         Log.Warning(ex, "تعذر إنشاء جدول Employees.");
     }
 
+    // ي. إضافة عمود AmountPaid لجدول Purchases لدعم الدفع بالأقساط
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Purchases"" ADD COLUMN IF NOT EXISTS ""AmountPaid"" numeric(18,4) NOT NULL DEFAULT 0;
+            UPDATE ""Purchases"" SET ""AmountPaid"" = ""PurchaseCost"" WHERE ""AmountPaid"" = 0;
+        ");
+        Log.Information("تم التحقق من عمود AmountPaid في جدول Purchases.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر تعديل جدول Purchases بإضافة عمود AmountPaid.");
+    }
+
     // ط. جداول موديول CRM (تفاعلات، صفقات، عمولات، أهداف)
     try
     {

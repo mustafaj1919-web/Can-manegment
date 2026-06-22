@@ -167,6 +167,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         SupplierId = supplier.Id,
                         VehicleId = vehicle.Id,
                         PurchaseCost = purchaseCost,
+                        AmountPaid = purchaseCost, // الشراء الجماعي دائماً دفع كامل
                         PaymentMethod = request.PaymentMethod,
                         Status = "Active",
                         BranchId = branchId

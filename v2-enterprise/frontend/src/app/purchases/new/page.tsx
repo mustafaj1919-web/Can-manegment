@@ -287,7 +287,6 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
     if (!year || Number.isNaN(Number.parseInt(year, 10))) nextErrors.year = 'سنة الصنع مطلوبة'
     if (!color.trim()) nextErrors.color = 'اللون مطلوب'
     if (!vin.trim()) nextErrors.vin = 'رقم الشاصي مطلوب'
-    if (!plateNumber.trim()) nextErrors.plateNumber = 'رقم اللوحة مطلوب'
     if (!purchasePrice || price <= 0) nextErrors.purchasePrice = 'سعر الشراء مطلوب'
     if (!paymentMethod) nextErrors.paymentMethod = 'اختر طريقة الدفع'
     if (!purchaseDate) nextErrors.purchaseDate = 'تاريخ الشراء مطلوب'
@@ -391,8 +390,8 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
           <FieldError msg={errors.vin} />
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">رقم اللوحة *</Label>
-          <Input value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)} className={cn('font-numeric bg-secondary/30 border-border/60', errors.plateNumber && 'border-rose-500/60')} />
+          <Label className="mb-1.5 block text-xs text-muted-foreground">رقم اللوحة</Label>
+          <Input value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
           <FieldError msg={errors.plateNumber} />
         </div>
         <div className="sm:col-span-2">

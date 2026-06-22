@@ -125,12 +125,12 @@ export async function getPurchaseById(id: number | string): Promise<PurchaseDeta
 }
 
 export async function createPurchase(payload: CreatePurchasePayload): Promise<{ id: number | string; invoice_number: string }> {
-  // مطابقة أسماء حقول الطلب إلى PascalCase لـ CreatePurchaseCommand في الـ backend.
-  // الـ backend ينشئ سيارة جديدة مع فاتورة الشراء، لذا يجب إرسال بيانات السيارة كاملة.
   const methodMap: Record<string, number> = { Cash: 1, Bank: 2, 'Bank transfer': 2, Cheque: 3 }
+  const paidAmount = payload.paid_amount != null && payload.paid_amount >= 0 ? payload.paid_amount : payload.purchase_price
   const body = {
     SupplierId: payload.seller_id,
     PurchaseCost: payload.purchase_price,
+    PaidAmount: paidAmount,
     PaymentMethod: methodMap[payload.payment_method] ?? 1,
     Brand: payload.brand,
     Model: payload.model,
@@ -208,5 +208,15 @@ export async function addPurchasePayment(
   id: number | string,
   payload: AddPurchasePaymentPayload,
 ): Promise<AddPurchasePaymentResponse> {
-  return Promise.reject(new Error('صرف دفعات إضافية للمورد غير متاح حالياً'))
+  const body = {
+    Amount: payload.amount,
+    PaymentMethod: payload.payment_method,
+    Notes: payload.notes,
+  }
+  const res = await post<any>(`/Purchases/${id}/payment`, body)
+  return {
+    payment_id: res.payment_id ?? '',
+    paid_amount: res.paid_amount ?? 0,
+    remaining_amount: res.remaining_amount ?? 0,
+  }
 }

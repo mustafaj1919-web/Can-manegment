@@ -12,6 +12,7 @@ namespace CarShowroomManagementV2.Domain.Entities
         public DateTime PurchaseDate { get; set; } = DateTime.UtcNow;
 
         public decimal PurchaseCost { get; set; } // تكلفة الشراء الأساسية
+        public decimal AmountPaid { get; set; } // المبلغ المدفوع فعلياً حتى الآن
         public PaymentMethod PaymentMethod { get; set; } // طريقة الدفع المعتمدة للشراء
         public string Status { get; set; } = "Active"; // Active, Cancelled
 

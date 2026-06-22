@@ -90,8 +90,8 @@ namespace CarShowroomManagementV2.API.Controllers
                     car_name = p.Vehicle != null ? $"{p.Vehicle.Model} {p.Vehicle.Year}" : null,
                     seller_name = p.Supplier != null ? p.Supplier.Name : null,
                     purchase_price = p.PurchaseCost,
-                    paid_amount = p.PurchaseCost,
-                    remaining_amount = 0.0m,
+                    paid_amount = p.AmountPaid,
+                    remaining_amount = p.PurchaseCost - p.AmountPaid,
                     currency = "IQD",
                     payment_method = p.PaymentMethod.ToString(),
                     status = p.Status,
@@ -147,8 +147,8 @@ namespace CarShowroomManagementV2.API.Controllers
                 car_name = p.Vehicle != null ? $"{p.Vehicle.Model} {p.Vehicle.Year}" : null,
                 seller_name = p.Supplier != null ? p.Supplier.Name : null,
                 purchase_price = p.PurchaseCost,
-                paid_amount = p.PurchaseCost,
-                remaining_amount = 0.0m,
+                paid_amount = p.AmountPaid,
+                remaining_amount = p.PurchaseCost - p.AmountPaid,
                 currency = "IQD",
                 payment_method = p.PaymentMethod.ToString(),
                 status = p.Status,
@@ -193,7 +193,136 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, purchaseId = id, message = "تم تسجيل فاتورة الشراء وتوليد القيد المحاسبي الموزون بنجاح." });
         }
 
-        // 4. شراء جماعي — نفس المورد والموديل بأرقام شاصي مختلفة
+        // 4. تسجيل دفعة جديدة لفاتورة شراء (دفع جزء من المبلغ المتبقي)
+        [HttpPost("{id}/payment")]
+        public async Task<IActionResult> AddPayment(Guid id, [FromBody] AddPurchasePaymentRequest request)
+        {
+            var branchId = _currentUserService.BranchId;
+
+            var purchase = await _context.Purchases
+                .Include(p => p.Supplier)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (purchase == null)
+                return NotFound(new { success = false, message = "فاتورة الشراء غير موجودة." });
+
+            var remaining = purchase.PurchaseCost - purchase.AmountPaid;
+
+            if (remaining <= 0)
+                return BadRequest(new { success = false, message = "تم سداد هذه الفاتورة بالكامل." });
+
+            if (request.Amount <= 0)
+                return BadRequest(new { success = false, message = "قيمة الدفعة يجب أن تكون أكبر من صفر." });
+
+            if (request.Amount > remaining)
+                return BadRequest(new { success = false, message = $"الدفعة ({request.Amount}) تتجاوز المبلغ المتبقي ({remaining})." });
+
+            var supplier = purchase.Supplier;
+            if (supplier == null)
+                return BadRequest(new { success = false, message = "المورد غير موجود." });
+
+            // حساب الصندوق أو البنك
+            var accountCode = request.PaymentMethod?.ToLower() == "bank" ? "112001" : "111001";
+            var cashAccount = await _context.Accounts
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(a => a.AccountCode == accountCode && a.BranchId == branchId);
+
+            if (cashAccount == null)
+                return BadRequest(new { success = false, message = $"حساب الصرف ({accountCode}) غير موجود في هذا الفرع." });
+
+            var dbContext = _context as Microsoft.EntityFrameworkCore.DbContext;
+            if (dbContext == null) return StatusCode(500);
+
+            using var transaction = await dbContext.Database.BeginTransactionAsync();
+            try
+            {
+                var paymentAmount = Math.Round(request.Amount, 4);
+                var method = request.PaymentMethod?.ToLower() == "bank"
+                    ? CarShowroomManagementV2.Domain.Enums.PaymentMethod.Bank
+                    : CarShowroomManagementV2.Domain.Enums.PaymentMethod.Cash;
+
+                // سند الصرف
+                var totalPaymentsCount = await _context.Payments.IgnoreQueryFilters().CountAsync();
+                var refNumber = $"PAY-{DateTime.UtcNow:yyyyMMdd}-{totalPaymentsCount + 1:D5}";
+
+                var payment = new CarShowroomManagementV2.Domain.Entities.Payment
+                {
+                    Id = Guid.NewGuid(),
+                    Type = CarShowroomManagementV2.Domain.Enums.PaymentType.Payment,
+                    Method = method,
+                    Amount = paymentAmount,
+                    ReferenceNumber = refNumber,
+                    Description = request.Notes ?? $"دفعة لفاتورة شراء {purchase.PurchaseNumber} - المورد: {supplier.Name}",
+                    AccountId = cashAccount.Id,
+                    ContraAccountId = supplier.AccountId,
+                    BranchId = branchId
+                };
+                _context.Payments.Add(payment);
+                await _context.SaveChangesAsync();
+
+                // القيد المحاسبي
+                var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync();
+                var entryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
+
+                var journal = new CarShowroomManagementV2.Domain.Entities.JournalEntry
+                {
+                    Id = Guid.NewGuid(),
+                    EntryNumber = entryNumber,
+                    EntryDate = DateTime.UtcNow,
+                    Description = $"دفعة للمورد {supplier.Name} - فاتورة: {purchase.PurchaseNumber} - سند: {refNumber}",
+                    IsPosted = true,
+                    BranchId = branchId,
+                    ReferenceType = "Payment",
+                    ReferenceId = payment.Id,
+                    CreatedBy = _currentUserService.UserId
+                };
+                journal.Lines.Add(new CarShowroomManagementV2.Domain.Entities.JournalLine
+                {
+                    Id = Guid.NewGuid(),
+                    JournalEntryId = journal.Id,
+                    AccountId = supplier.AccountId,
+                    Debit = paymentAmount,
+                    Credit = 0,
+                    Description = $"تخفيض ذمة المورد {supplier.Name}"
+                });
+                journal.Lines.Add(new CarShowroomManagementV2.Domain.Entities.JournalLine
+                {
+                    Id = Guid.NewGuid(),
+                    JournalEntryId = journal.Id,
+                    AccountId = cashAccount.Id,
+                    Debit = 0,
+                    Credit = paymentAmount,
+                    Description = $"خروج النقدية لصالح المورد {supplier.Name}"
+                });
+
+                _context.JournalEntries.Add(journal);
+                payment.JournalEntryId = journal.Id;
+                await _context.SaveChangesAsync();
+
+                // تحديث المبلغ المدفوع في الفاتورة
+                purchase.AmountPaid += paymentAmount;
+                _context.Purchases.Update(purchase);
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    payment_id = payment.Id,
+                    paid_amount = purchase.AmountPaid,
+                    remaining_amount = purchase.PurchaseCost - purchase.AmountPaid,
+                    message = "تم تسجيل الدفعة وتوليد القيد المحاسبي بنجاح."
+                });
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        // 5. شراء جماعي — نفس المورد والموديل بأرقام شاصي مختلفة
         [HttpPost("bulk")]
         public async Task<IActionResult> BulkCreate([FromBody] BulkCreatePurchaseCommand command)
         {
@@ -208,4 +337,6 @@ namespace CarShowroomManagementV2.API.Controllers
             });
         }
     }
+
+    public record AddPurchasePaymentRequest(decimal Amount, string? PaymentMethod, string? Notes);
 }

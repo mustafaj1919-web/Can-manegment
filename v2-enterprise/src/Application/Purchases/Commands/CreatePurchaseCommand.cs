@@ -16,7 +16,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
     {
         public Guid SupplierId { get; set; }
         public decimal PurchaseCost { get; set; }
-        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // Cash, Bank, Cheque (treated as credit/accounts payable)
+        public decimal? PaidAmount { get; set; } // null = دفع كامل، رقم أقل = دفعة أولى
+        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // Cash, Bank, Cheque
 
         // تفاصيل السيارة
         public string? Brand { get; set; }
@@ -129,29 +130,32 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 _context.VehicleCosts.Add(detailedCost);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 3. تحديد الحسابات المحاسبية للقيد
+                // 3. تحديد طريقة الدفع والمبلغ المدفوع
+                var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? purchaseCost);
+                if (paidAmount < 0) paidAmount = 0;
+                if (paidAmount > purchaseCost) paidAmount = purchaseCost;
+                var isPartialPayment = paidAmount < purchaseCost;
+                var effectiveMethod = isPartialPayment ? PaymentMethod.Installment : request.PaymentMethod;
+
                 // حساب المخزون: 1201
                 var inventoryAccount = await _context.Accounts
                     .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(a => a.AccountCode == "1201" && a.BranchId == branchId, cancellationToken);
 
                 if (inventoryAccount == null)
-                {
                     throw new InvalidOperationException("حساب مخزون السيارات (1201) غير موجود في هذا الفرع.");
-                }
 
-                // الحساب الدائن بحسب طريقة الدفع
-                Guid creditAccountId;
-                string creditAccountDesc = "";
-
+                // حساب الدفع الفوري (نقد/بنك)
+                Guid? cashOrBankAccountId = null;
+                string cashOrBankDesc = "";
                 if (request.PaymentMethod == PaymentMethod.Cash)
                 {
                     var cashAccount = await _context.Accounts
                         .IgnoreQueryFilters()
                         .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId, cancellationToken);
                     if (cashAccount == null) throw new InvalidOperationException("حساب صندوق النقدية (111001) غير موجود في هذا الفرع.");
-                    creditAccountId = cashAccount.Id;
-                    creditAccountDesc = "صندوق النقدية الرئيسي";
+                    cashOrBankAccountId = cashAccount.Id;
+                    cashOrBankDesc = "صندوق النقدية";
                 }
                 else if (request.PaymentMethod == PaymentMethod.Bank)
                 {
@@ -159,16 +163,11 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         .IgnoreQueryFilters()
                         .FirstOrDefaultAsync(a => a.AccountCode == "112001" && a.BranchId == branchId, cancellationToken);
                     if (bankAccount == null) throw new InvalidOperationException("حساب البنك (112001) غير موجود في هذا الفرع.");
-                    creditAccountId = bankAccount.Id;
-                    creditAccountDesc = "حساب البنك";
-                }
-                else // Cheque / Credit
-                {
-                    creditAccountId = supplier.AccountId;
-                    creditAccountDesc = $"ذمم الدائنين - المورد: {supplier.Name}";
+                    cashOrBankAccountId = bankAccount.Id;
+                    cashOrBankDesc = "البنك";
                 }
 
-                // 4. إنشاء سجل الشراء (Purchase Record)
+                // 4. إنشاء سجل الشراء
                 var totalPurchasesCount = await _context.Purchases.IgnoreQueryFilters().CountAsync(cancellationToken);
                 var purchaseNumber = $"PUR-{DateTime.UtcNow:yyyyMMdd}-{totalPurchasesCount + 1:D5}";
 
@@ -179,16 +178,33 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     SupplierId = supplier.Id,
                     VehicleId = vehicle.Id,
                     PurchaseCost = purchaseCost,
-                    PaymentMethod = request.PaymentMethod,
+                    AmountPaid = paidAmount,
+                    PaymentMethod = effectiveMethod,
                     Status = "Active",
                     BranchId = branchId
                 };
                 _context.Purchases.Add(purchase);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 5. إنشاء القيد المحاسبي المتوازن لعملية الشراء
+                // 5. القيد الرئيسي: مدين المخزون / دائن حساب المورد (بالمبلغ الكامل)
                 var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
                 var entryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
+
+                Guid mainCreditAccountId;
+                string mainCreditDesc;
+
+                if (!isPartialPayment && cashOrBankAccountId.HasValue)
+                {
+                    // دفع كامل نقداً أو بنكياً: دائن الصندوق/البنك مباشرة
+                    mainCreditAccountId = cashOrBankAccountId.Value;
+                    mainCreditDesc = $"دفع قيمة الشراء للسيارة {vehicle.Model} عبر {cashOrBankDesc}";
+                }
+                else
+                {
+                    // دفع آجل أو جزئي أو بشيك: دائن حساب المورد
+                    mainCreditAccountId = supplier.AccountId;
+                    mainCreditDesc = $"إثبات استحقاق قيمة الشراء للمورد {supplier.Name}";
+                }
 
                 var journalEntry = new JournalEntry
                 {
@@ -203,8 +219,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     CreatedBy = _currentUserService.UserId
                 };
 
-                // الطرف المدين: زيادة المخزون
-                var debitLine = new JournalLine
+                journalEntry.Lines.Add(new JournalLine
                 {
                     Id = Guid.NewGuid(),
                     JournalEntryId = journalEntry.Id,
@@ -212,29 +227,85 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     Debit = purchaseCost,
                     Credit = 0,
                     Description = $"زيادة قيمة المخزون بشراء سيارة {vehicle.Model} - شاصي: {vehicle.ChassisNumber}"
-                };
-
-                // الطرف الدائن: الصندوق أو البنك أو حساب المورد الفرعي
-                var creditLine = new JournalLine
+                });
+                journalEntry.Lines.Add(new JournalLine
                 {
                     Id = Guid.NewGuid(),
                     JournalEntryId = journalEntry.Id,
-                    AccountId = creditAccountId,
+                    AccountId = mainCreditAccountId,
                     Debit = 0,
                     Credit = purchaseCost,
-                    Description = $"إثبات دفع/استحقاق قيمة الشراء للسيارة {vehicle.Model} للمورد {supplier.Name} عبر ({creditAccountDesc})"
-                };
-
-                journalEntry.Lines.Add(debitLine);
-                journalEntry.Lines.Add(creditLine);
+                    Description = mainCreditDesc
+                });
 
                 if (!journalEntry.IsBalanced)
-                {
                     throw new InvalidOperationException("القيد المحاسبي لعملية الشراء غير متوازن.");
-                }
 
                 _context.JournalEntries.Add(journalEntry);
                 await _context.SaveChangesAsync(cancellationToken);
+
+                // 6. إذا كان الدفع جزئياً — قيد الدفعة الأولى: مدين المورد / دائن الصندوق أو البنك
+                if (isPartialPayment && paidAmount > 0 && cashOrBankAccountId.HasValue)
+                {
+                    var totalEntriesCount2 = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
+                    var payEntryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount2 + 1:D5}";
+
+                    var totalPaymentsCount = await _context.Payments.IgnoreQueryFilters().CountAsync(cancellationToken);
+                    var payRefNumber = $"PAY-{DateTime.UtcNow:yyyyMMdd}-{totalPaymentsCount + 1:D5}";
+
+                    var initialPayment = new Payment
+                    {
+                        Id = Guid.NewGuid(),
+                        Type = PaymentType.Payment,
+                        Method = request.PaymentMethod,
+                        Amount = paidAmount,
+                        ReferenceNumber = payRefNumber,
+                        Description = $"دفعة أولى لشراء سيارة {vehicle.Model} من المورد {supplier.Name} - فاتورة: {purchaseNumber}",
+                        AccountId = cashOrBankAccountId.Value,
+                        ContraAccountId = supplier.AccountId,
+                        BranchId = branchId
+                    };
+                    _context.Payments.Add(initialPayment);
+                    await _context.SaveChangesAsync(cancellationToken);
+
+                    var payJournal = new JournalEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        EntryNumber = payEntryNumber,
+                        EntryDate = DateTime.UtcNow,
+                        Description = $"قيد الدفعة الأولى للمورد {supplier.Name} - فاتورة شراء: {purchaseNumber}",
+                        IsPosted = true,
+                        BranchId = branchId,
+                        ReferenceType = "Payment",
+                        ReferenceId = initialPayment.Id,
+                        CreatedBy = _currentUserService.UserId
+                    };
+                    payJournal.Lines.Add(new JournalLine
+                    {
+                        Id = Guid.NewGuid(),
+                        JournalEntryId = payJournal.Id,
+                        AccountId = supplier.AccountId,
+                        Debit = paidAmount,
+                        Credit = 0,
+                        Description = $"تخفيض ذمة المورد {supplier.Name} بالدفعة الأولى"
+                    });
+                    payJournal.Lines.Add(new JournalLine
+                    {
+                        Id = Guid.NewGuid(),
+                        JournalEntryId = payJournal.Id,
+                        AccountId = cashOrBankAccountId.Value,
+                        Debit = 0,
+                        Credit = paidAmount,
+                        Description = $"خروج النقدية لصالح المورد {supplier.Name}"
+                    });
+
+                    if (!payJournal.IsBalanced)
+                        throw new InvalidOperationException("قيد الدفعة الأولى غير متوازن.");
+
+                    _context.JournalEntries.Add(payJournal);
+                    initialPayment.JournalEntryId = payJournal.Id;
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
 
                 await transaction.CommitAsync(cancellationToken);
                 return purchase.Id;

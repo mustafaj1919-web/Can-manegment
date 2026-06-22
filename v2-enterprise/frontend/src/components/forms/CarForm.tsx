@@ -149,8 +149,7 @@ export function CarForm({ car }: CarFormProps) {
     if (!year || Number.isNaN(parsedYear))                  nextErrors.year          = 'سنة الصنع مطلوبة'
     if (!color.trim())                                      nextErrors.color         = 'اللون مطلوب'
     if (!vin.trim())                                        nextErrors.vin           = 'رقم الشاصي مطلوب'
-    if (!plate.trim())                                      nextErrors.plate         = 'رقم اللوحة مطلوب'
-    if (!purchasePrice || Number.isNaN(parsedPurchase) || parsedPurchase <= 0)
+    if (!isEdit && (!purchasePrice || Number.isNaN(parsedPurchase) || parsedPurchase <= 0))
                                                             nextErrors.purchasePrice = 'سعر الشراء مطلوب'
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
@@ -278,7 +277,7 @@ export function CarForm({ car }: CarFormProps) {
               }
             />
             <ModernInput
-              label="رقم اللوحة *"
+              label="رقم اللوحة"
               value={plate}
               onChange={(e) => setPlate(e.target.value)}
               placeholder="رقم اللوحة"
@@ -388,12 +387,13 @@ export function CarForm({ car }: CarFormProps) {
               type="number"
               min="0"
               step="any"
-              label="سعر الشراء *"
+              label={isEdit ? 'سعر الشراء (لا يمكن تعديله)' : 'سعر الشراء *'}
               value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value)}
+              onChange={(e) => !isEdit && setPurchasePrice(e.target.value)}
+              readOnly={isEdit}
               placeholder="0"
               error={errors.purchasePrice}
-              className="font-numeric"
+              className={`font-numeric${isEdit ? ' opacity-60 cursor-not-allowed' : ''}`}
             />
             <ModernInput
               type="number"
