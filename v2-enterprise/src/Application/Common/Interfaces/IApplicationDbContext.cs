@@ -35,6 +35,9 @@ namespace CarShowroomManagementV2.Application.Common.Interfaces
         DbSet<Deal> Deals { get; }
         DbSet<EmployeeCommission> EmployeeCommissions { get; }
         DbSet<EmployeeTarget> EmployeeTargets { get; }
+        DbSet<FiscalYear> FiscalYears { get; }
+        DbSet<RecurringJournalTemplate> RecurringJournalTemplates { get; }
+        DbSet<RecurringTemplateLine> RecurringTemplateLines { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

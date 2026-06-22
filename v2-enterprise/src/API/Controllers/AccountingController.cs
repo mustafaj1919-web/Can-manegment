@@ -621,5 +621,78 @@ namespace CarShowroomManagementV2.API.Controllers
             public string? ParentCode { get; set; }
             public bool? IsActive { get; set; }
         }
+
+        // ─── الإهلاك الشهري ───
+        [HttpPost("depreciation")]
+        public async Task<IActionResult> ComputeDepreciation([FromBody] ComputeDepreciationRequest request)
+        {
+            try
+            {
+                var result = await Mediator.Send(new ComputeDepreciationCommand
+                {
+                    Month = request.Month,
+                    Year = request.Year,
+                    AnnualRatePercent = request.AnnualRatePercent ?? 20m
+                });
+                return Ok(new
+                {
+                    success = true,
+                    entries_created = result.EntriesCreated,
+                    total_depreciation = result.TotalDepreciation,
+                    vehicles = result.Vehicles.Select(v => new
+                    {
+                        vehicle_id = v.VehicleId,
+                        vehicle_name = v.VehicleName,
+                        chassis_number = v.ChassisNumber,
+                        book_value_before = v.BookValueBefore,
+                        depreciation_amount = v.DepreciationAmount,
+                        book_value_after = v.BookValueAfter
+                    }),
+                    message = $"تم احتساب إهلاك {result.EntriesCreated} سيارة بمجموع {result.TotalDepreciation:N0} ريال/دينار."
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("depreciation-report")]
+        public async Task<IActionResult> GetDepreciationReport([FromQuery] int? month, [FromQuery] int? year)
+        {
+            var branchId = _currentUserService.BranchId;
+            var targetMonth = month ?? DateTime.UtcNow.Month;
+            var targetYear  = year  ?? DateTime.UtcNow.Year;
+            var periodTag   = $"DEP-{targetYear:D4}-{targetMonth:D2}";
+
+            var entries = await _context.JournalEntries
+                .Include(e => e.Lines)
+                .IgnoreQueryFilters()
+                .Where(e => e.BranchId == branchId
+                    && e.ReferenceType == "Depreciation"
+                    && e.EntryNumber.StartsWith(periodTag))
+                .OrderBy(e => e.EntryDate)
+                .ToListAsync();
+
+            var totalDep = entries.SelectMany(e => e.Lines).Where(l => l.Debit > 0).Sum(l => l.Debit);
+            return Ok(new
+            {
+                success = true,
+                month = targetMonth,
+                year = targetYear,
+                total_depreciation = totalDep,
+                entries_count = entries.Count,
+                entries = entries.Select(e => new
+                {
+                    id = e.Id,
+                    entry_number = e.EntryNumber,
+                    entry_date = e.EntryDate,
+                    description = e.Description,
+                    amount = e.Lines.Where(l => l.Debit > 0).Sum(l => l.Debit)
+                })
+            });
+        }
     }
+
+    public record ComputeDepreciationRequest(int Month, int Year, decimal? AnnualRatePercent);
 }

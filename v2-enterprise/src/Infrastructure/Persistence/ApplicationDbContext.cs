@@ -47,6 +47,9 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
         public DbSet<Deal> Deals => Set<Deal>();
         public DbSet<EmployeeCommission> EmployeeCommissions => Set<EmployeeCommission>();
         public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
+        public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
+        public DbSet<RecurringJournalTemplate> RecurringJournalTemplates => Set<RecurringJournalTemplate>();
+        public DbSet<RecurringTemplateLine> RecurringTemplateLines => Set<RecurringTemplateLine>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -238,6 +241,10 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<EmployeeTarget>()
                 .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+            modelBuilder.Entity<FiscalYear>()
+                .HasQueryFilter(f => f.BranchId == _currentUserService.BranchId);
+            modelBuilder.Entity<RecurringJournalTemplate>()
+                .HasQueryFilter(r => r.BranchId == _currentUserService.BranchId);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

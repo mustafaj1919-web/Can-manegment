@@ -29,6 +29,9 @@ import {
   Users,
   Bell,
   Truck,
+  Calendar,
+  RefreshCw,
+  TrendingDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
@@ -110,6 +113,8 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/accounting', label: 'المحاسبة', icon: Calculator, roles: FINANCE_ROLES },
       { href: '/trial-balance', label: 'ميزان المراجعة', icon: Scale, roles: FINANCE_ROLES },
       { href: '/chart-of-accounts', label: 'دليل الحسابات', icon: ListTree, roles: FINANCE_ROLES },
+      { href: '/fiscal-years', label: 'السنوات المالية', icon: Calendar, roles: FINANCE_ROLES },
+      { href: '/recurring-entries', label: 'القيود الدورية', icon: RefreshCw, roles: FINANCE_ROLES },
       { href: '/reports', label: 'التقارير', icon: FileText, roles: FINANCE_ROLES },
     ],
   },

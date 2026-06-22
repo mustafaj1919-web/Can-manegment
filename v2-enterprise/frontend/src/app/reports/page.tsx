@@ -11,6 +11,7 @@ import {
   Wallet,
   Building2,
   TrendingUp,
+  TrendingDown,
   Landmark,
   ShieldCheck,
   Package,
@@ -50,7 +51,7 @@ const REPORT_LINKS = [
     available: true,
   },
   {
-    href: '/accounting',
+    href: '/reports/profit-loss',
     icon: Calculator,
     color: 'emerald' as const,
     title: 'قائمة الأرباح والخسائر',
@@ -119,6 +120,14 @@ const REPORT_LINKS = [
     color: 'indigo' as const,
     title: 'تقييم المخزون',
     description: 'القيمة الدفترية الحالية لجميع السيارات في المخزون',
+    available: true,
+  },
+  {
+    href: '/reports/depreciation',
+    icon: TrendingDown,
+    color: 'rose' as const,
+    title: 'إهلاك السيارات',
+    description: 'احتساب وتقرير الإهلاك الشهري للسيارات بطريقة القسط الثابت',
     available: true,
   },
 ]

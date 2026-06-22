@@ -481,3 +481,65 @@ export async function getAccountMovement(
   const res = await get<any>(`/Accounting/account-movement?${qs.toString()}`)
   return (res?.success && res?.data) ? res.data : res
 }
+
+export interface ProfitLossItem {
+  accountCode: string
+  accountName: string
+  amount: number
+}
+
+export interface ProfitLossResponse {
+  revenues: ProfitLossItem[]
+  expenses: ProfitLossItem[]
+  totalRevenues: number
+  totalExpenses: number
+  netProfitOrLoss: number
+}
+
+export async function getProfitAndLoss(fromDate?: string, toDate?: string): Promise<ProfitLossResponse> {
+  const qs = new URLSearchParams()
+  if (fromDate) qs.set('fromDate', fromDate + 'T00:00:00Z')
+  if (toDate) qs.set('toDate', toDate + 'T23:59:59Z')
+  return get<ProfitLossResponse>(`/Accounting/profit-loss?${qs.toString()}`)
+}
+
+export interface DepreciationVehicleRow {
+  vehicle_name: string
+  chassis_number: string
+  book_value_before: number
+  depreciation_amount: number
+  book_value_after: number
+}
+
+export interface DepreciationResult {
+  success: boolean
+  entries_created: number
+  total_depreciation: number
+  vehicles: DepreciationVehicleRow[]
+  message: string
+}
+
+export interface DepreciationReportEntry {
+  id: string
+  entry_number: string
+  entry_date: string
+  description: string
+  amount: number
+}
+
+export interface DepreciationReport {
+  month: number
+  year: number
+  total_depreciation: number
+  entries_count: number
+  entries: DepreciationReportEntry[]
+}
+
+export async function computeDepreciation(month: number, year: number, annualRatePercent = 20): Promise<DepreciationResult> {
+  return post<DepreciationResult>('/Accounting/depreciation', { Month: month, Year: year, AnnualRatePercent: annualRatePercent })
+}
+
+export async function getDepreciationReport(month: number, year: number): Promise<DepreciationReport> {
+  const res = await get<any>(`/Accounting/depreciation-report?month=${month}&year=${year}`)
+  return (res?.success && res?.data) ? res.data : res
+}

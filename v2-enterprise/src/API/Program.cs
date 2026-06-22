@@ -627,4 +627,54 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
     {
         Log.Warning(ex, "تعذر إنشاء جداول CRM.");
     }
+
+    // Phase 2: السنة المالية والقيود الدورية
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""FiscalYears"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""Year"" integer NOT NULL,
+                ""StartDate"" timestamp with time zone NOT NULL,
+                ""EndDate"" timestamp with time zone NOT NULL,
+                ""Status"" text NOT NULL DEFAULT 'Open',
+                ""ClosingJournalEntryId"" uuid,
+                ""Notes"" text,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text,
+                ""LastModifiedAt"" timestamp with time zone,
+                ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ""RecurringJournalTemplates"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""Name"" text NOT NULL DEFAULT '',
+                ""Description"" text NOT NULL DEFAULT '',
+                ""Frequency"" text NOT NULL DEFAULT 'Monthly',
+                ""DayOfMonth"" integer NOT NULL DEFAULT 1,
+                ""IsActive"" boolean NOT NULL DEFAULT true,
+                ""LastRunAt"" timestamp with time zone,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy"" text,
+                ""LastModifiedAt"" timestamp with time zone,
+                ""LastModifiedBy"" text,
+                ""BranchId"" uuid NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ""RecurringTemplateLines"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""TemplateId"" uuid NOT NULL REFERENCES ""RecurringJournalTemplates""(""Id"") ON DELETE CASCADE,
+                ""AccountCode"" text NOT NULL DEFAULT '',
+                ""AccountName"" text NOT NULL DEFAULT '',
+                ""IsDebit"" boolean NOT NULL DEFAULT true,
+                ""Amount"" numeric(18,4) NOT NULL DEFAULT 0,
+                ""Description"" text,
+                ""SortOrder"" integer NOT NULL DEFAULT 0
+            );
+        ");
+        Log.Information("تم التحقق من جداول السنة المالية والقيود الدورية.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جداول السنة المالية.");
+    }
 }
