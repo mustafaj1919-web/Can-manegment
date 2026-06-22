@@ -38,6 +38,8 @@ services:
       - Cors__AllowedOrigins__0=http://localhost
       - Cors__AllowedOrigins__1=http://localhost:3000
       - Cors__AllowedOrigins__2=http://localhost:80
+      - Cors__AllowedOrigins__3=https://alsadaka.com
+      - Cors__AllowedOrigins__4=https://www.alsadaka.com
     volumes:
       - v2_vehicle_photos:/app/storage/vehicles
     depends_on:
@@ -71,8 +73,10 @@ services:
     container_name: v2-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - v2-enterprise-frontend
       - v2-enterprise-api
