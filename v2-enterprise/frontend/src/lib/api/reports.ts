@@ -453,6 +453,105 @@ export interface MonthlyProfitResponse {
   }
 }
 
+/* ─── Supplier Ledger ────────────────────────────────────────────────────── */
+
+export interface LedgerTransaction {
+  journal_entry_id: string
+  entry_number: string
+  entry_date: string
+  description: string
+  debit: number
+  credit: number
+  running_balance: number
+}
+
+export interface SupplierLedger {
+  supplier_id: string
+  supplier_name: string
+  account_code: string
+  opening_balance: number
+  closing_balance: number
+  total_count: number
+  transactions: LedgerTransaction[]
+}
+
+export async function getSupplierLedger(params: {
+  supplierId: string
+  fromDate?: string
+  toDate?: string
+  page?: number
+  per_page?: number
+}): Promise<SupplierLedger> {
+  const qs = new URLSearchParams()
+  qs.set('supplierId', params.supplierId)
+  if (params.fromDate) qs.set('fromDate', params.fromDate)
+  if (params.toDate)   qs.set('toDate', params.toDate)
+  qs.set('page',     String(params.page ?? 1))
+  qs.set('per_page', String(params.per_page ?? 50))
+  const res = await get<any>(`/Accounting/supplier-ledger?${qs.toString()}`)
+  return (res?.success && res?.data) ? res.data : res
+}
+
+/* ─── Inventory Valuation ────────────────────────────────────────────────── */
+
+export interface InventoryVehicleRow {
+  vehicle_id: string
+  model: string
+  chassis_number: string
+  purchase_cost: number
+  book_value: number
+  purchase_date: string | null
+  supplier_name: string
+}
+
+export interface InventoryValuation {
+  total_vehicles_count: number
+  total_book_value: number
+  total_purchase_cost: number
+  vehicles: InventoryVehicleRow[]
+}
+
+export async function getInventoryValuation(asOfDate?: string): Promise<InventoryValuation> {
+  const qs = asOfDate ? `?asOfDate=${asOfDate}` : ''
+  const res = await get<any>(`/Accounting/inventory-valuation${qs}`)
+  return (res?.success && res?.data) ? res.data : res
+}
+
+/* ─── Sales Profit Report ────────────────────────────────────────────────── */
+
+export interface SalesProfitItem {
+  contract_id: string
+  contract_number: string
+  sale_date: string
+  customer_name: string
+  vehicle_model: string
+  sale_price: number
+  book_value: number
+  direct_profit?: number
+  deferred_profit_markup?: number
+  recognized_installment_profit?: number
+  overall_profit?: number
+  payment_type?: string
+}
+
+export interface SalesProfitReport {
+  total_sale_price: number
+  total_book_value: number
+  total_direct_profit: number
+  total_deferred_profit_markup: number
+  total_recognized_installment_profit: number
+  total_overall_profit: number
+  sales: SalesProfitItem[]
+}
+
+export async function getSalesProfitReport(params: { fromDate?: string; toDate?: string } = {}): Promise<SalesProfitReport> {
+  const qs = new URLSearchParams()
+  if (params.fromDate) qs.set('fromDate', params.fromDate)
+  if (params.toDate)   qs.set('toDate', params.toDate)
+  const res = await get<any>(`/Accounting/sales-profit${qs.toString() ? '?' + qs.toString() : ''}`)
+  return (res?.success && res?.data) ? res.data : res
+}
+
 export async function getMonthlyProfitReport(months = 12): Promise<MonthlyProfitResponse> {
   try {
     const res = await get<any>(`/reports/monthly-profit?months=${months}`)

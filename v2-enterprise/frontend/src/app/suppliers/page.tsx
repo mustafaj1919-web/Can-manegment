@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import Link from 'next/link'
 import {
   Truck, Plus, Search, RefreshCw, Pencil, Trash2,
   AlertTriangle, X, Check, Phone, MapPin, StickyNote,
-  DollarSign, ShoppingBag, CreditCard,
+  DollarSign, ShoppingBag, CreditCard, BookOpen,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, formatMoney } from '@/lib/utils'
@@ -206,6 +207,11 @@ export default function SuppliersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
+                      <Link href={`/suppliers/${s.id}/ledger`}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-400 hover:text-amber-300" title="كشف الحساب">
+                          <BookOpen className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-green-400 hover:text-green-300" onClick={() => openPay(s)} title="صرف دفعة">
                         <CreditCard className="h-3.5 w-3.5" />
                       </Button>

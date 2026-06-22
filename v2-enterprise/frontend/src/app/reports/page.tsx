@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Landmark,
   ShieldCheck,
+  Package,
 } from 'lucide-react'
 
 const REPORT_LINKS = [
@@ -102,6 +103,22 @@ const REPORT_LINKS = [
     color: 'amber' as const,
     title: 'فحص قواعد المحاسبة',
     description: 'التحقق من توازن وسلامة القيود المحاسبية',
+    available: true,
+  },
+  {
+    href: '/reports/sales-profit',
+    icon: TrendingUp,
+    color: 'emerald' as const,
+    title: 'تقرير أرباح المبيعات',
+    description: 'ربحية كل عملية بيع مع مقارنة سعر البيع بالتكلفة',
+    available: true,
+  },
+  {
+    href: '/reports/inventory-valuation',
+    icon: Package,
+    color: 'indigo' as const,
+    title: 'تقييم المخزون',
+    description: 'القيمة الدفترية الحالية لجميع السيارات في المخزون',
     available: true,
   },
 ]
