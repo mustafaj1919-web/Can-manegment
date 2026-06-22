@@ -19,6 +19,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // Cash, Bank, Cheque (treated as credit/accounts payable)
 
         // تفاصيل السيارة
+        public string? Brand { get; set; }
         public string Model { get; set; } = string.Empty;
         public string ChassisNumber { get; set; } = string.Empty;
         public string? EngineNumber { get; set; }
@@ -88,6 +89,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     vehicle = new Vehicle
                     {
                         Id = Guid.NewGuid(),
+                        Brand = request.Brand,
                         Model = request.Model,
                         ChassisNumber = request.ChassisNumber,
                         EngineNumber = request.EngineNumber,

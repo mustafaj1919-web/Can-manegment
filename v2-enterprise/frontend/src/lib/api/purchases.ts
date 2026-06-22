@@ -127,15 +127,17 @@ export async function getPurchaseById(id: number | string): Promise<PurchaseDeta
 export async function createPurchase(payload: CreatePurchasePayload): Promise<{ id: number | string; invoice_number: string }> {
   // مطابقة أسماء حقول الطلب إلى PascalCase لـ CreatePurchaseCommand في الـ backend.
   // الـ backend ينشئ سيارة جديدة مع فاتورة الشراء، لذا يجب إرسال بيانات السيارة كاملة.
+  const methodMap: Record<string, number> = { Cash: 1, Bank: 2, 'Bank transfer': 2, Cheque: 3 }
   const body = {
-    SupplierId: payload.seller_id,                 // Guid (نص) — وليس رقمًا
+    SupplierId: payload.seller_id,
     PurchaseCost: payload.purchase_price,
-    PaymentMethod: payload.payment_method === 'Cash' ? 1 : 2, // enum: Cash=1, Bank/آجل=2
+    PaymentMethod: methodMap[payload.payment_method] ?? 1,
+    Brand: payload.brand,
     Model: payload.model,
     ChassisNumber: payload.vin,
     Color: payload.color,
     Year: payload.manufacturing_year,
-    TargetSellingPrice: payload.purchase_price,    // قيمة مبدئية = التكلفة (تُعدّل لاحقًا)
+    TargetSellingPrice: payload.purchase_price,
   }
   const res = await post<any>('/Purchases', body)
   return {

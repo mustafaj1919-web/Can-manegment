@@ -18,6 +18,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public Guid SupplierId { get; set; }
         public decimal PurchaseCost { get; set; }
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
+        public string? Brand { get; set; }
         public string Model { get; set; } = string.Empty;
         public string? Color { get; set; }
         public int Year { get; set; }
@@ -128,6 +129,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     var vehicle = new Vehicle
                     {
                         Id = Guid.NewGuid(),
+                        Brand = request.Brand,
                         Model = request.Model,
                         ChassisNumber = vin,
                         Color = request.Color,

@@ -78,6 +78,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
     if (!validate()) return
     bulkMut.mutate({
       supplierId: sellerId,
+      brand: brand.trim() || undefined,
       model: model.trim(),
       year: Number(year),
       color: color.trim() || undefined,

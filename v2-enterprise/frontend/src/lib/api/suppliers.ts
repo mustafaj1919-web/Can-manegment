@@ -42,6 +42,7 @@ export interface UpdateSupplierPayload {
 
 export interface BulkPurchasePayload {
   supplierId: string
+  brand?: string
   model: string
   year: number
   color?: string
@@ -106,6 +107,7 @@ export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<
     SupplierId: payload.supplierId,
     PurchaseCost: payload.purchaseCost,
     PaymentMethod: methodMap[payload.paymentMethod] ?? 1,
+    Brand: payload.brand ?? null,
     Model: payload.model,
     Color: payload.color ?? null,
     Year: payload.year,
