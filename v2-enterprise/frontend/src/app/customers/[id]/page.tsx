@@ -1,11 +1,11 @@
 'use client'
 
-import { use, useState } from 'react'
+import { use, useState, useRef } from 'react'
 import Link from 'next/link'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  AlertTriangle, ArrowRight, Calendar, Car, CheckCircle2, ChevronDown,
+  AlertTriangle, ArrowRight, Calendar, Car, Camera, CheckCircle2, ChevronDown,
   Clock, CreditCard, Edit, ExternalLink, FileText,
   MapPin, Phone, Printer, RefreshCw, Shield, TrendingUp, User, Wallet, XCircle,
   Upload, Trash2, Eye, Download,
@@ -14,6 +14,7 @@ import { cn, formatDate, formatMoney } from '@/lib/utils'
 import {
   getCustomerById, getCustomerStatement, getCustomerDocuments,
   uploadCustomerDocument, deleteCustomerDocument, getDocumentUrl,
+  uploadCustomerPhoto,
   DOC_TYPE_LABEL, DOCUMENT_SLOTS,
 } from '@/lib/api/customers'
 import type { StatementSaleItem, StatementSchedule, CustomerDocumentType } from '@/lib/api/customers'
@@ -124,6 +125,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const [expandedSale, setExpandedSale] = useState<number | null>(null)
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [uploadDocType, setUploadDocType] = useState<CustomerDocumentType>('id_front')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadPhotoMutation = useMutation({
+    mutationFn: (file: File) => uploadCustomerPhoto(id, file),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customer', id] }) },
+  })
 
   const { data: customer, isLoading, isError } = useQuery({
     queryKey: ['customer', id],
@@ -203,9 +209,36 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-5">
           <div className="flex items-start gap-4">
-            {/* Avatar */}
-            <div className={cn('h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 border text-xl font-black', health.ring, health.color)}>
-              {customer.name.charAt(0)}
+            {/* Avatar with photo upload */}
+            <div
+              className="relative group cursor-pointer shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="انقر لتغيير الصورة الشخصية"
+            >
+              {customer.photo_url ? (
+                <img
+                  src={customer.photo_url}
+                  alt={customer.name}
+                  className="h-14 w-14 rounded-2xl object-cover border border-border"
+                />
+              ) : (
+                <div className={cn('h-14 w-14 rounded-2xl flex items-center justify-center border text-xl font-black', health.ring, health.color)}>
+                  {customer.name.charAt(0)}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                {uploadPhotoMutation.isPending
+                  ? <RefreshCw className="h-4 w-4 text-white animate-spin" />
+                  : <Camera className="h-4 w-4 text-white" />
+                }
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhotoMutation.mutate(f); e.target.value = '' }}
+              />
             </div>
             <div>
               <h1 className="text-[22px] font-black tracking-tight">{customer.name}</h1>

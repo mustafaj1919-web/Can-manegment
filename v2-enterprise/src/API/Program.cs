@@ -203,6 +203,30 @@ app.Run();
 // دالة تهيئة البيانات الأولية والمحاسبية للنظام
 async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService identityService, IConfiguration configuration)
 {
+    // تشغيل ALTER TABLE migrations أولاً قبل أي query على الجداول
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Branches"" ADD COLUMN IF NOT EXISTS ""VatNumber"" text;
+            ALTER TABLE ""Branches"" ADD COLUMN IF NOT EXISTS ""TaxName"" text;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""VatNumber"" text;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""Email"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceStatus"" text DEFAULT 'Draft';
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceXmlHash"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceQrCode"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceUuid"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceError"" text;
+            ALTER TABLE ""InstallmentPlans"" ALTER COLUMN ""SalesContractId"" DROP NOT NULL;
+            ALTER TABLE ""InstallmentPlans"" ADD COLUMN IF NOT EXISTS ""PurchaseId"" uuid;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""PhotoUrl"" text;
+        ");
+        Log.Information("Schema migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Schema migration warning (non-fatal).");
+    }
+
     // أ. إنشاء الفرع الرئيسي الافتراضي
     var defaultBranchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     var defaultBranch = await context.Branches.IgnoreQueryFilters()
@@ -685,6 +709,7 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
         await context.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""InstallmentPlans"" ALTER COLUMN ""SalesContractId"" DROP NOT NULL;
             ALTER TABLE ""InstallmentPlans"" ADD COLUMN IF NOT EXISTS ""PurchaseId"" uuid;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""PhotoUrl"" text;
         ");
         Log.Information("تم تحديث جدول InstallmentPlans لدعم التقسيط على المشتريات.");
     }
@@ -704,5 +729,25 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
     catch (Exception ex)
     {
         Log.Warning(ex, "تعذر تعديل جدول Customers بإضافة عمود Email.");
+    }
+
+    // فحص وإضافة أعمدة الفاتورة الإلكترونية والربط الضريبي
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Branches"" ADD COLUMN IF NOT EXISTS ""VatNumber"" text;
+            ALTER TABLE ""Branches"" ADD COLUMN IF NOT EXISTS ""TaxName"" text;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""VatNumber"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceStatus"" text DEFAULT 'Draft';
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceXmlHash"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceQrCode"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceUuid"" text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""EInvoiceError"" text;
+        ");
+        Log.Information("تم التحقق من أعمدة الفاتورة الإلكترونية والربط الضريبي في قاعدة البيانات.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر تعديل الجداول لإضافة أعمدة الفاتورة الإلكترونية.");
     }
 }

@@ -28,6 +28,7 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
         public DateTime? DateOfBirth { get; set; }
         public string CustomerType { get; set; } = string.Empty;
         public string? Notes { get; set; }
+        public string? PhotoUrl { get; set; }
         public Guid AccountId { get; set; }
         public string AccountCode { get; set; } = string.Empty;
         public Guid BranchId { get; set; }
@@ -62,6 +63,7 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                     DateOfBirth = c.DateOfBirth,
                     CustomerType = c.CustomerType,
                     Notes = c.Notes,
+                    PhotoUrl = c.PhotoUrl,
                     AccountId = c.AccountId,
                     AccountCode = c.Account != null ? c.Account.AccountCode : string.Empty,
                     BranchId = c.BranchId,

@@ -54,6 +54,7 @@ export interface Customer {
   sales_count?: number
   purchases_count?: number
   documents?: CustomerDocument[]
+  photo_url?: string | null
 }
 
 export interface CustomersListResponse {
@@ -99,6 +100,7 @@ function mapCustomerFromBackend(c: any): Customer {
     documents_count: c.documentsCount ?? c.documents_count ?? 0,
     sales_count:    c.salesCount     ?? c.sales_count    ?? 0,
     documents:      c.documents      ?? [],
+    photo_url:      c.photo_url       ?? c.photoUrl       ?? null,
   }
 }
 
@@ -212,10 +214,36 @@ export interface CustomerStatement {
 
 export async function getCustomerStatement(id: number | string): Promise<CustomerStatement> {
   const res = await get<any>(`/Customers/${id}/statement`)
-  if (res && res.success && res.data) {
-    return res.data
+  const raw = (res?.success && res?.data) ? res.data : res
+  if (!raw) return raw
+
+  // map camelCase backend response → snake_case frontend types
+  const s = raw.summary ?? {}
+  return {
+    customer: raw.customer ?? {},
+    summary: {
+      sales_count:        s.salesCount        ?? s.sales_count        ?? 0,
+      total_sales_amount: s.totalSalesAmount  ?? s.total_sales_amount ?? 0,
+      total_paid_amount:  s.totalPaidAmount   ?? s.total_paid_amount  ?? 0,
+      total_remaining:    s.totalRemaining    ?? s.total_remaining    ?? 0,
+      total_overdue:      s.totalOverdue      ?? s.total_overdue      ?? 0,
+      last_payment_date:  s.lastPaymentDate   ?? s.last_payment_date  ?? null,
+      currency:           s.currency          ?? 'IQD',
+    },
+    sales: (raw.sales ?? []).map((sc: any) => ({
+      ...sc,
+      car_name:         sc.carName         ?? sc.car_name         ?? 'سيارة غير محددة',
+      car_vin:          sc.carVin          ?? sc.car_vin          ?? null,
+      invoice_number:   sc.invoiceNumber   ?? sc.invoice_number   ?? '',
+      sale_date:        sc.saleDate        ?? sc.sale_date        ?? null,
+      selling_price:    sc.sellingPrice    ?? sc.selling_price    ?? 0,
+      paid_amount:      sc.paidAmount      ?? sc.paid_amount      ?? 0,
+      remaining_amount: sc.remainingAmount ?? sc.remaining_amount ?? 0,
+      payment_method:   sc.paymentMethod   ?? sc.payment_method   ?? '',
+      has_installment:  sc.hasInstallment  ?? sc.has_installment  ?? false,
+      installment_plan: sc.installmentPlan ?? sc.installment_plan ?? null,
+    })),
   }
-  return res
 }
 
 // تحويل حقول الفورم (snake_case) إلى حقول الأمر في الباكيند (PascalCase).
@@ -343,4 +371,16 @@ export async function checkScannerAvailable(): Promise<{ available: boolean; sca
     pywin32: false,
     reason: 'الماسح الضوئي غير متاح'
   })
+}
+
+export async function uploadCustomerPhoto(id: string | number, file: File): Promise<{ success: boolean; photo_url?: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    const { apiClient } = await import('./client')
+    const response = await apiClient.post<any>(`/Customers/${id}/photo`, formData)
+    return response.data
+  } catch {
+    return { success: false }
+  }
 }

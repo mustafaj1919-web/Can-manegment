@@ -18,7 +18,9 @@ namespace CarShowroomManagementV2.Domain.Entities
         public string? Nationality { get; set; }
         public DateTime? DateOfBirth { get; set; }
         public string CustomerType { get; set; } = "Individual"; // Individual or Company
+        public string? VatNumber { get; set; } // الرقم الضريبي للعميل (للشركات)
         public string? Notes { get; set; }
+        public string? PhotoUrl { get; set; }  // filename only, stored in /app/storage/customers/
 
         // ربط الحساب المحاسبي (Subledger)
         public Guid AccountId { get; set; }

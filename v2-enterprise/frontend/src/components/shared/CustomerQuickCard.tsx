@@ -87,14 +87,28 @@ export function CustomerQuickCard({ customerId, customerName, className }: Custo
               <>
                 {/* Header */}
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <p className="text-[13px] font-black text-foreground">{customer.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={cn('text-[10px] font-bold', health.color)}>{health.label}</span>
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: 5 }, (_, i) => (
-                          <span key={i} className={cn('h-1.5 w-1.5 rounded-full', i < health.score ? health.color.replace('text-', 'bg-') : 'bg-muted/40')} />
-                        ))}
+                  <div className="flex items-start gap-2">
+                    {/* Avatar or photo */}
+                    {customer.photo_url ? (
+                      <img
+                        src={customer.photo_url}
+                        alt={customer.name}
+                        className="h-10 w-10 rounded-full object-cover border border-border/40 shrink-0"
+                      />
+                    ) : (
+                      <div className={cn('h-10 w-10 rounded-full flex items-center justify-center text-base font-black shrink-0 border', health.color.replace('text-', 'bg-') + '/20', 'border-current/20', health.color)}>
+                        {(customer.name ?? '?')[0]}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[13px] font-black text-foreground">{customer.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={cn('text-[10px] font-bold', health.color)}>{health.label}</span>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 5 }, (_, i) => (
+                            <span key={i} className={cn('h-1.5 w-1.5 rounded-full', i < health.score ? health.color.replace('text-', 'bg-') : 'bg-muted/40')} />
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>

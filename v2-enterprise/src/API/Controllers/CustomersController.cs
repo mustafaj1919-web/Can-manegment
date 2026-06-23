@@ -85,7 +85,10 @@ namespace CarShowroomManagementV2.API.Controllers
             var customer = all.FirstOrDefault(c => c.Id == id);
             if (customer == null)
                 return NotFound(new { success = false, message = "العميل غير موجود." });
-            return Ok(new { success = true, data = customer });
+            var photoUrl = !string.IsNullOrEmpty(customer.PhotoUrl)
+                ? $"/api/Customers/{customer.Id}/photo"
+                : null;
+            return Ok(new { success = true, data = customer, photo_url = photoUrl });
         }
 
         // 3. كشف حساب أستاذ مساعد للعميل
@@ -215,6 +218,70 @@ namespace CarShowroomManagementV2.API.Controllers
             else if (extension == ".png") contentType = "image/png";
 
             return PhysicalFile(fullFilePath, contentType, originalFileName);
+        }
+
+        // 7. رفع صورة شخصية للعميل
+        [HttpPost("{id}/photo")]
+        public async Task<IActionResult> UploadPhoto(Guid id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { success = false, message = "لم يتم اختيار ملف." });
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp")
+                return BadRequest(new { success = false, message = "صيغة الملف غير مدعومة. يُسمح بـ JPG, PNG, WEBP فقط." });
+
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest(new { success = false, message = "حجم الصورة يتجاوز الحد المسموح (5 ميجابايت)." });
+
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
+            if (customer == null) return NotFound();
+
+            var storageDir = Path.Combine("/app/storage/customers");
+            Directory.CreateDirectory(storageDir);
+
+            // حذف الصورة القديمة إن وجدت
+            if (!string.IsNullOrEmpty(customer.PhotoUrl))
+            {
+                var oldPath = Path.Combine(storageDir, customer.PhotoUrl);
+                if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
+            }
+
+            var fileName = $"{id}{ext}";
+            var filePath = Path.Combine(storageDir, fileName);
+
+            await using var stream = new FileStream(filePath, FileMode.Create);
+            await file.CopyToAsync(stream);
+
+            customer.PhotoUrl = fileName;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, photo_url = $"/api/Customers/{id}/photo", message = "تم رفع الصورة بنجاح." });
+        }
+
+        // 7.ب عرض الصورة الشخصية للعميل
+        [HttpGet("{id}/photo")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPhoto(Guid id)
+        {
+            var customer = await _context.Customers.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Id == id);
+            if (customer == null || string.IsNullOrEmpty(customer.PhotoUrl))
+                return NotFound();
+
+            var filePath = Path.Combine("/app/storage/customers", customer.PhotoUrl);
+            if (!System.IO.File.Exists(filePath)) return NotFound();
+
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            var contentType = ext switch {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
+
+            var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
+            Response.Headers["Cache-Control"] = "public, max-age=3600";
+            return File(bytes, contentType);
         }
     }
 }
