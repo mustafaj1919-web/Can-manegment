@@ -120,11 +120,8 @@ export default function NewSalePage() {
     if (!paymentMethod)          e.paymentMethod = 'اختر طريقة الدفع'
     if (!saleDate)               e.saleDate      = 'أدخل تاريخ البيع'
     if (enableInstallment && remaining > 0) {
+      if (!numMonths || parseInt(numMonths) <= 0) e.numMonths = 'أدخل عدد الأشهر'
       if (!startDate) e.startDate = 'أدخل تاريخ بدء الأقساط'
-      if (!dueDay)    e.dueDay    = 'أدخل يوم الاستحقاق'
-      const dd = parseInt(dueDay)
-      if (dueDay && (dd < 1 || dd > 31)) e.dueDay = 'يوم الاستحقاق بين 1 و 31'
-      if (numMonths && parseInt(numMonths) <= 0) e.numMonths = 'عدد الأشهر يجب أن يكون أكبر من صفر'
     }
     setErrors(e)
     return Object.keys(e).length === 0

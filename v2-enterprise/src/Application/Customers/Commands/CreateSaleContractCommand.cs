@@ -27,6 +27,7 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
         // حقول التقسيط
         public int InstallmentPeriodMonths { get; set; } = 0;
         public decimal ProfitRatePercentage { get; set; } = 0; // نسبة الربح المضافة للتقسيط
+        public DateTime? InstallmentStartDate { get; set; } // تاريخ بدء الأقساط (اختياري - افتراضي اليوم)
     }
 
     public class CreateSaleContractCommandValidator : AbstractValidator<CreateSaleContractCommand>
@@ -223,6 +224,9 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     await _context.SaveChangesAsync(cancellationToken);
 
                     // توليد جدول الأقساط
+                    var baseDate = request.InstallmentStartDate.HasValue
+                        ? DateTime.SpecifyKind(request.InstallmentStartDate.Value, DateTimeKind.Utc)
+                        : DateTime.UtcNow;
                     for (int i = 1; i <= request.InstallmentPeriodMonths; i++)
                     {
                         var installment = new Installment
@@ -230,7 +234,7 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                             Id = Guid.NewGuid(),
                             InstallmentPlanId = plan.Id,
                             InstallmentNumber = i,
-                            DueDate = DateTime.UtcNow.AddMonths(i),
+                            DueDate = baseDate.AddMonths(i),
                             Amount = monthlyAmount,
                             PaidAmount = 0,
                             Status = "Pending",

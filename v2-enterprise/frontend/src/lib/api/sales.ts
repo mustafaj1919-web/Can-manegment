@@ -204,7 +204,8 @@ export async function createSale(payload: CreateSalePayload): Promise<{ id: numb
     DownPayment: payload.paid_amount ?? 0,
     PaymentMethod: mapPaymentMethod(payload.payment_method),
     InstallmentPeriodMonths: payload.number_of_months ?? 0,
-    ProfitRatePercentage: (payload as any).profit_rate ?? 0
+    ProfitRatePercentage: (payload as any).profit_rate ?? 0,
+    InstallmentStartDate: (payload as any).installment_start_date ?? null
   }
   const res = await post<any>('/Sales', body)
   return {
