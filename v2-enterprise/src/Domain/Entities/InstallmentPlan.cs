@@ -6,7 +6,8 @@ namespace CarShowroomManagementV2.Domain.Entities
 {
     public class InstallmentPlan : AuditableEntity
     {
-        public Guid SalesContractId { get; set; }
+        public Guid? SalesContractId { get; set; }  // null when it's a supplier purchase plan
+        public Guid? PurchaseId { get; set; }         // set when linked to a supplier purchase
 
         public decimal TotalAmount { get; set; } // المبلغ المتبقي الأصلي للتقسيط (قبل الأرباح المضافة)
         public decimal DownPayment { get; set; } // الدفعة الأولى المسددة
@@ -20,6 +21,7 @@ namespace CarShowroomManagementV2.Domain.Entities
 
         // علاقات التنقل
         public virtual SalesContract? SalesContract { get; set; }
+        public virtual Purchase? Purchase { get; set; }  // linked to supplier purchase when PurchaseId is set
         public virtual ICollection<Installment> Installments { get; set; } = new List<Installment>();
     }
 }

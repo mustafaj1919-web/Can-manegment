@@ -184,7 +184,15 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasOne(ip => ip.SalesContract)
                 .WithOne(sc => sc.InstallmentPlan)
                 .HasForeignKey<InstallmentPlan>(ip => ip.SalesContractId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<InstallmentPlan>()
+                .HasOne(ip => ip.Purchase)
+                .WithMany()
+                .HasForeignKey(ip => ip.PurchaseId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<InstallmentPlan>()
                 .HasMany(ip => ip.Installments)

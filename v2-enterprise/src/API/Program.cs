@@ -678,6 +678,21 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
         Log.Warning(ex, "تعذر إنشاء جداول السنة المالية.");
     }
 
+
+    // دعم التقسيط للمشتريات — جعل SalesContractId اختياري وإضافة PurchaseId
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""InstallmentPlans"" ALTER COLUMN ""SalesContractId"" DROP NOT NULL;
+            ALTER TABLE ""InstallmentPlans"" ADD COLUMN IF NOT EXISTS ""PurchaseId"" uuid;
+        ");
+        Log.Information("تم تحديث جدول InstallmentPlans لدعم التقسيط على المشتريات.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر تحديث جدول InstallmentPlans.");
+    }
+
     // إضافة عمود Email لجدول العملاء
     try
     {

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { AlertCircle, CheckCircle2, Loader2, ScanLine, Layers, FileText, Plus, X, Check } from 'lucide-react'
+import { AlertCircle, CalendarDays, CheckCircle2, Loader2, ScanLine, Layers, FileText, Plus, X, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, formatMoney } from '@/lib/utils'
 import { createPurchase, getSellers } from '@/lib/api/purchases'
@@ -263,6 +263,8 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
   const [paymentMethod, setPaymentMethod] = useState('')
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10))
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [numMonths, setNumMonths] = useState('')
+  const [startDate, setStartDate] = useState('')
 
   const price = Number.parseFloat(purchasePrice) || 0
   const paid = Number.parseFloat(paidAmount) || 0
@@ -290,6 +292,12 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
     if (!purchasePrice || price <= 0) nextErrors.purchasePrice = 'سعر الشراء مطلوب'
     if (!paymentMethod) nextErrors.paymentMethod = 'اختر طريقة الدفع'
     if (!purchaseDate) nextErrors.purchaseDate = 'تاريخ الشراء مطلوب'
+    const paidAmt = parseFloat(paidAmount) || 0
+    const purchaseCostNum = parseFloat(purchasePrice) || 0
+    const isPartial = paidAmt > 0 && paidAmt < purchaseCostNum
+    if (isPartial && numMonths && parseInt(numMonths) <= 0) {
+      nextErrors.numMonths = 'عدد الأشهر يجب أن يكون أكبر من صفر'
+    }
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
@@ -311,6 +319,8 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
       currency,
       payment_method: paymentMethod,
       purchase_date: purchaseDate,
+      number_of_months: numMonths ? parseInt(numMonths) : null,
+      installment_start_date: startDate || null,
     })
   }
 
@@ -456,6 +466,45 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
           </div>
         )}
       </SectionCard>
+
+      {/* قسم الأقساط — يظهر عند الدفع الجزئي */}
+      {parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount || '0') < parseFloat(purchasePrice || '0') && (
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-cyan-400" />
+            <p className="text-sm font-semibold text-cyan-300">جدول سداد الأقساط للمورد (اختياري)</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            المبلغ المتبقي: <strong className="text-rose-400">{formatMoney(parseFloat(purchasePrice || '0') - parseFloat(paidAmount || '0'), 'IQD')}</strong>
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">عدد الأشهر</Label>
+              <Input
+                type="number" min="1" placeholder="6"
+                value={numMonths}
+                onChange={e => setNumMonths(e.target.value)}
+                className="bg-secondary/30 border-border/60"
+              />
+              {numMonths && parseInt(numMonths) > 0 && parseFloat(purchasePrice || '0') > parseFloat(paidAmount || '0') && (
+                <p className="text-[11px] text-cyan-400/80 mt-1">
+                  القسط الشهري: {formatMoney((parseFloat(purchasePrice || '0') - parseFloat(paidAmount || '0')) / parseInt(numMonths), 'IQD')}
+                </p>
+              )}
+              {errors.numMonths && <p className="mt-1 text-[11px] text-rose-400">{errors.numMonths}</p>}
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">تاريخ بدء الأقساط</Label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="bg-secondary/30 border-border/60"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-3">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={mutation.isPending}>إلغاء</Button>

@@ -93,6 +93,8 @@ export interface CreatePurchasePayload {
   currency: 'USD' | 'IQD'
   payment_method: string
   purchase_date: string
+  number_of_months?: number | null
+  installment_start_date?: string | null
 }
 
 export async function getPurchases(params: PurchasesListParams = {}): Promise<PurchasesListResponse> {
@@ -138,6 +140,8 @@ export async function createPurchase(payload: CreatePurchasePayload): Promise<{ 
     Color: payload.color,
     Year: payload.manufacturing_year,
     TargetSellingPrice: payload.purchase_price,
+    InstallmentPeriodMonths: payload.number_of_months ?? 0,
+    InstallmentStartDate: payload.installment_start_date ?? null,
   }
   const res = await post<any>('/Purchases', body)
   return {

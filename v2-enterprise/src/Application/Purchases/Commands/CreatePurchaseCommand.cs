@@ -27,6 +27,10 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public string? Color { get; set; }
         public int Year { get; set; }
         public decimal TargetSellingPrice { get; set; }
+
+        // حقول جدول الأقساط (اختياري)
+        public int InstallmentPeriodMonths { get; set; } = 0;
+        public DateTime? InstallmentStartDate { get; set; }
     }
 
     public class CreatePurchaseCommandValidator : AbstractValidator<CreatePurchaseCommand>
@@ -318,6 +322,50 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
                     _context.JournalEntries.Add(payJournal);
                     initialPayment.JournalEntryId = payJournal.Id;
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+
+                // 7. إنشاء خطة التقسيط وجدول الأقساط للمورد (إذا طُلب ذلك)
+                if (isPartialPayment && request.InstallmentPeriodMonths > 0)
+                {
+                    var remainingForPlan = purchaseCost - paidAmount;
+                    var monthlyAmount = AccountingAmount.RoundMoney(remainingForPlan / request.InstallmentPeriodMonths);
+                    var baseDate = request.InstallmentStartDate.HasValue
+                        ? DateTime.SpecifyKind(request.InstallmentStartDate.Value, DateTimeKind.Utc)
+                        : DateTime.UtcNow;
+
+                    var plan = new InstallmentPlan
+                    {
+                        Id = Guid.NewGuid(),
+                        SalesContractId = null,
+                        PurchaseId = purchase.Id,
+                        TotalAmount = remainingForPlan,
+                        DownPayment = paidAmount,
+                        InstallmentPeriodMonths = request.InstallmentPeriodMonths,
+                        ProfitRatePercentage = 0,
+                        TotalProfit = 0,
+                        TotalPlanAmount = remainingForPlan,
+                        MonthlyInstallmentAmount = monthlyAmount,
+                        Status = "Active",
+                        BranchId = branchId
+                    };
+                    _context.InstallmentPlans.Add(plan);
+                    await _context.SaveChangesAsync(cancellationToken);
+
+                    for (int i = 1; i <= request.InstallmentPeriodMonths; i++)
+                    {
+                        _context.Installments.Add(new Installment
+                        {
+                            Id = Guid.NewGuid(),
+                            InstallmentPlanId = plan.Id,
+                            InstallmentNumber = i,
+                            DueDate = baseDate.AddMonths(i),
+                            Amount = monthlyAmount,
+                            PaidAmount = 0,
+                            Status = "Pending",
+                            BranchId = branchId
+                        });
+                    }
                     await _context.SaveChangesAsync(cancellationToken);
                 }
 
