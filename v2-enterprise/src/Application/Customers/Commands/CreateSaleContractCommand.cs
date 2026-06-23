@@ -23,6 +23,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
         public decimal Discount { get; set; } = 0;
         public decimal DownPayment { get; set; } = 0;
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // Cash, Installment
+        public string? CustomerVatNumber { get; set; } // الرقم الضريبي للعميل
+        public Guid? SalesRepId { get; set; } // مندوب المبيعات (موظف) المسؤول عن العقد
 
         // حقول التقسيط
         public int InstallmentPeriodMonths { get; set; } = 0;
@@ -46,16 +48,30 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
     {
         private readonly IApplicationDbContext _context;
         private readonly ICurrentUserService _currentUserService;
+        private readonly IEInvoiceService _eInvoiceService;
 
-        public CreateSaleContractCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+        public CreateSaleContractCommandHandler(
+            IApplicationDbContext context, 
+            ICurrentUserService currentUserService,
+            IEInvoiceService eInvoiceService)
         {
             _context = context;
             _currentUserService = currentUserService;
+            _eInvoiceService = eInvoiceService;
         }
 
         public async Task<Guid> Handle(CreateSaleContractCommand request, CancellationToken cancellationToken)
         {
             var branchId = _currentUserService.BranchId;
+
+            // التحقق من وجود الفرع وتأكيد بياناته الضريبية
+            var branch = await _context.Branches
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(b => b.Id == branchId, cancellationToken);
+            if (branch == null)
+            {
+                throw new InvalidOperationException("الفرع الحالي غير موجود في النظام.");
+            }
 
             // 1. التحقق من وجود العميل
             var customer = await _context.Customers
@@ -65,6 +81,14 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
             if (customer == null)
             {
                 throw new InvalidOperationException("العميل المحدد غير موجود أو لا ينتمي لهذا الفرع.");
+            }
+
+            // تحديث الرقم الضريبي للعميل إذا تم إدخاله وكان فارغاً أو متغيراً
+            if (!string.IsNullOrWhiteSpace(request.CustomerVatNumber) && customer.VatNumber != request.CustomerVatNumber)
+            {
+                customer.VatNumber = request.CustomerVatNumber;
+                _context.Customers.Update(customer);
+                await _context.SaveChangesAsync(cancellationToken);
             }
 
             // 2. التحقق من وجود السيارة وحالتها
@@ -160,6 +184,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                 var totalSalesCount = await _context.SalesContracts.IgnoreQueryFilters().CountAsync(cancellationToken);
                 var contractNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{totalSalesCount + 1:D5}";
 
+                var uuid = Guid.NewGuid().ToString();
+
                 var contract = new SalesContract
                 {
                     Id = Guid.NewGuid(),
@@ -177,8 +203,44 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     Profit = profit,
                     PaymentMethod = request.PaymentMethod,
                     Status = "Active",
-                    BranchId = branchId
+                    BranchId = branchId,
+                    SalesRepId = request.SalesRepId,
+                    EInvoiceUuid = uuid,
+                    EInvoiceStatus = "Pending"
                 };
+
+                // إرفاق السيارة مؤقتاً لتسهيل توليد الـ XML قبل التخزين الفعلي
+                contract.Vehicle = vehicle;
+
+                // توليد الـ QR Code الضريبي باستخدام ترميز TLV
+                var sellerName = branch.TaxName ?? branch.Name;
+                var sellerVat = branch.VatNumber ?? "300000000000003";
+                contract.EInvoiceQrCode = _eInvoiceService.GenerateTlvQrCodeBase64(
+                    sellerName,
+                    sellerVat,
+                    contract.SaleDate,
+                    netPrice,
+                    taxAmount);
+
+                // توليد الفاتورة بصيغة UBL XML وحساب الهاش
+                var xmlContent = _eInvoiceService.GenerateInvoiceXml(contract, branch, customer);
+                contract.EInvoiceXmlHash = _eInvoiceService.CalculateXmlHash(xmlContent);
+
+                // تقديم الفاتورة إلى خادم المصلحة الضريبية (محاكي)
+                var submissionResult = await _eInvoiceService.SubmitInvoiceToPortalAsync(contract, xmlContent);
+                if (submissionResult.Success)
+                {
+                    contract.EInvoiceStatus = "Sent";
+                    contract.EInvoiceError = null;
+                }
+                else
+                {
+                    contract.EInvoiceStatus = "Failed";
+                    contract.EInvoiceError = submissionResult.Message;
+                }
+
+                // مسح المرجع المؤقت للسيارة لتجنب إعادة الإدراج المزدوج
+                contract.Vehicle = null;
 
                 _context.SalesContracts.Add(contract);
                 await _context.SaveChangesAsync(cancellationToken);

@@ -6,7 +6,7 @@ export interface SaleListItem {
   id: number
   invoice_number: string
   branch_id?: number | null
-  branch?: { id: number; name: string; is_main: boolean; created_at?: string } | null
+  branch?: { id: any; name: string; code?: string; vat_number?: string | null; tax_name?: string | null } | null
   car_id: number | null
   buyer_id: number | null
   car_name: string | null
@@ -34,6 +34,11 @@ export interface SaleDetail extends SaleListItem {
   sales_rep_id_number: string | null
   sales_rep_title: string | null
   sales_rep_address: string | null
+  einvoice_status?: string | null
+  einvoice_qr_code?: string | null
+  einvoice_uuid?: string | null
+  einvoice_error?: string | null
+  einvoice_xml_hash?: string | null
   car: {
     id: number
     brand: string
@@ -104,6 +109,8 @@ export interface CreateSalePayload {
   installment_start_date?: string | null
   installment_due_day?: number | null
   installment_notes?: string | null
+  customer_vat_number?: string | null // الرقم الضريبي للعميل
+  sales_rep_id?: string | null // معرف مندوب المبيعات
 }
 
 export interface SalesListParams {
@@ -205,7 +212,9 @@ export async function createSale(payload: CreateSalePayload): Promise<{ id: numb
     PaymentMethod: mapPaymentMethod(payload.payment_method),
     InstallmentPeriodMonths: payload.number_of_months ?? 0,
     ProfitRatePercentage: (payload as any).profit_rate ?? 0,
-    InstallmentStartDate: (payload as any).installment_start_date ?? null
+    InstallmentStartDate: (payload as any).installment_start_date ?? null,
+    CustomerVatNumber: payload.customer_vat_number ?? null,
+    SalesRepId: payload.sales_rep_id ?? null
   }
   const res = await post<any>('/Sales', body)
   return {

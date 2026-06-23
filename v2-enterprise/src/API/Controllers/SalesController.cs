@@ -171,11 +171,32 @@ namespace CarShowroomManagementV2.API.Controllers
                 }).ToList()
             } : null;
 
+            var branch = await _context.Branches
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(b => b.Id == sc.BranchId);
+
+            // جلب بيانات مندوب المبيعات إن وُجد
+            Employee? salesRep = null;
+            if (sc.SalesRepId.HasValue)
+            {
+                salesRep = await _context.Employees
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(e => e.Id == sc.SalesRepId.Value);
+            }
+
             var detail = new
             {
                 id = sc.Id,
                 invoice_number = sc.ContractNumber,
                 branch_id = sc.BranchId,
+                branch = branch != null ? new
+                {
+                    id = branch.Id,
+                    name = branch.Name,
+                    code = branch.Code,
+                    vat_number = branch.VatNumber,
+                    tax_name = branch.TaxName
+                } : null,
                 car_id = sc.VehicleId,
                 buyer_id = sc.CustomerId,
                 car_name = sc.Vehicle != null ? $"{sc.Vehicle.Model} {sc.Vehicle.Year}" : null,
@@ -194,22 +215,27 @@ namespace CarShowroomManagementV2.API.Controllers
                 created_at = sc.CreatedAt,
                 cancel_reason = (string?)null,
                 cancelled_at = sc.Status == "Cancelled" ? sc.LastModifiedAt : null,
-                sales_rep_id = (string?)null,
-                sales_rep_name = (string?)null,
-                sales_rep_phone = (string?)null,
-                sales_rep_id_number = (string?)null,
-                sales_rep_title = (string?)null,
-                sales_rep_address = (string?)null,
+                sales_rep_id        = salesRep?.Id.ToString(),
+                sales_rep_name      = salesRep?.FullName,
+                sales_rep_phone     = salesRep?.Phone,
+                sales_rep_id_number = salesRep?.IdNumber,
+                sales_rep_title     = salesRep?.Title ?? (salesRep != null ? "موظف مبيعات" : null),
+                sales_rep_address   = salesRep?.Address,
+                einvoice_status = sc.EInvoiceStatus,
+                einvoice_qr_code = sc.EInvoiceQrCode,
+                einvoice_uuid = sc.EInvoiceUuid,
+                einvoice_error = sc.EInvoiceError,
+                einvoice_xml_hash = sc.EInvoiceXmlHash,
                 car = sc.Vehicle != null ? new
                 {
                     id = sc.Vehicle.Id,
-                    brand = "Car",
+                    brand = sc.Vehicle.Brand,
                     model = sc.Vehicle.Model,
                     manufacturing_year = sc.Vehicle.Year,
-                    trim = (string?)null,
+                    trim = sc.Vehicle.Trim,
                     color = sc.Vehicle.Color,
                     vin = sc.Vehicle.ChassisNumber,
-                    plate_number = "بدون لوحة",
+                    plate_number = sc.Vehicle.PlateNumber,
                     status = sc.Vehicle.Status
                 } : null,
                 buyer = sc.Customer != null ? new
@@ -219,7 +245,8 @@ namespace CarShowroomManagementV2.API.Controllers
                     phone = sc.Customer.Phone,
                     address = sc.Customer.Address,
                     id_type = sc.Customer.IdType,
-                    id_number = sc.Customer.IdNumber
+                    id_number = sc.Customer.IdNumber,
+                    vat_number = sc.Customer.VatNumber
                 } : null,
                 payments = payments,
                 installment_plan = installmentPlan

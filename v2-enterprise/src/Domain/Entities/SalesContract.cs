@@ -27,9 +27,17 @@ namespace CarShowroomManagementV2.Domain.Entities
         public string Status { get; set; } = "Active"; // Active, Cancelled
         public Guid? SalesRepId { get; set; } // مندوب المبيعات (موظف) المسؤول عن العقد
 
+        // حقول الفاتورة الإلكترونية والربط الضريبي
+        public string? EInvoiceStatus { get; set; } = "Draft"; // Draft, Pending, Sent, Failed
+        public string? EInvoiceXmlHash { get; set; }
+        public string? EInvoiceQrCode { get; set; }
+        public string? EInvoiceUuid { get; set; }
+        public string? EInvoiceError { get; set; }
+
         // علاقات التنقل
         public virtual Customer? Customer { get; set; }
         public virtual Vehicle? Vehicle { get; set; }
         public virtual InstallmentPlan? InstallmentPlan { get; set; }
+        public virtual Employee? SalesRep { get; set; }
     }
 }

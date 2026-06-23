@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { cn, formatMoney } from '@/lib/utils'
 import { getAvailableCars, getBuyers, createSale } from '@/lib/api/sales'
-import { extractApiError } from '@/lib/api/client'
+import { get, extractApiError } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,6 +42,9 @@ export default function NewSalePage() {
   const [currency,      setCurrency]      = useState<'USD' | 'IQD'>('USD')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [saleDate,      setSaleDate]      = useState(new Date().toISOString().slice(0, 10))
+  const [customerVatNumber, setCustomerVatNumber] = useState('')
+
+  const [salesRepId,   setSalesRepId]   = useState<string>('')
 
   /* ── Installment state ── */
   const [enableInstallment, setEnableInstallment] = useState(false)
@@ -77,6 +80,17 @@ export default function NewSalePage() {
     staleTime: 60_000,
   })
 
+  const { data: employeesData } = useQuery({
+    queryKey: ['employees-active'],
+    queryFn: async () => {
+      const res = await get<any>('/Employees?per_page=100')
+      const items = res?.success ? (res.data ?? []) : (res ?? [])
+      return Array.isArray(items) ? items : (items.items ?? [])
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const employees = employeesData ?? []
+
   const selectedCar   = cars.find(c => String(c.id) === carId)
   const selectedBuyer = buyers.find(b => String(b.id) === buyerId)
 
@@ -87,6 +101,15 @@ export default function NewSalePage() {
       setCurrency(selectedCar.currency)
     }
   }, [selectedCar])
+
+  /* ── Prefill VAT from selected buyer ── */
+  useEffect(() => {
+    if (selectedBuyer) {
+      setCustomerVatNumber((selectedBuyer as any).vat_number || '')
+    } else {
+      setCustomerVatNumber('')
+    }
+  }, [selectedBuyer])
 
   /* ── Smart profit analysis ── */
   const purchaseCost   = selectedCar ? (parseFloat(String(selectedCar.purchase_price)) || 0) : 0
@@ -144,6 +167,8 @@ export default function NewSalePage() {
       installment_start_date:  startDate  || null,
       installment_due_day:     dueDay     ? parseInt(dueDay)     : null,
       installment_notes:       installNotes || null,
+      customer_vat_number:     customerVatNumber || null,
+      sales_rep_id:            salesRepId || null,
     })
   }
 
@@ -238,11 +263,29 @@ export default function NewSalePage() {
                 <FieldError msg={errors.buyerId} />
               </div>
               {selectedBuyer && (
-                <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  <span className="text-muted-foreground">رقم الهاتف</span>
-                  <span className="text-foreground">{selectedBuyer.phone}</span>
-                  <span className="text-muted-foreground">رقم الهوية</span>
-                  <span className="text-foreground">{selectedBuyer.id_number}</span>
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <span className="text-muted-foreground">رقم الهاتف</span>
+                    <span className="text-foreground">{selectedBuyer.phone}</span>
+                    <span className="text-muted-foreground">رقم الهوية</span>
+                    <span className="text-foreground">{selectedBuyer.id_number}</span>
+                    {selectedBuyer.customer_type === 'Company' && (
+                      <>
+                        <span className="text-muted-foreground">الرقم الضريبي الحالي</span>
+                        <span className="text-foreground">{(selectedBuyer as any).vat_number || 'غير مسجل'}</span>
+                      </>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1.5 block">الرقم الضريبي للمشتري (اختياري)</Label>
+                    <Input
+                      type="text"
+                      placeholder="أدخل الرقم الضريبي للعميل إن وجد"
+                      value={customerVatNumber}
+                      onChange={e => setCustomerVatNumber(e.target.value)}
+                      className="bg-secondary/30 border-border/60 text-xs"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -390,7 +433,27 @@ export default function NewSalePage() {
           )}
         </SectionCard>
 
-        {/* ── Section 4: Installments (functional accordion — animation kept) ── */}
+        {/* ── Section 4: Sales Representative ── */}
+        <SectionCard title="مندوب المبيعات">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">اختر مندوب المبيعات (اختياري)</Label>
+            <select
+              value={salesRepId}
+              onChange={e => setSalesRepId(e.target.value)}
+              className="w-full rounded-lg border border-border/60 bg-secondary/30 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">— بدون مندوب —</option>
+              {employees.map((emp: any) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.fullName ?? emp.full_name ?? emp.FullName}
+                  {(emp.title ?? emp.Title) ? ` — ${emp.title ?? emp.Title}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </SectionCard>
+
+        {/* ── Section 5: Installments (functional accordion — animation kept) ── */}
         {remaining > 0 && (
           <div className="dash-card overflow-hidden rounded-xl">
             <button

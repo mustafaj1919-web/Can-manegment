@@ -162,6 +162,13 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasForeignKey(sc => sc.VehicleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<SalesContract>()
+                .HasOne(sc => sc.SalesRep)
+                .WithMany()
+                .HasForeignKey(sc => sc.SalesRepId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // إعدادات المشتريات
             modelBuilder.Entity<Purchase>()
                 .HasIndex(p => new { p.PurchaseNumber, p.BranchId })
