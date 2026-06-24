@@ -354,11 +354,12 @@ export default function CustomersPage() {
         const hashColor = getHashColor(displayName)
         return (
           <div className="flex items-center gap-2.5">
-            <div
-              style={{ backgroundColor: hashColor.bg, color: hashColor.text }}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold"
-            >
-              {initials}
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden">
+              {customer.photo_url ? (
+                <img src={customer.photo_url} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <div style={{ backgroundColor: hashColor.bg, color: hashColor.text }} className="flex h-full w-full items-center justify-center text-[10px] font-bold">{initials}</div>
+              )}
             </div>
             <div>
               <CustomerQuickCard customerId={customer.id} customerName={displayName} className="text-xs font-bold" />
@@ -678,11 +679,12 @@ export default function CustomersPage() {
                       <div className="p-4 space-y-3">
                         {/* Header */}
                         <div className="flex items-start gap-3">
-                          <div
-                            style={{ backgroundColor: hashColor.bg, color: hashColor.text }}
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold ring-1 ring-white/5 transition-all duration-300"
-                          >
-                            {initials}
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl overflow-hidden ring-1 ring-white/5 transition-all duration-300">
+                            {customer.photo_url ? (
+                              <img src={customer.photo_url} alt={displayName} className="h-full w-full object-cover" />
+                            ) : (
+                              <div style={{ backgroundColor: hashColor.bg, color: hashColor.text }} className="flex h-full w-full items-center justify-center text-sm font-bold">{initials}</div>
+                            )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-bold text-foreground leading-tight group-hover:text-primary transition-colors">{displayName}</p>

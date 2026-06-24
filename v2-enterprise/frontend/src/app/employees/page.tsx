@@ -200,6 +200,37 @@ function ConfirmDelete({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function EmployeesPage() {
+  const queryClient = useQueryClient()
+  const [search,      setSearch]      = useState('')
+  const [dialogOpen,  setDialogOpen]  = useState(false)
+  const [editTarget,  setEditTarget]  = useState<Employee | undefined>()
+  const [deleteTarget, setDeleteTarget] = useState<Employee | undefined>()
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['employees'],
+    queryFn: () => getEmployees({ per_page: 200 }),
+  })
+
+  const allEmployees: Employee[] = data?.items ?? []
+  const employees = allEmployees.filter((e: Employee) =>
+    !search || e.full_name.toLowerCase().includes(search.toLowerCase()) || e.phone.includes(search)
+  )
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteEmployee(id),
+    onSuccess: () => {
+      toast.success('تم حذف الموظف')
+      setDeleteTarget(undefined)
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (err) => toast.error(extractApiError(err)),
+  })
+
+  function openAdd() { setEditTarget(undefined); setDialogOpen(true) }
+  function openEdit(emp: Employee) { setEditTarget(emp); setDialogOpen(true) }
+  function closeDialog() { setDialogOpen(false); setEditTarget(undefined) }
+  function onSaved() { closeDialog(); queryClient.invalidateQueries({ queryKey: ['employees'] }) }
+
   return (
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
       <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -207,7 +238,7 @@ export default function EmployeesPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-              <Users className="h-4.5 w-4.5 text-primary" />
+              <Users className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white leading-tight">الموظفون</h1>
@@ -215,23 +246,82 @@ export default function EmployeesPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              disabled
-              className="bg-primary/50 text-primary-foreground/50 gap-1.5 cursor-not-allowed"
-            >
+            <button onClick={() => refetch()} title="تحديث" className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <Button size="sm" onClick={openAdd} className="gap-1.5">
               <Plus className="h-3.5 w-3.5" />
               موظف جديد
             </Button>
           </div>
         </div>
 
-        {/* Feature Unavailable State */}
-        <FeatureUnavailable 
-          title="إدارة الموظفين غير متاحة"
-          description="ميزة إدارة الموظفين غير مدعومة في هذا الإصدار لعدم توفر نقاط النهاية المخصصة لها في خادم الخلفية."
-        />
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الهاتف..."
+            className="ps-9 bg-secondary/30 border-border/60"
+          />
+        </div>
+
+        {/* List */}
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+          </div>
+        ) : employees.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground text-sm">
+            {search ? 'لا توجد نتائج للبحث' : 'لا يوجد موظفون. اضغط "موظف جديد" للإضافة.'}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {employees.map((emp) => (
+              <div key={emp.id} className="rounded-xl border border-border/60 bg-card p-4 flex items-start gap-3 hover:border-primary/20 transition-colors">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-sm">
+                  {emp.full_name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-sm text-foreground truncate">{emp.full_name}</p>
+                    <Badge variant={emp.is_active ? 'default' : 'secondary'} className="text-[10px] shrink-0">
+                      {emp.is_active ? 'نشط' : 'غير نشط'}
+                    </Badge>
+                  </div>
+                  {emp.title && <p className="text-xs text-muted-foreground mt-0.5"><Briefcase className="h-3 w-3 inline ml-1" />{emp.title}</p>}
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <span><PhoneCall className="h-3 w-3 inline ml-1" />{emp.phone}</span>
+                    {emp.id_number && <span><CreditCard className="h-3 w-3 inline ml-1" />{emp.id_number}</span>}
+                    {emp.address && <span><MapPin className="h-3 w-3 inline ml-1" />{emp.address}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => openEdit(emp)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors" title="تعديل">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => setDeleteTarget(emp)} className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="حذف">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {dialogOpen && (
+        <EmployeeDialog initial={editTarget} onClose={closeDialog} onSaved={onSaved} />
+      )}
+      {deleteTarget && (
+        <ConfirmDelete
+          emp={deleteTarget}
+          onConfirm={() => deleteMutation.mutate(String(deleteTarget.id))}
+          onCancel={() => setDeleteTarget(undefined)}
+          busy={deleteMutation.isPending}
+        />
+      )}
     </div>
   )
 }

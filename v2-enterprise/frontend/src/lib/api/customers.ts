@@ -100,7 +100,15 @@ function mapCustomerFromBackend(c: any): Customer {
     documents_count: c.documentsCount ?? c.documents_count ?? 0,
     sales_count:    c.salesCount     ?? c.sales_count    ?? 0,
     documents:      c.documents      ?? [],
-    photo_url:      c.photo_url       ?? c.photoUrl       ?? null,
+    photo_url:      (() => {
+      const customerId = c.id ?? c.Id ?? ''
+      const raw = c.photo_url ?? c.photoUrl ?? null
+      if (!raw) return null
+      // if it's already a full path/URL, use it as-is; otherwise construct the API URL
+      return (raw.startsWith('/') || raw.startsWith('http'))
+        ? raw
+        : `/api/Customers/${customerId}/photo`
+    })(),
   }
 }
 
