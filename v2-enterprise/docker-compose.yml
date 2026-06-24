@@ -43,6 +43,7 @@ services:
       - AllowedHosts=*
     volumes:
       - v2_vehicle_photos:/app/storage/vehicles
+      - v2_dataprotection_keys:/home/appuser/.aspnet/DataProtection-Keys
     depends_on:
       v2-postgres-db:
         condition: service_healthy
@@ -88,6 +89,7 @@ services:
 volumes:
   v2_postgres_data:
   v2_vehicle_photos:
+  v2_dataprotection_keys:
 
 networks:
   v2-network:
