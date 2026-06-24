@@ -38,6 +38,9 @@ namespace CarShowroomManagementV2.Infrastructure
             // تسجيل خدمة البريد الإلكتروني
             services.AddScoped<IEmailService, SmtpEmailService>();
 
+            // تسجيل خدمة الفاتورة الإلكترونية
+            services.AddScoped<IEInvoiceService, EInvoiceService>();
+
             return services;
         }
     }

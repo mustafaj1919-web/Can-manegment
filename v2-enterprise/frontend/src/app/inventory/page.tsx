@@ -698,7 +698,7 @@ export default function InventoryPage() {
                     return (
                       <motion.div key={car.id} variants={cardVariants}>
                         <div
-                          className="group relative bg-[#161616] border border-white/5 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-glow-primary hover:border-[#e63946]/30 flex flex-col h-full select-none"
+                          className="group relative bg-[#161616] border border-white/5 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-glow-primary hover:border-[#00d4aa]/30 flex flex-col h-full select-none"
                         >
                           {/* Image & Status & Urgency Overlay */}
                           <div className="relative h-[200px] overflow-hidden bg-white/[0.02] w-full shrink-0 flex items-center justify-center">

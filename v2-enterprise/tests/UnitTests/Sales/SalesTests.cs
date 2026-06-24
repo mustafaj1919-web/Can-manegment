@@ -145,7 +145,8 @@ namespace CarShowroomManagementV2.UnitTests.Sales
             var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
             var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Toyota Camry", "CH-CAMRY-111", 15000, _testBranchId);
 
-            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
 
             var command = new CreateSaleContractCommand
             {
@@ -216,7 +217,8 @@ namespace CarShowroomManagementV2.UnitTests.Sales
             context.Vehicles.Update(vehicle);
             await context.SaveChangesAsync();
 
-            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
 
             var command = new CreateSaleContractCommand
             {
@@ -244,7 +246,8 @@ namespace CarShowroomManagementV2.UnitTests.Sales
             var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
             var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Toyota Camry", "CH-CAMRY-111", 15000, _testBranchId);
 
-            var createHandler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var createHandler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
             var cancelHandler = new CancelSaleContractCommandHandler(context, _currentUserServiceMock.Object);
 
             var createCommand = new CreateSaleContractCommand
@@ -337,6 +340,56 @@ namespace CarShowroomManagementV2.UnitTests.Sales
             // Assert
             list.Should().ContainSingle();
             list.First().ContractNumber.Should().Be("CON-A");
+        }
+
+        [Fact]
+        public async Task CreateSaleContract_ShouldGenerateEInvoiceXmlAndTlvQrCode()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            var branch = await SeedBranchAsync(context, _testBranchId, "معرض الأصدقاء", "BR-01");
+            branch.VatNumber = "311111111111113";
+            branch.TaxName = "شركة الأصدقاء لتجارة السيارات";
+            context.Branches.Update(branch);
+            await context.SaveChangesAsync();
+
+            await SeedAccountingSetupAsync(context, _testBranchId);
+            
+            var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
+            customer.VatNumber = "322222222222223";
+            context.Customers.Update(customer);
+            await context.SaveChangesAsync();
+
+            var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Toyota Camry", "CH-CAMRY-111", 15000, _testBranchId);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
+
+            var command = new CreateSaleContractCommand
+            {
+                CustomerId = customer.Id,
+                VehicleId = vehicle.Id,
+                SalePrice = 18000,
+                TaxAmount = 2700, // 15% VAT
+                RegistrationFees = 0,
+                Discount = 0,
+                DownPayment = 20700,
+                PaymentMethod = PaymentMethod.Cash,
+                CustomerVatNumber = "322222222222223"
+            };
+
+            // Act
+            var contractId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            var contract = await context.SalesContracts
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.Id == contractId);
+
+            contract.Should().NotBeNull();
+            contract!.EInvoiceStatus.Should().Be("Sent");
+            contract.EInvoiceUuid.Should().NotBeNullOrEmpty();
+            contract.EInvoiceQrCode.Should().NotBeNullOrEmpty();
+            contract.EInvoiceXmlHash.Should().NotBeNullOrEmpty();
         }
     }
 }

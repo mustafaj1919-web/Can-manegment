@@ -35,7 +35,7 @@ export function TopModelsChart() {
         <BarChart data={chartData} layout="vertical" barSize={16} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="violetGrad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#6d28d9" stopOpacity={0.25} />
+              <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.25} />
               <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.9} />
             </linearGradient>
           </defs>
@@ -44,7 +44,7 @@ export function TopModelsChart() {
           <Tooltip content={(props) => (
             <ChartTooltip {...props} formatter={(v: number) => `${v} سيارة`} />
           )} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
-          <Bar dataKey="count" fill="url(#violetGrad)" stroke="#8b5cf6" strokeOpacity={0.4} radius={[0, 6, 6, 0]} name="العدد" />
+          <Bar dataKey="count" fill="url(#violetGrad)" stroke="#7c3aed" strokeOpacity={0.4} radius={[0, 6, 6, 0]} name="العدد" />
         </BarChart>
       </ResponsiveContainer>
     </div>

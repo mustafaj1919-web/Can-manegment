@@ -43,8 +43,8 @@ export function SalesTrendSparkline() {
         <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+              <stop offset="5%" stopColor="#00d4aa" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#00d4aa" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
@@ -52,7 +52,7 @@ export function SalesTrendSparkline() {
           <Tooltip content={(props) => (
             <ChartTooltip {...props} formatter={(v: number) => `${shortenIQD(v)} IQD`} />
           )} />
-          <Area type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} fill="url(#salesGrad)" name="المبيعات" />
+          <Area type="monotone" dataKey="amount" stroke="#00d4aa" strokeWidth={2} fill="url(#salesGrad)" name="المبيعات" />
         </AreaChart>
       </ResponsiveContainer>
     </div>

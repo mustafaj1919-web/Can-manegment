@@ -24,10 +24,10 @@ function RiskTooltip({ active, payload }: any) {
 }
 
 const BUCKETS = [
-  { key:'overdue',  label:'متأخرة',    countKey:'overdue_count',       amtKey:'overdue_amount',       color:'#e63946', text:'text-red-400',    bg:'bg-red-500/8',    border:'border-red-500/15'    },
+  { key:'overdue',  label:'متأخرة',    countKey:'overdue_count',       amtKey:'overdue_amount',       color:'#ef4444', text:'text-red-400',    bg:'bg-red-500/8',    border:'border-red-500/15'    },
   { key:'today',    label:'اليوم',      countKey:'due_today_count',     amtKey:'due_today_amount',     color:'#f4a522', text:'text-amber-400',  bg:'bg-amber-500/8',  border:'border-amber-500/15'  },
   { key:'tomorrow', label:'غداً',       countKey:'due_tomorrow_count',  amtKey:'due_tomorrow_amount',  color:'#f97316', text:'text-orange-400', bg:'bg-orange-500/8', border:'border-orange-500/15' },
-  { key:'two_days', label:'بعد يومين', countKey:'due_in_2_days_count', amtKey:'due_in_2_days_amount', color:'#8b5cf6', text:'text-violet-400', bg:'bg-violet-500/8', border:'border-violet-500/15' },
+  { key:'two_days', label:'بعد يومين', countKey:'due_in_2_days_count', amtKey:'due_in_2_days_amount', color:'#7c3aed', text:'text-violet-400', bg:'bg-violet-500/8', border:'border-violet-500/15' },
 ] as const
 
 export function InstallmentRiskWidget() {

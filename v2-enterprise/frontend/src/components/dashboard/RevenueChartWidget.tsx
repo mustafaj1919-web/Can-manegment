@@ -107,8 +107,8 @@ export function RevenueChartWidget() {
             <AreaChart data={chartData} margin={{ top: 12, right: 4, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#e63946" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#e63946" stopOpacity={0.0} />
+                  <stop offset="5%"  stopColor="#00d4aa" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#00d4aa" stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradProfit" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#10b981" stopOpacity={0.2} />
@@ -157,11 +157,11 @@ export function RevenueChartWidget() {
               <Area
                 type="monotone"
                 dataKey="الإيرادات"
-                stroke="#e63946"
+                stroke="#00d4aa"
                 strokeWidth={2}
                 fill="url(#gradRevenue)"
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 0, fill: '#e63946' }}
+                activeDot={{ r: 4, strokeWidth: 0, fill: '#00d4aa' }}
                 style={{ filter: 'url(#revenueGlow)' }}
               />
               <Area

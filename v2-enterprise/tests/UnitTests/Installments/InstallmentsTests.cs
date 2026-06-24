@@ -147,7 +147,8 @@ namespace CarShowroomManagementV2.UnitTests.Installments
             var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
             var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Honda Civic", "CH-CIVIC-999", 10000, _testBranchId);
 
-            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
 
             var command = new CreateSaleContractCommand
             {
@@ -208,7 +209,8 @@ namespace CarShowroomManagementV2.UnitTests.Installments
             var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
             var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Honda Civic", "CH-CIVIC-999", 10000, _testBranchId);
 
-            var saleHandler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var saleHandler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
             var payHandler = new PayInstallmentCommandHandler(context, _currentUserServiceMock.Object);
 
             var saleCommand = new CreateSaleContractCommand
@@ -285,7 +287,8 @@ namespace CarShowroomManagementV2.UnitTests.Installments
             var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
             var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Honda Civic", "CH-CIVIC-999", 10000, _testBranchId);
 
-            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object);
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
 
             var command = new CreateSaleContractCommand
             {

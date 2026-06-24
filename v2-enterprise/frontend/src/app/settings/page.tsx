@@ -61,44 +61,12 @@ function InfoValue({ value }: { value: string }) {
 /* ─── Theme Toggle ───────────────────────────────────────────────────────── */
 
 function ThemeRow() {
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    if (typeof window === 'undefined') return 'dark'
-    return (localStorage.getItem('dashboardTheme') as 'dark' | 'light') || 'dark'
-  })
-
-  function toggle(next: 'dark' | 'light') {
-    document.documentElement.classList.toggle('light', next === 'light')
-    localStorage.setItem('dashboardTheme', next)
-    setTheme(next)
-  }
-
   return (
     <SettingRow label="مظهر الواجهة">
-      <div className="flex items-center gap-2 justify-end">
-        <button
-          type="button"
-          onClick={() => toggle('dark')}
-          className={cn(
-            'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-all',
-            theme === 'dark'
-              ? 'border-primary/40 bg-primary/10 text-primary'
-              : 'border-border/40 text-muted-foreground hover:border-border/60 hover:text-foreground'
-          )}
-        >
-          <Moon className="h-3.5 w-3.5" /> داكن
-        </button>
-        <button
-          type="button"
-          onClick={() => toggle('light')}
-          className={cn(
-            'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-all',
-            theme === 'light'
-              ? 'border-amber-400/40 bg-amber-400/10 text-amber-400'
-              : 'border-border/40 text-muted-foreground hover:border-border/60 hover:text-foreground'
-          )}
-        >
-          <Sun className="h-3.5 w-3.5" /> فاتح
-        </button>
+      <div className="flex items-center gap-1.5 justify-end">
+        <span className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-bold text-primary">
+          <Moon className="h-3.5 w-3.5" /> داكن تلقائياً
+        </span>
       </div>
     </SettingRow>
   )

@@ -65,17 +65,17 @@ interface NavSection {
 }
 
 const ACCENT_INDICATOR: Record<AccentColor, string> = {
-  red:     'bg-[#e63946]',
+  red:     'bg-[#00d4aa]',
   amber:   'bg-[#f59e0b]',
-  emerald: 'bg-[#10b981]',
-  violet:  'bg-[#8b5cf6]',
+  emerald: 'bg-[#00d4aa]',
+  violet:  'bg-[#7c3aed]',
 }
 
 const ACCENT_ICON_ACTIVE: Record<AccentColor, string> = {
-  red:     'text-[#e63946] drop-shadow-[0_0_4px_#e6394660]',
-  amber:   'text-[#f59e0b] drop-shadow-[0_0_4px_#f59e0b60]',
-  emerald: 'text-[#10b981] drop-shadow-[0_0_4px_#10b98160]',
-  violet:  'text-[#8b5cf6] drop-shadow-[0_0_4px_#8b5cf660]',
+  red:     'text-[#00d4aa] drop-shadow-[0_0_4px_rgba(0,212,170,0.4)]',
+  amber:   'text-[#f59e0b] drop-shadow-[0_0_4px_rgba(245,158,11,0.4)]',
+  emerald: 'text-[#00d4aa] drop-shadow-[0_0_4px_rgba(0,212,170,0.4)]',
+  violet:  'text-[#7c3aed] drop-shadow-[0_0_4px_rgba(124,58,237,0.4)]',
 }
 
 const MANAGEMENT_ROLES = ['Owner', 'Admin']
@@ -170,7 +170,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="showroom-sidebar relative hidden h-[calc(100vh-2rem)] my-4 ms-4 w-[260px] shrink-0 flex-col rounded-2xl border border-border bg-[var(--sidebar-bg)] shadow-2xl lg:flex">
+    <aside className="showroom-sidebar relative hidden h-[calc(100vh-2rem)] my-4 ms-4 w-[260px] shrink-0 flex-col rounded-2xl border border-border bg-[#0d0d14] shadow-2xl lg:flex">
       {/* Top ambient glow */}
       <div className="sidebar-top-glow rounded-t-2xl" />
 
@@ -178,7 +178,7 @@ export function Sidebar() {
       <div className="relative z-10 flex h-[72px] items-center gap-3 border-b border-border-subtle px-5">
         <Link
           href="/"
-          className="sidebar-brand-ring h-10 w-10 animate-pulse-border-red"
+          className="sidebar-brand-ring h-10 w-10 animate-pulse-border-red shadow-[0_0_15px_rgba(0,212,170,0.3)] rounded-full border border-[#00d4aa]/40 flex items-center justify-center"
         >
           <img src="/logo.png" alt="شركة الأصدقاء لتجارة السيارات" className="h-7 w-7 object-contain" />
         </Link>
@@ -215,10 +215,10 @@ export function Sidebar() {
                       return (
                         <div
                           key={item.href}
-                          className="group relative flex h-9 items-center gap-3 rounded-lg px-3 text-xs font-semibold cursor-not-allowed opacity-40 select-none"
+                          className="group relative flex h-10 items-center gap-3 rounded-xl px-3 text-xs font-semibold cursor-not-allowed opacity-40 select-none"
                           title="قيد التطوير"
                         >
-                          <Icon className="h-4 w-4 shrink-0 opacity-40" />
+                          <Icon className="h-5 w-5 shrink-0 opacity-40" />
                           <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.label}</span>
                           <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-muted/40 text-muted-foreground border border-border/30">
                             قريباً
@@ -243,9 +243,9 @@ export function Sidebar() {
                         <Link
                           href={item.href}
                           className={cn(
-                            'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-xs font-semibold transition-colors duration-150',
+                            'group relative flex h-10 items-center gap-3 rounded-xl px-3 text-xs font-semibold transition-colors duration-150',
                             active
-                              ? 'bg-primary/[0.08] text-foreground font-bold'
+                              ? 'bg-primary/[0.12] text-foreground font-bold'
                               : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                           )}
                         >
@@ -253,17 +253,14 @@ export function Sidebar() {
                           {active && (
                             <motion.span
                               layoutId="sidebar-active-bar"
-                              className={cn(
-                                'absolute inset-y-2 start-0 w-[2.5px] rounded-full',
-                                ACCENT_INDICATOR[section.accent]
-                              )}
+                              className="absolute inset-y-2 left-0 w-[2px] rounded-full bg-[#00d4aa]"
                               transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                             />
                           )}
 
                           <Icon
                             className={cn(
-                              'h-4 w-4 shrink-0 transition-all duration-150',
+                              'h-5 w-5 shrink-0 transition-all duration-150',
                               active
                                 ? ACCENT_ICON_ACTIVE[section.accent]
                                 : 'opacity-40 group-hover:opacity-75'

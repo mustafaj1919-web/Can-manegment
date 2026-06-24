@@ -45,7 +45,7 @@ export function FeatureUnavailable({
             <svg className="h-14 w-14" viewBox="0 0 100 100">
               <defs>
                 <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#e63946" />
+                  <stop offset="0%" stopColor="#00d4aa" />
                   <stop offset="60%" stopColor="#f4a522" />
                   <stop offset="100%" stopColor="#10b981" />
                 </linearGradient>
@@ -65,13 +65,13 @@ export function FeatureUnavailable({
                 transition={{ rotate: { repeat: Infinity, duration: 3, ease: 'easeInOut' } }}
                 style={{ originX: '50px', originY: '50px' }}
               >
-                <line x1="50" y1="50" x2="22" y2="22" stroke="#e63946" strokeWidth="3.5" strokeLinecap="round" filter="url(#needleGlow)" />
-                <circle cx="50" cy="50" r="5" fill="#e63946" />
+                <line x1="50" y1="50" x2="22" y2="22" stroke="#00d4aa" strokeWidth="3.5" strokeLinecap="round" filter="url(#needleGlow)" />
+                <circle cx="50" cy="50" r="5" fill="#00d4aa" />
               </motion.g>
             </svg>
             <span className="absolute bottom-2 left-1/2 -translate-x-1/2 flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00d4aa] opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00d4aa]" />
             </span>
           </div>
         </div>

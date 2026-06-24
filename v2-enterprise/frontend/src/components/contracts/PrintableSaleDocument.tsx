@@ -531,8 +531,19 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer, mode = 'receip
         </div>
 
         {/* RTL-end → physical LEFT */}
-        <div className="pc-hdr-l">
-          {SHOWROOM.phones.map(p => <p key={p} className="pc-phone">{p}</p>)}
+        <div className="pc-hdr-l" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+          {(sale as any).einvoice_qr_code ? (
+            <div style={{ background: '#fff', padding: '3px', borderRadius: '4px', display: 'inline-block' }}>
+              <img
+                src={`https://chart.googleapis.com/chart?chs=70x70&cht=qr&chl=${encodeURIComponent((sale as any).einvoice_qr_code)}`}
+                alt="فاتورة ضريبية مبسطة"
+                style={{ width: '64px', height: '64px', display: 'block' }}
+                title="فاتورة ضريبية مبسطة معتمدة"
+              />
+            </div>
+          ) : (
+            SHOWROOM.phones.map(p => <p key={p} className="pc-phone">{p}</p>)
+          )}
         </div>
       </div>
 
@@ -550,6 +561,7 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer, mode = 'receip
           <div className="pc-party-ttl">الطرف الأول (البائع)</div>
           <div className="pc-party-fields">
             <FL label="الاسم"          value={repName} />
+            <FL label="الرقم الضريبي"  value={sale.branch?.vat_number || "300000000000003"} />
             <FL label="السكن"          value={repAddress} />
             <FL label="العنوان"        value={SHOWROOM.address} />
             <FL label="المهنة"         value={repTitle} />
@@ -562,6 +574,7 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer, mode = 'receip
           <div className="pc-party-ttl pc-party-buyer-ttl">الطرف الثاني (المشتري)</div>
           <div className="pc-party-fields">
             <FL label="الاسم"          value={buyerName} />
+            <FL label="الرقم الضريبي"  value={(sale.buyer as any)?.vat_number || "غير مسجل"} />
             <FL label="السكن"          value={buyerAddress} />
             <FL label="العنوان"        value={buyerAddress} />
             <FL label="المهنة"         value={null} />

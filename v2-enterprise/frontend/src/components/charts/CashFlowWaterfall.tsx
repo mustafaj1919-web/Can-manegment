@@ -23,9 +23,9 @@ export function CashFlowWaterfall() {
   const netProfit = data?.monthly_profit ?? salesPaid - purchasesPaid
 
   const chartData = [
-    { name: 'مبيعات', value: salesPaid, color: '#10b981' },
-    { name: 'مشتريات', value: -purchasesPaid, color: '#e63946' },
-    { name: 'صافي الربح', value: netProfit, color: netProfit >= 0 ? '#8b5cf6' : '#e63946' },
+    { name: 'مبيعات', value: salesPaid, color: '#00d4aa' },
+    { name: 'مشتريات', value: -purchasesPaid, color: '#ef4444' },
+    { name: 'صافي الربح', value: netProfit, color: netProfit >= 0 ? '#7c3aed' : '#ef4444' },
   ]
 
   return (
@@ -35,16 +35,16 @@ export function CashFlowWaterfall() {
         <BarChart data={chartData} barSize={36} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="waterfallGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#047857" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#00d4aa" />
+              <stop offset="100%" stopColor="#00d4aa" stopOpacity={0.4} />
             </linearGradient>
             <linearGradient id="waterfallRed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e63946" />
+              <stop offset="0%" stopColor="#ef4444" />
               <stop offset="100%" stopColor="#991b1b" stopOpacity={0.4} />
             </linearGradient>
             <linearGradient id="waterfallViolet" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#a78bfa" />
-              <stop offset="100%" stopColor="#6d28d9" stopOpacity={0.4} />
+              <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.4} />
             </linearGradient>
           </defs>
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
@@ -59,17 +59,17 @@ export function CashFlowWaterfall() {
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, i) => {
               let fillUrl = 'url(#waterfallGreen)'
-              let stroke = '#10b981'
+              let stroke = '#00d4aa'
               if (entry.name === 'مشتريات') {
                 fillUrl = 'url(#waterfallRed)'
-                stroke = '#e63946'
+                stroke = '#ef4444'
               } else if (entry.name === 'صافي الربح') {
                 if (entry.value >= 0) {
                   fillUrl = 'url(#waterfallViolet)'
-                  stroke = '#8b5cf6'
+                  stroke = '#7c3aed'
                 } else {
                   fillUrl = 'url(#waterfallRed)'
-                  stroke = '#e63946'
+                  stroke = '#ef4444'
                 }
               }
               return <Cell key={i} fill={fillUrl} stroke={stroke} strokeOpacity={0.3} />

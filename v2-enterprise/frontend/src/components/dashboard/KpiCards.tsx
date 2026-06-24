@@ -31,7 +31,7 @@ const TONE = {
     iconBorder:'rgba(230,57,70,0.22)',
     topLine:   'linear-gradient(90deg, transparent 0%, rgba(230,57,70,0.8) 50%, transparent 100%)',
     bottomFog: 'linear-gradient(to top, rgba(230,57,70,0.08) 0%, transparent 100%)',
-    numColor:  '#fff',
+    numColor:  '#e63946',
   },
   emerald: {
     accent:    '#10b981',
@@ -54,14 +54,14 @@ const TONE = {
     numColor:  '#f4a522',
   },
   blue: {
-    accent:    '#e63946',
-    glow:      'rgba(230,57,70,0.16)',
-    hoverGlow: 'rgba(230,57,70,0.26)',
-    iconBg:    'rgba(230,57,70,0.10)',
-    iconBorder:'rgba(230,57,70,0.20)',
-    topLine:   'linear-gradient(90deg, transparent 0%, rgba(230,57,70,0.7) 50%, transparent 100%)',
-    bottomFog: 'linear-gradient(to top, rgba(230,57,70,0.06) 0%, transparent 100%)',
-    numColor:  '#fff',
+    accent:    '#00d4aa',
+    glow:      'rgba(0,212,170,0.16)',
+    hoverGlow: 'rgba(0,212,170,0.26)',
+    iconBg:    'rgba(0,212,170,0.10)',
+    iconBorder:'rgba(0,212,170,0.20)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(0,212,170,0.7) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(0,212,170,0.06) 0%, transparent 100%)',
+    numColor:  '#00d4aa',
   },
 }
 

@@ -9,9 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getDashboardStats } from '@/lib/api/dashboard'
 
 const SEGMENTS = [
-  { key: 'available_cars', label: 'متاحة',  color: '#10b981', glow: 'text-emerald-400' },
-  { key: 'sold_cars',      label: 'مباعة',   color: '#e63946', glow: 'text-rose-400'  },
-  { key: 'reserved_cars',  label: 'محجوزة', color: '#f4a522', glow: 'text-amber-400'   },
+  { key: 'available_cars', label: 'متاحة',  color: '#00d4aa', glow: 'text-[#00d4aa]' },
+  { key: 'sold_cars',      label: 'مباعة',   color: '#8888aa', glow: 'text-[#8888aa]'  },
+  { key: 'reserved_cars',  label: 'محجوزة', color: '#7c3aed', glow: 'text-[#7c3aed]'   },
 ] as const
 
 function PieTooltipContent({ active, payload }: any) {

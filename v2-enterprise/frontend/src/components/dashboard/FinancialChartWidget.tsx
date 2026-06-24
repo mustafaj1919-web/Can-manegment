@@ -40,9 +40,9 @@ export function FinancialChartWidget() {
   const hasData  = salesM > 0 || purchM > 0 || cashbox > 0
 
   const chartData = [
-    { label: 'مبيعات',   value: salesM,  color: '#10b981', gradient: 'salesGradient', key: 'sales' },
-    { label: 'مشتريات', value: purchM,  color: '#e63946', gradient: 'purchaseGradient', key: 'purch' },
-    { label: 'الربح',   value: profitM, color: profitM >= 0 ? '#8b5cf6' : '#e63946', gradient: profitM >= 0 ? 'profitGradient' : 'lossGradient', key: 'profit' },
+    { label: 'مبيعات',   value: salesM,  color: '#00d4aa', gradient: 'salesGradient', key: 'sales' },
+    { label: 'مشتريات', value: purchM,  color: '#ef4444', gradient: 'purchaseGradient', key: 'purch' },
+    { label: 'الربح',   value: profitM, color: profitM >= 0 ? '#7c3aed' : '#ef4444', gradient: profitM >= 0 ? 'profitGradient' : 'lossGradient', key: 'profit' },
     { label: 'الصندوق', value: cashbox, color: '#22d3ee', gradient: 'cashGradient', key: 'cashbox' },
   ]
 
@@ -78,10 +78,10 @@ export function FinancialChartWidget() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }} barCategoryGap="24%">
                 <defs>
-                  <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" /><stop offset="100%" stopColor="#047857" stopOpacity={0.4} /></linearGradient>
-                  <linearGradient id="purchaseGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#e63946" /><stop offset="100%" stopColor="#991b1b" stopOpacity={0.4} /></linearGradient>
-                  <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#6d28d9" stopOpacity={0.4} /></linearGradient>
-                  <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fb7185" /><stop offset="100%" stopColor="#be123c" stopOpacity={0.4} /></linearGradient>
+                  <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#00d4aa" /><stop offset="100%" stopColor="#008f73" stopOpacity={0.4} /></linearGradient>
+                  <linearGradient id="purchaseGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" /><stop offset="100%" stopColor="#991b1b" stopOpacity={0.4} /></linearGradient>
+                  <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#7c3aed" stopOpacity={0.4} /></linearGradient>
+                  <linearGradient id="lossGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fb7185" /><stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} /></linearGradient>
                   <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22d3ee" /><stop offset="100%" stopColor="#0891b2" stopOpacity={0.4} /></linearGradient>
                   <filter id="barGlow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
                 </defs>
@@ -110,7 +110,7 @@ export function FinancialChartWidget() {
           {/* Summary strip */}
           <div className="grid grid-cols-3 gap-2 pt-1" style={{ borderTop:'1px solid var(--border-inner)' }}>
             {[
-              { label:'مبيعات',   value:salesM,  color:'text-emerald-400' },
+              { label:'مبيعات',   value:salesM,  color:'text-[#00d4aa]' },
               { label:'مشتريات', value:purchM,  color:'text-red-400'     },
               { label:'الربح',   value:profitM, color: profitM >= 0 ? 'text-violet-400' : 'text-red-400' },
             ].map(({ label, value, color }, index) => (

@@ -17,7 +17,7 @@ export default function GlobalError({
         </p>
         <button
           onClick={reset}
-          style={{ marginTop: '8px', padding: '10px 24px', background: '#e63946', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}
+          style={{ marginTop: '8px', padding: '10px 24px', background: '#00d4aa', color: '#000', fontWeight: 'bold', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}
         >
           إعادة تحميل
         </button>
