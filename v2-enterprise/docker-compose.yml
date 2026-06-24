@@ -40,6 +40,7 @@ services:
       - Cors__AllowedOrigins__2=http://localhost:80
       - Cors__AllowedOrigins__3=https://alsadaka.com
       - Cors__AllowedOrigins__4=https://www.alsadaka.com
+      - AllowedHosts=*
     volumes:
       - v2_vehicle_photos:/app/storage/vehicles
     depends_on:
