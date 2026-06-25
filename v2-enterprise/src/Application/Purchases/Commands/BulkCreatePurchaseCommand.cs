@@ -10,6 +10,7 @@ using CarShowroomManagementV2.Application.Common.Interfaces;
 using CarShowroomManagementV2.Application.Common.Helpers;
 using CarShowroomManagementV2.Domain.Entities;
 using CarShowroomManagementV2.Domain.Enums;
+using static CarShowroomManagementV2.Domain.Enums.InstallmentFrequency;
 
 namespace CarShowroomManagementV2.Application.Purchases.Commands
 {
@@ -25,7 +26,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public int Year { get; set; }
         public decimal TargetSellingPrice { get; set; }
         public List<string> ChassisNumbers { get; set; } = new();
-        public int InstallmentPeriodMonths { get; set; } = 0;
+        public int InstallmentPeriodCount { get; set; } = 0;
+        public InstallmentFrequency InstallmentFrequency { get; set; } = InstallmentFrequency.Monthly;
         public DateTime? InstallmentStartDate { get; set; }
     }
 
@@ -306,10 +308,10 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     }
 
                     // إنشاء خطة التقسيط لكل سيارة
-                    if (isPartialPayment && request.InstallmentPeriodMonths > 0)
+                    if (isPartialPayment && request.InstallmentPeriodCount > 0)
                     {
                         var remaining = purchaseCost - paidAmount;
-                        var monthlyAmount = AccountingAmount.RoundMoney(remaining / request.InstallmentPeriodMonths);
+                        var installmentAmount = AccountingAmount.RoundMoney(remaining / request.InstallmentPeriodCount);
                         var baseDate = request.InstallmentStartDate.HasValue
                             ? DateTime.SpecifyKind(request.InstallmentStartDate.Value, DateTimeKind.Utc)
                             : DateTime.UtcNow;
@@ -321,26 +323,33 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                             PurchaseId = purchase.Id,
                             TotalAmount = remaining,
                             DownPayment = paidAmount,
-                            InstallmentPeriodMonths = request.InstallmentPeriodMonths,
+                            InstallmentPeriodMonths = request.InstallmentPeriodCount,
                             ProfitRatePercentage = 0,
                             TotalProfit = 0,
                             TotalPlanAmount = remaining,
-                            MonthlyInstallmentAmount = monthlyAmount,
+                            MonthlyInstallmentAmount = installmentAmount,
                             Status = "Active",
                             BranchId = branchId
                         };
                         _context.InstallmentPlans.Add(plan);
                         await _context.SaveChangesAsync(cancellationToken);
 
-                        for (int i = 1; i <= request.InstallmentPeriodMonths; i++)
+                        for (int i = 1; i <= request.InstallmentPeriodCount; i++)
                         {
+                            var dueDate = request.InstallmentFrequency switch
+                            {
+                                Daily   => baseDate.AddDays(i),
+                                Weekly  => baseDate.AddDays(i * 7),
+                                _       => baseDate.AddMonths(i)
+                            };
+
                             _context.Installments.Add(new Installment
                             {
                                 Id = Guid.NewGuid(),
                                 InstallmentPlanId = plan.Id,
                                 InstallmentNumber = i,
-                                DueDate = baseDate.AddMonths(i),
-                                Amount = monthlyAmount,
+                                DueDate = dueDate,
+                                Amount = installmentAmount,
                                 PaidAmount = 0,
                                 Status = "Pending",
                                 BranchId = branchId

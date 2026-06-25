@@ -13,4 +13,11 @@ namespace CarShowroomManagementV2.Domain.Enums
         Cheque = 3,      // شيك
         Installment = 4  // تقسيط (بيع آجل بخطة أقساط)
     }
+
+    public enum InstallmentFrequency
+    {
+        Daily = 1,   // يومي
+        Weekly = 2,  // أسبوعي
+        Monthly = 3  // شهري
+    }
 }
