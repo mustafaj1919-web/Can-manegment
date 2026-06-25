@@ -70,10 +70,15 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 throw new InvalidOperationException("المورد المحدد غير موجود أو لا ينتمي لهذا الفرع.");
             }
 
-            // 2. التحقق من وجود السيارة أو إنشائها
-            var vehicle = await _context.Vehicles
+            // 2. التحقق من عدم تكرار رقم الشاصي عالمياً
+            var vehicleExists = await _context.Vehicles
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(v => v.ChassisNumber == request.ChassisNumber && v.BranchId == branchId, cancellationToken);
+                .AnyAsync(v => v.ChassisNumber == request.ChassisNumber, cancellationToken);
+
+            if (vehicleExists)
+                throw new InvalidOperationException($"رقم الشاصي '{request.ChassisNumber}' مسجل مسبقاً في النظام ولا يمكن تكراره.");
+
+            Vehicle? vehicle = null;
 
             var dbContext = _context as DbContext;
             if (dbContext == null)
@@ -88,35 +93,23 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 var purchaseCost = AccountingAmount.RoundMoney(request.PurchaseCost);
                 var targetSellingPrice = AccountingAmount.RoundMoney(request.TargetSellingPrice);
 
-                if (vehicle == null)
+                vehicle = new Vehicle
                 {
-                    // إنشاء سيارة جديدة
-                    vehicle = new Vehicle
-                    {
-                        Id = Guid.NewGuid(),
-                        Brand = request.Brand,
-                        Model = request.Model,
-                        ChassisNumber = request.ChassisNumber,
-                        EngineNumber = request.EngineNumber,
-                        Color = request.Color,
-                        Year = request.Year,
-                        PurchaseCost = purchaseCost,
-                        BookValue = purchaseCost,
-                        TargetSellingPrice = targetSellingPrice,
-                        Status = "Available",
-                        IsSold = false,
-                        BranchId = branchId
-                    };
-                    _context.Vehicles.Add(vehicle);
-                }
-                else
-                {
-                    // تحديث السيارة الموجودة وإرجاعها للمخزون
-                    vehicle.PurchaseCost = purchaseCost;
-                    vehicle.BookValue = purchaseCost;
-                    vehicle.Status = "Available";
-                    vehicle.IsSold = false;
-                }
+                    Id = Guid.NewGuid(),
+                    Brand = request.Brand,
+                    Model = request.Model,
+                    ChassisNumber = request.ChassisNumber,
+                    EngineNumber = request.EngineNumber,
+                    Color = request.Color,
+                    Year = request.Year,
+                    PurchaseCost = purchaseCost,
+                    BookValue = purchaseCost,
+                    TargetSellingPrice = targetSellingPrice,
+                    Status = "Available",
+                    IsSold = false,
+                    BranchId = branchId
+                };
+                _context.Vehicles.Add(vehicle);
 
                 await _context.SaveChangesAsync(cancellationToken);
 

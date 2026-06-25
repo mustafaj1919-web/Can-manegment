@@ -149,11 +149,11 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 {
                     var exists = await _context.Vehicles
                         .IgnoreQueryFilters()
-                        .AnyAsync(v => v.ChassisNumber == vin && v.BranchId == branchId, cancellationToken);
+                        .AnyAsync(v => v.ChassisNumber == vin, cancellationToken);
 
                     if (exists)
                     {
-                        result.Errors.Add($"رقم الشاصي {vin} مسجل مسبقاً في المخزون.");
+                        result.Errors.Add($"رقم الشاصي {vin} مسجل مسبقاً في النظام ولا يمكن تكراره.");
                         continue;
                     }
 
