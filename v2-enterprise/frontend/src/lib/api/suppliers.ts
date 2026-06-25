@@ -47,9 +47,12 @@ export interface BulkPurchasePayload {
   year: number
   color?: string
   purchaseCost: number
+  paidAmount?: number
   targetSellingPrice: number
   paymentMethod: 'Cash' | 'Bank' | 'Cheque'
   chassisNumbers: string[]
+  installmentPeriodMonths?: number
+  installmentStartDate?: string | null
 }
 
 export interface BulkPurchaseResult {
@@ -113,6 +116,9 @@ export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<
     Year: payload.year,
     TargetSellingPrice: payload.targetSellingPrice,
     ChassisNumbers: payload.chassisNumbers,
+    PaidAmount: payload.paidAmount ?? null,
+    InstallmentPeriodMonths: payload.installmentPeriodMonths ?? 0,
+    InstallmentStartDate: payload.installmentStartDate ?? null,
   }
   return post<BulkPurchaseResult>('/Purchases/bulk', body)
 }

@@ -41,8 +41,16 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
   const [purchasePrice, setPurchasePrice] = useState('')
   const [targetPrice, setTargetPrice] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Cash')
+  const [paidAmount, setPaidAmount] = useState('')
+  const [numMonths, setNumMonths] = useState('')
+  const [startDate, setStartDate] = useState('')
   const [vinInput, setVinInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const price = parseFloat(purchasePrice) || 0
+  const paid = parseFloat(paidAmount) || 0
+  const remaining = price - paid
+  const isPartial = paid > 0 && paid < price
 
   const vinList = vinInput.split('\n').map(v => v.trim()).filter(Boolean)
   const uniqueVins = [...new Set(vinList)]
@@ -83,9 +91,12 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
       year: Number(year),
       color: color.trim() || undefined,
       purchaseCost: Number(purchasePrice),
+      paidAmount: paidAmount ? Number(paidAmount) : undefined,
       targetSellingPrice: Number(targetPrice) || Number(purchasePrice),
       paymentMethod: paymentMethod as any,
       chassisNumbers: uniqueVins,
+      installmentPeriodMonths: numMonths ? Number(numMonths) : undefined,
+      installmentStartDate: startDate || null,
     })
   }
 
@@ -150,7 +161,11 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
           <Label className="mb-1.5 block text-xs text-muted-foreground">سعر البيع المستهدف (IQD)</Label>
           <Input type="number" min="0" value={targetPrice} onChange={e => setTargetPrice(e.target.value)} placeholder="اختياري" className="font-numeric bg-secondary/30 border-border/60" />
         </div>
-        <div className="sm:col-span-2">
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">المبلغ المدفوع لكل سيارة (IQD)</Label>
+          <Input type="number" min="0" step="any" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} placeholder="اتركه فارغاً للدفع الكامل" className="font-numeric bg-secondary/30 border-border/60" />
+        </div>
+        <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">طريقة الدفع *</Label>
           <Select value={paymentMethod} onValueChange={setPaymentMethod}>
             <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue /></SelectTrigger>
@@ -159,7 +174,53 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
             </SelectContent>
           </Select>
         </div>
+        {price > 0 && paid > 0 && (
+          <div className="sm:col-span-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border border-border/40 bg-secondary/20 px-4 py-2.5">
+            <span className="flex items-baseline gap-1.5 text-[11px]">
+              <span className="text-muted-foreground/60">لكل سيارة</span>
+              <span className="font-semibold tabular-nums font-numeric text-foreground money">{formatMoney(price, 'IQD')}</span>
+            </span>
+            <span className="pointer-events-none select-none text-border">·</span>
+            <span className="flex items-baseline gap-1.5 text-[11px]">
+              <span className="text-muted-foreground/60">مدفوع</span>
+              <span className="font-semibold tabular-nums font-numeric text-emerald-400 money">{formatMoney(paid, 'IQD')}</span>
+            </span>
+            <span className="pointer-events-none select-none text-border">·</span>
+            <span className="flex items-baseline gap-1.5 text-[11px]">
+              <span className="text-muted-foreground/60">متبقي/سيارة</span>
+              <span className={cn('font-semibold tabular-nums font-numeric money', remaining > 0 ? 'text-rose-400' : 'text-emerald-400')}>{formatMoney(remaining, 'IQD')}</span>
+            </span>
+          </div>
+        )}
       </SectionCard>
+
+      {isPartial && (
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-cyan-400" />
+            <p className="text-sm font-semibold text-cyan-300">جدول سداد الأقساط للمورد (اختياري)</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            المبلغ المتبقي لكل سيارة: <strong className="text-rose-400">{formatMoney(remaining, 'IQD')}</strong>
+            {uniqueVins.length > 1 && <span className="mr-2 text-muted-foreground/60">· الإجمالي ({uniqueVins.length} سيارات): <strong className="text-rose-400">{formatMoney(remaining * uniqueVins.length, 'IQD')}</strong></span>}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">عدد الأشهر</Label>
+              <Input type="number" min="1" placeholder="6" value={numMonths} onChange={e => setNumMonths(e.target.value)} className="bg-secondary/30 border-border/60" />
+              {numMonths && parseInt(numMonths) > 0 && (
+                <p className="text-[11px] text-cyan-400/80 mt-1">
+                  القسط الشهري/سيارة: {formatMoney(remaining / parseInt(numMonths), 'IQD')}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">تاريخ بدء الأقساط</Label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-secondary/30 border-border/60" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chassis numbers */}
       <SectionCard title="أرقام الشاصي">
