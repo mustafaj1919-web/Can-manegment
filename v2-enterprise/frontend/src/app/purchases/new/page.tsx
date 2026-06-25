@@ -48,6 +48,10 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
   const [vinInput, setVinInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  const vinList = vinInput.split('\n').map(v => v.trim()).filter(Boolean)
+  const uniqueVins = [...new Set(vinList)]
+  const hasDuplicates = vinList.length !== uniqueVins.length
+
   const pricePerCar = parseFloat(purchasePrice) || 0
   const carCount = uniqueVins.length || 1
   const totalInvoice = pricePerCar * carCount
@@ -55,10 +59,6 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
   const totalRemaining = totalInvoice - totalPaid
   const paidPerCar = carCount > 0 ? totalPaid / carCount : 0
   const isPartial = totalPaid > 0 && totalPaid < totalInvoice
-
-  const vinList = vinInput.split('\n').map(v => v.trim()).filter(Boolean)
-  const uniqueVins = [...new Set(vinList)]
-  const hasDuplicates = vinList.length !== uniqueVins.length
 
   const bulkMut = useMutation({
     mutationFn: bulkCreatePurchase,
