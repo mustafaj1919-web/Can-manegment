@@ -4,7 +4,7 @@ export interface PurchaseListItem {
   id: number
   invoice_number: string
   branch_id?: number | null
-  branch?: { id: number; name: string; is_main: boolean; created_at?: string } | null
+  branch?: { id: string; name: string; is_main: boolean; created_at?: string } | null
   car_id: number | null
   seller_id: number | null
   car_name: string | null

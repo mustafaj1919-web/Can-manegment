@@ -555,8 +555,13 @@ export default function InstallmentsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-xs font-bold text-foreground">
-                          {plan.invoice_number ?? `فاتورة #${plan.sale_id}`}
+                          {plan.invoice_number ?? (plan.plan_type === 'purchase' ? 'مستحقات مورد' : `خطة #${plan.id.slice(0, 8)}`)}
                         </p>
+                        {plan.plan_type === 'purchase' && (
+                          <span className="inline-flex items-center rounded-full bg-violet-500/20 px-2 py-0.5 text-[9px] font-bold text-violet-300 border border-violet-500/30">
+                            مورد
+                          </span>
+                        )}
                         <StatusBadge plan={plan} />
                         {plan.number_of_months && (
                           <span className="rounded border border-border/40 px-1.5 py-0.5 text-[10px] text-muted-foreground font-semibold">

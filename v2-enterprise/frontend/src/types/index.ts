@@ -18,7 +18,7 @@ export type Transmission = 'Automatic' | 'Manual' | 'CVT' | 'DCT'
 /* ─── Branch ─────────────────────────────────────────────────────────────── */
 
 export interface Branch {
-  id: number
+  id: string
   name: string
   is_main: boolean
   created_at: string
@@ -31,7 +31,7 @@ export interface User {
   username: string
   role: UserRole
   role_label?: string
-  branch_id: number | null
+  branch_id: string | null
   can_access_all_branches: boolean
   is_active_user: boolean
   branch?: Branch
@@ -49,7 +49,7 @@ export interface CarPhoto {
 
 export interface Car {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   brand: string
   model: string
   manufacturing_year: number
@@ -90,7 +90,7 @@ export interface CustomerDocument {
 
 export interface Customer {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   name: string
   full_name: string | null
   phone: string
@@ -112,7 +112,7 @@ export interface Customer {
 
 export interface Payment {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   payment_type: 'sale' | 'purchase' | 'installment'
   sale_id: number | null
   purchase_id: number | null
@@ -127,7 +127,7 @@ export interface Payment {
 
 export interface Sale {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   invoice_number: string
   car_id: number
   buyer_id: number
@@ -150,7 +150,7 @@ export interface Sale {
 
 export interface Purchase {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   invoice_number: string
   car_id: number
   seller_id: number
@@ -174,7 +174,7 @@ export interface Purchase {
 
 export interface InstallmentSchedule {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   installment_plan_id: number
   installment_number: number
   due_date: string
@@ -189,7 +189,7 @@ export interface InstallmentSchedule {
 
 export interface InstallmentPlan {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   sale_id: number
   total_amount: number
   paid_amount: number
@@ -211,7 +211,7 @@ export interface InstallmentPlan {
 
 export interface Expense {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   title: string
   amount: number
   currency: Currency
@@ -223,7 +223,7 @@ export interface Expense {
 
 export interface Transaction {
   id: number
-  branch_id: number | null
+  branch_id: string | null
   transaction_type: TransactionType
   amount: number
   currency: Currency

@@ -3,6 +3,7 @@ import { Providers } from '../lib/providers'
 import { AppShell } from '../components/layout/AppShell'
 import { CommandPalette } from '../components/shared/CommandPalette'
 import { ShortcutsPanel } from '../components/shared/ShortcutsPanel'
+import { InstallPrompt } from '../components/pwa/InstallPrompt'
 import { Tajawal, Inter, JetBrains_Mono } from 'next/font/google'
 
 const tajawal = Tajawal({
@@ -28,24 +29,45 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata = {
   title: {
-    default: 'شركة الأصدقاء لتجارة السيارات',
+    default: 'الأصدقاء للسيارات',
     template: '%s — الأصدقاء',
   },
-  description: 'نظام إدارة متكامل لمعارض السيارات',
-  icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
+  description: 'نظام إدارة متكامل لمعرض الأصدقاء للسيارات',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'الأصدقاء للسيارات',
   },
+  formatDetection: { telephone: false },
+  icons: {
+    icon: '/icons/icon-192x192.png',
+    shortcut: '/icons/icon-192x192.png',
+    apple: '/icons/icon-152x152.png',
+  },
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)',  color: '#0a0a0a' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+  ],
 }
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="ar" dir="rtl" className={`light ${tajawal.variable} ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="ar" dir="rtl" className={`${tajawal.variable} ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* يشتغل قبل React لتجنب وميض الثيم وخطأ hydration */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('dashboardTheme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>
         <Providers>
           <CommandPalette />
           <ShortcutsPanel />
           <AppShell>{children}</AppShell>
+          <InstallPrompt />
         </Providers>
       </body>
     </html>

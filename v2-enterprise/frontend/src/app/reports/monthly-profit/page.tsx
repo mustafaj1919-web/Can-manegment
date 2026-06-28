@@ -168,10 +168,10 @@ export default function MonthlyProfitPage() {
                 <linearGradient id="revenueBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#818cf8" /><stop offset="100%" stopColor="#4f46e5" stopOpacity={0.35} /></linearGradient>
                 <linearGradient id="costBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fbbf24" /><stop offset="100%" stopColor="#d97706" stopOpacity={0.3} /></linearGradient>
                 <linearGradient id="expenseBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fb7185" /><stop offset="100%" stopColor="#be123c" stopOpacity={0.3} /></linearGradient>
-                <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#00d4aa" stopOpacity={0.3} /><stop offset="100%" stopColor="#00d4aa" stopOpacity={0} /></linearGradient>
+                <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10B981" stopOpacity={0.3} /><stop offset="100%" stopColor="#10B981" stopOpacity={0} /></linearGradient>
                 <filter id="profitGlow"><feGaussianBlur stdDeviation="2.5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="hsl(var(--border) / 0.5)" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={40} />
               <Tooltip content={<CUSTOM_TOOLTIP />} />
@@ -180,7 +180,7 @@ export default function MonthlyProfitPage() {
               <Bar dataKey="الإيرادات" fill="url(#revenueBar)" radius={[6,6,1,1]} maxBarSize={30} isAnimationActive={!reduceMotion} animationDuration={900} />
               <Bar dataKey="تكلفة البضاعة" fill="url(#costBar)" radius={[6,6,1,1]} maxBarSize={30} isAnimationActive={!reduceMotion} animationBegin={100} animationDuration={900} />
               <Bar dataKey="المصاريف" fill="url(#expenseBar)" radius={[6,6,1,1]} maxBarSize={30} isAnimationActive={!reduceMotion} animationBegin={180} animationDuration={900} />
-              <Line type="monotone" dataKey="الربح الصافي" stroke="#00d4aa" strokeWidth={3} dot={{ r: 3, fill: '#07111f', stroke: '#00d4aa', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#00d4aa', stroke: '#d1fae5', strokeWidth: 2 }} style={{ filter: 'url(#profitGlow)' }} isAnimationActive={!reduceMotion} animationBegin={250} animationDuration={1200} />
+              <Line type="monotone" dataKey="الربح الصافي" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: 'var(--background)', stroke: '#10B981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10B981', stroke: '#d1fae5', strokeWidth: 2 }} style={{ filter: 'url(#profitGlow)' }} isAnimationActive={!reduceMotion} animationBegin={250} animationDuration={1200} />
             </ComposedChart>
           </ResponsiveContainer>
         )}

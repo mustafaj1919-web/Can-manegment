@@ -1,13 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { AlertCircle, CalendarDays, CheckCircle2, Loader2, ScanLine, Layers, FileText, Plus, X, Check } from 'lucide-react'
+import {
+  AlertCircle, CalendarDays, CheckCircle2, Loader2, ScanLine, Layers, FileText,
+  Plus, X, Check, Image as ImageIcon, Upload, ChevronDown, ChevronRight, Camera, Sparkles
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, formatMoney } from '@/lib/utils'
 import { createPurchase, getSellers } from '@/lib/api/purchases'
 import { bulkCreatePurchase } from '@/lib/api/suppliers'
+import { uploadCarPhotos } from '@/lib/api/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +21,7 @@ import { useVinDecoder } from '@/lib/useVinDecoder'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { QuickSupplierDialog } from '@/components/purchases/QuickSupplierDialog'
+import { OcrScannerDialog, type OcrResultData } from '@/components/ui/OcrScannerDialog'
 
 const PAYMENT_METHODS = [
   { value: 'Cash', label: 'نقداً' },
@@ -29,7 +34,206 @@ function FieldError({ msg }: { msg?: string }) {
   return <p className="mt-1 text-[11px] text-rose-400">{msg}</p>
 }
 
-// ── Bulk Purchase Mode ────────────────────────────────────────────────────────
+// ── Per-vehicle detail row ────────────────────────────────────────────────────
+
+interface PerCarDetail {
+  color: string
+  plateNumber: string
+  notes: string
+  targetSellingPrice: string
+  photos: File[]
+  previewUrls: string[]
+}
+
+function emptyDetail(): PerCarDetail {
+  return { color: '', plateNumber: '', notes: '', targetSellingPrice: '', photos: [], previewUrls: [] }
+}
+
+function VehicleDetailRow({
+  index,
+  vin,
+  detail,
+  sharedColor,
+  onChange,
+}: {
+  index: number
+  vin: string
+  detail: PerCarDetail
+  sharedColor: string
+  onChange: (d: PerCarDetail) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const hasData = detail.color || detail.plateNumber || detail.notes || detail.photos.length > 0
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return
+    const newFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+    if (!newFiles.length) return
+    const newPreviews = newFiles.map(f => URL.createObjectURL(f))
+    onChange({
+      ...detail,
+      photos: [...detail.photos, ...newFiles],
+      previewUrls: [...detail.previewUrls, ...newPreviews],
+    })
+  }
+
+  function removePhoto(i: number) {
+    URL.revokeObjectURL(detail.previewUrls[i])
+    const photos = detail.photos.filter((_, j) => j !== i)
+    const previewUrls = detail.previewUrls.filter((_, j) => j !== i)
+    onChange({ ...detail, photos, previewUrls })
+  }
+
+  return (
+    <div className={cn(
+      'rounded-lg border transition-colors',
+      hasData ? 'border-violet-500/30 bg-violet-500/5' : 'border-border/30 bg-secondary/10',
+    )}>
+      {/* Header row */}
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-right"
+      >
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-secondary/60 text-[10px] font-bold text-muted-foreground">
+          {index + 1}
+        </span>
+        <span className="font-mono text-xs font-semibold text-foreground flex-1 text-left">{vin}</span>
+        <div className="flex items-center gap-2 mr-auto">
+          {detail.photos.length > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+              <Camera className="h-3 w-3" />
+              {detail.photos.length}
+            </span>
+          )}
+          {detail.color && (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">
+              {detail.color}
+            </span>
+          )}
+          {detail.plateNumber && (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+              {detail.plateNumber}
+            </span>
+          )}
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+          }
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="border-t border-border/20 px-3 pb-3 pt-2.5 space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <Label className="mb-1 block text-[10px] text-muted-foreground/70">اللون</Label>
+              <Input
+                value={detail.color}
+                onChange={e => onChange({ ...detail, color: e.target.value })}
+                placeholder={sharedColor || 'مشترك'}
+                className="h-8 bg-secondary/30 border-border/50 text-xs"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-[10px] text-muted-foreground/70">رقم اللوحة</Label>
+              <Input
+                value={detail.plateNumber}
+                onChange={e => onChange({ ...detail, plateNumber: e.target.value })}
+                placeholder="اختياري"
+                className="h-8 bg-secondary/30 border-border/50 text-xs font-mono"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-[10px] text-muted-foreground/70">سعر البيع (تخصيص)</Label>
+              <Input
+                type="number"
+                value={detail.targetSellingPrice}
+                onChange={e => onChange({ ...detail, targetSellingPrice: e.target.value })}
+                placeholder="مشترك"
+                className="h-8 bg-secondary/30 border-border/50 text-xs font-numeric"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-[10px] text-muted-foreground/70">ملاحظات</Label>
+              <Input
+                value={detail.notes}
+                onChange={e => onChange({ ...detail, notes: e.target.value })}
+                placeholder="اختياري"
+                className="h-8 bg-secondary/30 border-border/50 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Photos */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <Label className="text-[10px] text-muted-foreground/70">صور السيارة</Label>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1 rounded-md border border-border/50 bg-secondary/40 px-2 py-1 text-[10px] text-muted-foreground hover:border-violet-500/40 hover:text-violet-300 transition-colors"
+              >
+                <Upload className="h-3 w-3" />
+                إضافة صور
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => handleFiles(e.target.files)}
+                onClick={e => { (e.target as HTMLInputElement).value = '' }}
+              />
+            </div>
+
+            {detail.previewUrls.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {detail.previewUrls.map((url, i) => (
+                  <div key={i} className="group relative h-16 w-16 overflow-hidden rounded-md border border-border/40">
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-4 w-4 text-white" />
+                    </button>
+                    {i === 0 && (
+                      <span className="absolute bottom-0 left-0 right-0 bg-violet-600/80 text-[9px] text-center text-white py-0.5">غلاف</span>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-border/50 text-muted-foreground/40 hover:border-violet-500/40 hover:text-violet-400 transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex h-16 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/40 text-xs text-muted-foreground/50 hover:border-violet-500/30 hover:text-violet-400 transition-colors"
+              >
+                <ImageIcon className="h-4 w-4" />
+                اسحب الصور هنا أو اضغط لاختيارها
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Bulk Purchase Form ────────────────────────────────────────────────────────
 
 function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
   const router = useRouter()
@@ -42,34 +246,38 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
   const [targetPrice, setTargetPrice] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Cash')
   const [totalPaidAmount, setTotalPaidAmount] = useState('')
-  const [numPeriods, setNumPeriods] = useState('')
-  const [frequency, setFrequency] = useState<'Daily' | 'Weekly' | 'Monthly'>('Monthly')
-  const [startDate, setStartDate] = useState('')
   const [vinInput, setVinInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [perCarDetails, setPerCarDetails] = useState<Record<string, PerCarDetail>>({})
+  const [uploading, setUploading] = useState(false)
 
   const vinList = vinInput.split('\n').map(v => v.trim()).filter(Boolean)
   const uniqueVins = [...new Set(vinList)]
   const hasDuplicates = vinList.length !== uniqueVins.length
 
+  // Sync perCarDetails when VINs change
+  useEffect(() => {
+    setPerCarDetails(prev => {
+      const next: Record<string, PerCarDetail> = {}
+      for (const vin of uniqueVins) {
+        next[vin] = prev[vin] ?? emptyDetail()
+      }
+      return next
+    })
+  }, [vinInput])
+
   const pricePerCar = parseFloat(purchasePrice) || 0
   const carCount = uniqueVins.length || 1
   const totalInvoice = pricePerCar * carCount
   const totalPaid = parseFloat(totalPaidAmount) || 0
-  const totalRemaining = totalInvoice - totalPaid
+  const totalRemaining = Math.max(0, totalInvoice - totalPaid)
   const paidPerCar = carCount > 0 ? totalPaid / carCount : 0
-  const isPartial = totalPaid > 0 && totalPaid < totalInvoice
+
+  const hasAnyPhotos = uniqueVins.some(v => (perCarDetails[v]?.photos?.length ?? 0) > 0)
+  const totalPhotos = uniqueVins.reduce((sum, v) => sum + (perCarDetails[v]?.photos?.length ?? 0), 0)
 
   const bulkMut = useMutation({
     mutationFn: bulkCreatePurchase,
-    onSuccess: (res) => {
-      if (res.errors?.length > 0) {
-        toast.warning(`تم تسجيل ${res.created_count} سيارة. أخطاء: ${res.errors.join('، ')}`)
-      } else {
-        toast.success(res.message)
-      }
-      router.push('/purchases')
-    },
     onError: (err: any) => toast.error(err?.response?.data?.error ?? 'حدث خطأ أثناء الشراء الجماعي'),
   })
 
@@ -86,24 +294,73 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
     return Object.keys(e).length === 0
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return
-    bulkMut.mutate({
-      supplierId: sellerId,
-      brand: brand.trim() || undefined,
-      model: model.trim(),
-      year: Number(year),
-      color: color.trim() || undefined,
-      purchaseCost: Number(purchasePrice),
-      paidAmount: isPartial ? paidPerCar : undefined,
-      targetSellingPrice: Number(targetPrice) || Number(purchasePrice),
-      paymentMethod: paymentMethod as any,
-      chassisNumbers: uniqueVins,
-      installmentPeriodCount: numPeriods ? Number(numPeriods) : undefined,
-      installmentFrequency: frequency,
-      installmentStartDate: startDate || null,
-    })
+
+    // Build overrides (only VINs with non-empty overrides)
+    const vehicleOverrides: Record<string, any> = {}
+    for (const vin of uniqueVins) {
+      const d = perCarDetails[vin]
+      if (d && (d.color || d.plateNumber || d.notes || d.targetSellingPrice)) {
+        vehicleOverrides[vin] = {
+          color: d.color || undefined,
+          plateNumber: d.plateNumber || undefined,
+          notes: d.notes || undefined,
+          targetSellingPrice: d.targetSellingPrice ? Number(d.targetSellingPrice) : undefined,
+        }
+      }
+    }
+
+    let res: any
+    try {
+      res = await bulkMut.mutateAsync({
+        supplierId: sellerId,
+        brand: brand.trim() || undefined,
+        model: model.trim(),
+        year: Number(year),
+        color: color.trim() || undefined,
+        purchaseCost: Number(purchasePrice),
+        paidAmount: totalPaid > 0 ? paidPerCar : 0,
+        targetSellingPrice: Number(targetPrice) || Number(purchasePrice),
+        paymentMethod: paymentMethod as any,
+        chassisNumbers: uniqueVins,
+        vehicleOverrides: Object.keys(vehicleOverrides).length > 0 ? vehicleOverrides : undefined,
+      })
+    } catch {
+      return
+    }
+
+    // Upload photos if any
+    const chassisMap: Record<string, string> = res?.chassis_to_vehicle_id ?? {}
+    const vinsWithPhotos = uniqueVins.filter(v => (perCarDetails[v]?.photos?.length ?? 0) > 0)
+
+    if (vinsWithPhotos.length > 0) {
+      setUploading(true)
+      let uploadedCount = 0
+      for (const vin of vinsWithPhotos) {
+        const vehicleId = chassisMap[vin]
+        if (!vehicleId) continue
+        try {
+          await uploadCarPhotos(vehicleId, perCarDetails[vin].photos)
+          uploadedCount++
+        } catch {
+          toast.error(`فشل رفع صور ${vin}`)
+        }
+      }
+      setUploading(false)
+      if (uploadedCount > 0) toast.success(`تم رفع صور ${uploadedCount} سيارة`)
+    }
+
+    if (res?.errors?.length > 0) {
+      toast.warning(`تم تسجيل ${res.created_count} سيارة. أخطاء: ${res.errors.join('، ')}`)
+    } else {
+      toast.success(res?.message || `تم تسجيل ${res?.created_count ?? uniqueVins.length} سيارة`)
+    }
+
+    router.push('/purchases')
   }
+
+  const isPending = bulkMut.isPending || uploading
 
   return (
     <div className="space-y-5">
@@ -132,8 +389,8 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
         )}
       </SectionCard>
 
-      {/* Car shared details */}
-      <SectionCard title="بيانات السيارة (مشتركة لجميع السيارات)" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* Shared car details */}
+      <SectionCard title="بيانات السيارة (مشتركة)" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <BrandModelSelect
           brand={brand}
           model={model}
@@ -146,12 +403,15 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
         />
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">سنة الصنع *</Label>
-          <Input type="number" value={year} onChange={e => setYear(e.target.value)} className={cn('font-numeric bg-secondary/30 border-border/60', errors.year && 'border-rose-500/60')} />
+          <Input type="number" value={year} onChange={e => setYear(e.target.value)}
+            className={cn('font-numeric bg-secondary/30 border-border/60', errors.year && 'border-rose-500/60')} />
           <FieldError msg={errors.year} />
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">اللون</Label>
-          <Input value={color} onChange={e => setColor(e.target.value)} placeholder="أبيض، أسود..." className="bg-secondary/30 border-border/60" />
+          <Label className="mb-1.5 block text-xs text-muted-foreground">اللون (مشترك)</Label>
+          <Input value={color} onChange={e => setColor(e.target.value)}
+            placeholder="أبيض، أسود... (يمكن تخصيص لكل سيارة)"
+            className="bg-secondary/30 border-border/60" />
         </div>
       </SectionCard>
 
@@ -159,19 +419,18 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
       <SectionCard title="السعر والدفع" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">سعر الشراء لكل سيارة (IQD) *</Label>
-          <Input type="number" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} className={cn('font-numeric bg-secondary/30 border-border/60', errors.purchasePrice && 'border-rose-500/60')} />
+          <Input type="number" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)}
+            className={cn('font-numeric bg-secondary/30 border-border/60', errors.purchasePrice && 'border-rose-500/60')} />
           <FieldError msg={errors.purchasePrice} />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">سعر البيع المستهدف (IQD)</Label>
-          <Input type="number" min="0" value={targetPrice} onChange={e => setTargetPrice(e.target.value)} placeholder="اختياري" className="font-numeric bg-secondary/30 border-border/60" />
+          <Input type="number" min="0" value={targetPrice} onChange={e => setTargetPrice(e.target.value)}
+            placeholder="اختياري — يمكن تخصيص لكل سيارة"
+            className="font-numeric bg-secondary/30 border-border/60" />
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">إجمالي المبلغ المدفوع (IQD)</Label>
-          <Input type="number" min="0" step="any" value={totalPaidAmount} onChange={e => setTotalPaidAmount(e.target.value)} placeholder="اتركه فارغاً للدفع الكامل" className="font-numeric bg-secondary/30 border-border/60" />
-        </div>
-        <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">طريقة الدفع *</Label>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">طريقة الدفع الفوري</Label>
           <Select value={paymentMethod} onValueChange={setPaymentMethod}>
             <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -179,67 +438,33 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">المدفوع الآن — إجمالي كل السيارات (IQD)</Label>
+          <Input
+            type="number" min="0" step="any"
+            value={totalPaidAmount}
+            onChange={e => setTotalPaidAmount(e.target.value)}
+            placeholder="0 = آجل كامل على حساب المورد"
+            className="font-numeric bg-secondary/30 border-border/60"
+          />
+        </div>
         {pricePerCar > 0 && (
-          <div className="sm:col-span-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border border-border/40 bg-secondary/20 px-4 py-2.5">
-            <span className="flex items-baseline gap-1.5 text-[11px]">
-              <span className="text-muted-foreground/60">إجمالي الفاتورة</span>
-              <span className="font-semibold tabular-nums font-numeric text-foreground money">{formatMoney(totalInvoice, 'IQD')}</span>
-            </span>
-            {totalPaid > 0 && (<>
-              <span className="pointer-events-none select-none text-border">·</span>
-              <span className="flex items-baseline gap-1.5 text-[11px]">
-                <span className="text-muted-foreground/60">مدفوع</span>
-                <span className="font-semibold tabular-nums font-numeric text-emerald-400 money">{formatMoney(totalPaid, 'IQD')}</span>
-              </span>
-              <span className="pointer-events-none select-none text-border">·</span>
-              <span className="flex items-baseline gap-1.5 text-[11px]">
-                <span className="text-muted-foreground/60">متبقي</span>
-                <span className={cn('font-semibold tabular-nums font-numeric money', totalRemaining > 0 ? 'text-rose-400' : 'text-emerald-400')}>{formatMoney(totalRemaining, 'IQD')}</span>
-              </span>
-            </>)}
+          <div className="sm:col-span-2 grid grid-cols-3 gap-3 rounded-lg border border-border/40 bg-secondary/20 px-4 py-2.5 text-[11px]">
+            <div className="text-center">
+              <p className="text-muted-foreground/60">إجمالي الفاتورة</p>
+              <p className="font-semibold font-numeric text-foreground money">{formatMoney(totalInvoice, 'IQD')}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-muted-foreground/60">المدفوع الآن</p>
+              <p className="font-semibold font-numeric text-emerald-400 money">{formatMoney(totalPaid, 'IQD')}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-muted-foreground/60">المتبقي على المورد</p>
+              <p className="font-semibold font-numeric text-rose-400 money">{formatMoney(totalRemaining, 'IQD')}</p>
+            </div>
           </div>
         )}
       </SectionCard>
-
-      {isPartial && (
-        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-cyan-400" />
-            <p className="text-sm font-semibold text-cyan-300">جدول سداد الأقساط للمورد</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3 rounded-lg bg-black/20 p-3 text-[11px]">
-            <div className="text-center"><p className="text-muted-foreground/60">إجمالي الفاتورة</p><p className="font-semibold text-foreground money">{formatMoney(totalInvoice, 'IQD')}</p></div>
-            <div className="text-center"><p className="text-muted-foreground/60">المدفوع الآن</p><p className="font-semibold text-emerald-400 money">{formatMoney(totalPaid, 'IQD')}</p></div>
-            <div className="text-center"><p className="text-muted-foreground/60">المتبقي للأقساط</p><p className="font-semibold text-rose-400 money">{formatMoney(totalRemaining, 'IQD')}</p></div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">تكرار القسط</Label>
-              <Select value={frequency} onValueChange={v => setFrequency(v as any)}>
-                <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Daily">يومي</SelectItem>
-                  <SelectItem value="Weekly">أسبوعي</SelectItem>
-                  <SelectItem value="Monthly">شهري</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">عدد الأقساط</Label>
-              <Input type="number" min="1" placeholder="10" value={numPeriods} onChange={e => setNumPeriods(e.target.value)} className="bg-secondary/30 border-border/60" />
-              {numPeriods && parseInt(numPeriods) > 0 && (
-                <p className="text-[11px] text-cyan-400/80 mt-1">
-                  كل قسط: {formatMoney(totalRemaining / parseInt(numPeriods), 'IQD')}
-                </p>
-              )}
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">تاريخ أول قسط</Label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-secondary/30 border-border/60" />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Chassis numbers */}
       <SectionCard title="أرقام الشاصي">
@@ -253,7 +478,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
           value={vinInput}
           onChange={e => { setVinInput(e.target.value); setErrors(err => ({ ...err, vins: '' })) }}
           placeholder={'WBAWL31040PY38989\nWBAWL31040PY38990\nWBAWL31040PY38991'}
-          rows={8}
+          rows={6}
           dir="ltr"
           className={cn(
             'w-full rounded-md border bg-secondary/30 px-3 py-2 font-mono text-sm text-left resize-none focus:outline-none focus:ring-1 focus:ring-ring',
@@ -265,7 +490,6 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
         )}
         <FieldError msg={errors.vins} />
 
-        {/* Preview */}
         {uniqueVins.length > 0 && Number(purchasePrice) > 0 && (
           <div className="mt-3 rounded-lg border border-border/40 bg-secondary/20 px-4 py-2.5 text-xs">
             <span className="text-muted-foreground">إجمالي التكلفة: </span>
@@ -276,18 +500,58 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
         )}
       </SectionCard>
 
+      {/* Per-vehicle details & photos */}
+      {uniqueVins.length > 0 && (
+        <SectionCard
+          title={
+            <div className="flex items-center gap-2">
+              <Camera className="h-4 w-4 text-violet-400" />
+              <span>تفاصيل وصور كل سيارة</span>
+              {totalPhotos > 0 && (
+                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+                  {totalPhotos} صورة
+                </span>
+              )}
+            </div>
+          }
+        >
+          <p className="mb-3 text-xs text-muted-foreground/70">
+            اضغط على كل سيارة لتخصيص لونها، رقم لوحتها، وإضافة صورها. الحقول اختيارية.
+          </p>
+          <div className="space-y-2">
+            {uniqueVins.map((vin, i) => (
+              <VehicleDetailRow
+                key={vin}
+                index={i}
+                vin={vin}
+                detail={perCarDetails[vin] ?? emptyDetail()}
+                sharedColor={color}
+                onChange={d => setPerCarDetails(prev => ({ ...prev, [vin]: d }))}
+              />
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
       {/* Submit */}
       <div className="flex items-center justify-end gap-3">
-        <Button type="button" variant="ghost" onClick={() => router.back()} disabled={bulkMut.isPending}>إلغاء</Button>
+        <Button type="button" variant="ghost" onClick={() => router.back()} disabled={isPending}>إلغاء</Button>
         <Button
           onClick={handleSubmit}
-          disabled={bulkMut.isPending || uniqueVins.length === 0}
-          className="min-w-[180px] gap-2 bg-amber-600 text-white hover:bg-amber-500"
+          disabled={isPending || uniqueVins.length === 0}
+          className="min-w-[200px] gap-2 bg-amber-600 text-white hover:bg-amber-500"
         >
-          {bulkMut.isPending ? (
-            <><Loader2 className="h-4 w-4 animate-spin" />جاري التسجيل...</>
+          {isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {uploading ? 'جاري رفع الصور...' : 'جاري التسجيل...'}
+            </>
           ) : (
-            <><Layers className="h-4 w-4" />تسجيل {uniqueVins.length > 0 ? uniqueVins.length : ''} سيارة</>
+            <>
+              <Layers className="h-4 w-4" />
+              تسجيل {uniqueVins.length > 0 ? `${uniqueVins.length} سيارة` : ''}
+              {totalPhotos > 0 && <span className="text-amber-200 text-[10px]">+ {totalPhotos} صورة</span>}
+            </>
           )}
         </Button>
       </div>
@@ -295,7 +559,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
   )
 }
 
-// ── Single Purchase Mode (original) ──────────────────────────────────────────
+// ── Single Purchase Form ──────────────────────────────────────────────────────
 
 function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
   const router = useRouter()
@@ -330,6 +594,17 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
     if (result.year) setYear(result.year)
     const parts = [result.brand, result.model, result.year].filter(Boolean)
     toast.success(`✓ ${parts.join(' ')} — تم تعبئة البيانات تلقائياً`)
+  }
+
+  const [isOcrOpen, setIsOcrOpen] = useState(false)
+
+  const handleOcrComplete = (data: OcrResultData) => {
+    if (data.brand) { setBrand(data.brand); setModel(''); setTrim('') }
+    if (data.model) setModel(data.model)
+    if (data.year) setYear(String(data.year))
+    if (data.color) setColor(data.color)
+    if (data.chassisNumber) setVin(data.chassisNumber)
+    if (data.plateNumber) setPlateNumber(data.plateNumber)
   }
 
   const [year, setYear] = useState(String(new Date().getFullYear()))
@@ -372,12 +647,6 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
     if (!purchasePrice || price <= 0) nextErrors.purchasePrice = 'سعر الشراء مطلوب'
     if (!paymentMethod) nextErrors.paymentMethod = 'اختر طريقة الدفع'
     if (!purchaseDate) nextErrors.purchaseDate = 'تاريخ الشراء مطلوب'
-    const paidAmt = parseFloat(paidAmount) || 0
-    const purchaseCostNum = parseFloat(purchasePrice) || 0
-    const isPartial = paidAmt > 0 && paidAmt < purchaseCostNum
-    if (isPartial && numMonths && parseInt(numMonths) <= 0) {
-      nextErrors.numMonths = 'عدد الأشهر يجب أن يكون أكبر من صفر'
-    }
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
@@ -457,36 +726,48 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
         />
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">سنة الصنع *</Label>
-          <Input type="number" value={year} onChange={(e) => setYear(e.target.value)} className={cn('font-numeric bg-secondary/30 border-border/60', errors.year && 'border-rose-500/60')} />
+          <Input type="number" value={year} onChange={(e) => setYear(e.target.value)}
+            className={cn('font-numeric bg-secondary/30 border-border/60', errors.year && 'border-rose-500/60')} />
           <FieldError msg={errors.year} />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">اللون *</Label>
-          <Input value={color} onChange={(e) => setColor(e.target.value)} className={cn('bg-secondary/30 border-border/60', errors.color && 'border-rose-500/60')} />
+          <Input value={color} onChange={(e) => setColor(e.target.value)}
+            className={cn('bg-secondary/30 border-border/60', errors.color && 'border-rose-500/60')} />
           <FieldError msg={errors.color} />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">رقم الشاصي *</Label>
           <div className="flex gap-2">
-            <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="VIN — 17 حرف" className={cn('font-numeric bg-secondary/30 border-border/60', errors.vin && 'border-rose-500/60')} />
+            <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="VIN — 17 حرف"
+              className={cn('font-numeric bg-secondary/30 border-border/60', errors.vin && 'border-rose-500/60')} />
             <button
               type="button" onClick={handleVinDecode}
               disabled={vinLoading || vin.trim().length !== 17}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-secondary/30 text-muted-foreground transition-colors hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+              title="فك الترميز القياسي"
             >
               {vinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+            </button>
+            <button
+              type="button" onClick={() => setIsOcrOpen(true)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:text-emerald-400"
+              title="مسح السنوية بالذكاء الاصطناعي (AI OCR)"
+            >
+              <Sparkles className="h-4 w-4" />
             </button>
           </div>
           <FieldError msg={errors.vin} />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">رقم اللوحة</Label>
-          <Input value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
-          <FieldError msg={errors.plateNumber} />
+          <Input value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)}
+            className="font-numeric bg-secondary/30 border-border/60" />
         </div>
         <div className="sm:col-span-2">
           <Label className="mb-1.5 block text-xs text-muted-foreground">المسافة المقطوعة (كم)</Label>
-          <Input type="number" min="0" value={mileage} onChange={(e) => setMileage(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
+          <Input type="number" min="0" value={mileage} onChange={(e) => setMileage(e.target.value)}
+            className="font-numeric bg-secondary/30 border-border/60" />
         </div>
       </SectionCard>
 
@@ -515,16 +796,19 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">سعر الشراء *</Label>
-          <Input type="number" min="0" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} className={cn('font-numeric bg-secondary/30 border-border/60', errors.purchasePrice && 'border-rose-500/60')} />
+          <Input type="number" min="0" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)}
+            className={cn('font-numeric bg-secondary/30 border-border/60', errors.purchasePrice && 'border-rose-500/60')} />
           <FieldError msg={errors.purchasePrice} />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">المبلغ المدفوع</Label>
-          <Input type="number" min="0" step="any" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="font-numeric bg-secondary/30 border-border/60" />
+          <Input type="number" min="0" step="any" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)}
+            className="font-numeric bg-secondary/30 border-border/60" />
         </div>
         <div>
           <Label className="mb-1.5 block text-xs text-muted-foreground">تاريخ الشراء *</Label>
-          <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={cn('bg-secondary/30 border-border/60', errors.purchaseDate && 'border-rose-500/60')} />
+          <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)}
+            className={cn('bg-secondary/30 border-border/60', errors.purchaseDate && 'border-rose-500/60')} />
           <FieldError msg={errors.purchaseDate} />
         </div>
         {price > 0 && (
@@ -541,46 +825,38 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
             <span className="pointer-events-none select-none text-border">·</span>
             <span className="flex items-baseline gap-1.5 text-[11px]">
               <span className="text-muted-foreground/60">متبقي</span>
-              <span className={cn('font-semibold tabular-nums font-numeric money', remaining > 0 ? 'text-rose-400' : 'text-emerald-400')}>{formatMoney(remaining, currency)}</span>
+              <span className={cn('font-semibold tabular-nums font-numeric money', remaining > 0 ? 'text-rose-400' : 'text-emerald-400')}>
+                {formatMoney(remaining, currency)}
+              </span>
             </span>
           </div>
         )}
       </SectionCard>
 
-      {/* قسم الأقساط — يظهر عند الدفع الجزئي */}
-      {parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount || '0') < parseFloat(purchasePrice || '0') && (
+      {price > 0 && paid < price && (
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-4">
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-cyan-400" />
             <p className="text-sm font-semibold text-cyan-300">جدول سداد الأقساط للمورد (اختياري)</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            المبلغ المتبقي: <strong className="text-rose-400">{formatMoney(parseFloat(purchasePrice || '0') - parseFloat(paidAmount || '0'), 'IQD')}</strong>
+            المبلغ المتبقي: <strong className="text-rose-400">{formatMoney(price - paid, 'IQD')}</strong>
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">عدد الأشهر</Label>
-              <Input
-                type="number" min="1" placeholder="6"
-                value={numMonths}
-                onChange={e => setNumMonths(e.target.value)}
-                className="bg-secondary/30 border-border/60"
-              />
-              {numMonths && parseInt(numMonths) > 0 && parseFloat(purchasePrice || '0') > parseFloat(paidAmount || '0') && (
+              <Input type="number" min="1" placeholder="6" value={numMonths} onChange={e => setNumMonths(e.target.value)}
+                className="bg-secondary/30 border-border/60" />
+              {numMonths && parseInt(numMonths) > 0 && price > paid && (
                 <p className="text-[11px] text-cyan-400/80 mt-1">
-                  القسط الشهري: {formatMoney((parseFloat(purchasePrice || '0') - parseFloat(paidAmount || '0')) / parseInt(numMonths), 'IQD')}
+                  القسط الشهري: {formatMoney((price - paid) / parseInt(numMonths), 'IQD')}
                 </p>
               )}
-              {errors.numMonths && <p className="mt-1 text-[11px] text-rose-400">{errors.numMonths}</p>}
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">تاريخ بدء الأقساط</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="bg-secondary/30 border-border/60"
-              />
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                className="bg-secondary/30 border-border/60" />
             </div>
           </div>
         </div>
@@ -589,13 +865,18 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
       <div className="flex items-center justify-end gap-3">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={mutation.isPending}>إلغاء</Button>
         <Button type="submit" disabled={mutation.isPending || sellersLoading} className="min-w-[150px] gap-2 bg-blue-600 text-white hover:bg-blue-500">
-          {mutation.isPending ? (
-            <><Loader2 className="h-4 w-4 animate-spin" />جاري الحفظ...</>
-          ) : (
-            <><CheckCircle2 className="h-4 w-4" />حفظ الفاتورة</>
-          )}
+          {mutation.isPending
+            ? <><Loader2 className="h-4 w-4 animate-spin" />جاري الحفظ...</>
+            : <><CheckCircle2 className="h-4 w-4" />حفظ الفاتورة</>
+          }
         </Button>
       </div>
+
+      <OcrScannerDialog
+        isOpen={isOcrOpen}
+        onClose={() => setIsOcrOpen(false)}
+        onScanComplete={handleOcrComplete}
+      />
     </form>
   )
 }
@@ -626,9 +907,7 @@ export default function NewPurchasePage() {
           onClick={() => setMode('single')}
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
-            mode === 'single'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
+            mode === 'single' ? 'bg-blue-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
           <FileText className="h-4 w-4" />
@@ -638,13 +917,11 @@ export default function NewPurchasePage() {
           onClick={() => setMode('bulk')}
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
-            mode === 'bulk'
-              ? 'bg-amber-600 text-white shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
+            mode === 'bulk' ? 'bg-amber-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
           <Layers className="h-4 w-4" />
-          شراء جماعي (نفس الموديل)
+          شراء جماعي
         </button>
       </div>
 

@@ -5,7 +5,9 @@ import type { InstallmentPlanEmbed, InstallmentScheduleItem } from './sales'
 
 export interface InstallmentListItem {
   id: string
-  sale_id: string
+  sale_id: string | null
+  purchase_id: string | null
+  plan_type: 'sale' | 'purchase'
   invoice_number: string | null
   car_name: string | null
   buyer_id: string | null

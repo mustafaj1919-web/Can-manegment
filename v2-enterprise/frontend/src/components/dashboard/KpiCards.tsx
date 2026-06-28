@@ -24,44 +24,44 @@ interface KpiCardProps {
 
 const TONE = {
   red: {
-    accent:    '#e63946',
-    glow:      'rgba(230,57,70,0.20)',
-    hoverGlow: 'rgba(230,57,70,0.32)',
-    iconBg:    'rgba(230,57,70,0.12)',
-    iconBorder:'rgba(230,57,70,0.22)',
-    topLine:   'linear-gradient(90deg, transparent 0%, rgba(230,57,70,0.8) 50%, transparent 100%)',
-    bottomFog: 'linear-gradient(to top, rgba(230,57,70,0.08) 0%, transparent 100%)',
-    numColor:  '#e63946',
+    accent:    '#F43F5E', // Rose danger accent
+    glow:      'rgba(244,63,94,0.02)',
+    hoverGlow: 'rgba(244,63,94,0.08)',
+    iconBg:    'rgba(244,63,94,0.08)',
+    iconBorder:'rgba(244,63,94,0.15)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(244,63,94,0.4) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(244,63,94,0.02) 0%, transparent 100%)',
+    numColor:  '#F43F5E',
   },
   emerald: {
-    accent:    '#10b981',
-    glow:      'rgba(16,185,129,0.16)',
-    hoverGlow: 'rgba(16,185,129,0.26)',
-    iconBg:    'rgba(16,185,129,0.10)',
-    iconBorder:'rgba(16,185,129,0.20)',
-    topLine:   'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.7) 50%, transparent 100%)',
-    bottomFog: 'linear-gradient(to top, rgba(16,185,129,0.07) 0%, transparent 100%)',
-    numColor:  '#10b981',
+    accent:    '#10B981', // Emerald primary accent
+    glow:      'rgba(16,185,129,0.02)',
+    hoverGlow: 'rgba(16,185,129,0.08)',
+    iconBg:    'rgba(16,185,129,0.08)',
+    iconBorder:'rgba(16,185,129,0.15)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.4) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(16,185,129,0.02) 0%, transparent 100%)',
+    numColor:  '#10B981',
   },
   amber: {
-    accent:    '#f4a522',
-    glow:      'rgba(244,165,34,0.18)',
-    hoverGlow: 'rgba(244,165,34,0.28)',
-    iconBg:    'rgba(244,165,34,0.10)',
-    iconBorder:'rgba(244,165,34,0.22)',
-    topLine:   'linear-gradient(90deg, transparent 0%, rgba(244,165,34,0.75) 50%, transparent 100%)',
-    bottomFog: 'linear-gradient(to top, rgba(244,165,34,0.07) 0%, transparent 100%)',
-    numColor:  '#f4a522',
+    accent:    '#F59E0B', // Amber warning accent
+    glow:      'rgba(245,158,11,0.02)',
+    hoverGlow: 'rgba(245,158,11,0.08)',
+    iconBg:    'rgba(245,158,11,0.08)',
+    iconBorder:'rgba(245,158,11,0.15)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.4) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(245,158,11,0.02) 0%, transparent 100%)',
+    numColor:  '#F59E0B',
   },
   blue: {
-    accent:    '#00d4aa',
-    glow:      'rgba(0,212,170,0.16)',
-    hoverGlow: 'rgba(0,212,170,0.26)',
-    iconBg:    'rgba(0,212,170,0.10)',
-    iconBorder:'rgba(0,212,170,0.20)',
-    topLine:   'linear-gradient(90deg, transparent 0%, rgba(0,212,170,0.7) 50%, transparent 100%)',
-    bottomFog: 'linear-gradient(to top, rgba(0,212,170,0.06) 0%, transparent 100%)',
-    numColor:  '#00d4aa',
+    accent:    '#2563EB', // Blue secondary accent
+    glow:      'rgba(37,99,235,0.02)',
+    hoverGlow: 'rgba(37,99,235,0.08)',
+    iconBg:    'rgba(37,99,235,0.08)',
+    iconBorder:'rgba(37,99,235,0.15)',
+    topLine:   'linear-gradient(90deg, transparent 0%, rgba(37,99,235,0.4) 50%, transparent 100%)',
+    bottomFog: 'linear-gradient(to top, rgba(37,99,235,0.02) 0%, transparent 100%)',
+    numColor:  '#2563EB',
   },
 }
 
@@ -75,20 +75,21 @@ function KpiCard({ label, value, note, href, icon: Icon, tone, critical, rawNumb
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -2 }}
     >
       <Link
         href={href}
-        className="group relative flex min-h-[160px] flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-[#111111] p-5 transition-all duration-200"
+        className="group relative flex min-h-[160px] flex-col overflow-hidden rounded-2xl border border-border/50 bg-card p-5 transition-all duration-200"
         style={{
-          boxShadow: `0 0 0 1px rgba(255,255,255,0.04) inset, 0 4px 24px ${t.glow}`,
+          boxShadow: `0 2px 8px rgba(0,0,0,0.01), 0 4px 16px ${t.glow}`,
         }}
         onMouseEnter={(e) => {
           (e.currentTarget as HTMLElement).style.boxShadow =
-            `0 0 0 1px ${t.accent}30 inset, 0 8px 36px ${t.hoverGlow}`
+            `0 0 0 1px ${t.accent}20 inset, 0 8px 24px ${t.hoverGlow}`
         }}
         onMouseLeave={(e) => {
           (e.currentTarget as HTMLElement).style.boxShadow =
-            `0 0 0 1px rgba(255,255,255,0.04) inset, 0 4px 24px ${t.glow}`
+            `0 2px 8px rgba(0,0,0,0.01), 0 4px 16px ${t.glow}`
         }}
       >
         {/* Top shimmer line */}
@@ -106,36 +107,36 @@ function KpiCard({ label, value, note, href, icon: Icon, tone, critical, rawNumb
         {/* Header: icon + arrow */}
         <div className="flex items-start justify-between">
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
             style={{ background: t.iconBg, border: `1px solid ${t.iconBorder}` }}
           >
-            <Icon className="h-4 w-4" style={{ color: t.accent }} />
+            <Icon className="h-4.5 w-4.5" style={{ color: t.accent }} />
           </div>
 
           {critical && tone === 'red' && (
-            <div className="flex items-center gap-1.5 rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-400">
+            <div className="flex items-center gap-1.5 rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-500">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
               تنبيه
             </div>
           )}
           {!critical && (
             <ArrowUpLeft
-              className="h-3.5 w-3.5 opacity-0 transition-all duration-200 group-hover:opacity-40 group-hover:-translate-x-0.5 group-hover:-translate-y-0.5"
+              className="h-3.5 w-3.5 opacity-0 transition-all duration-200 group-hover:opacity-60 group-hover:-translate-x-0.5 group-hover:-translate-y-0.5"
               style={{ color: t.accent }}
             />
           )}
         </div>
 
         {/* Label */}
-        <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+        <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
           {label}
         </p>
 
         {/* Big number — the hero */}
         <p
-          className="mt-1 font-black leading-none tracking-tight"
+          className="mt-1 font-black leading-none tracking-tight transition-colors duration-200"
           style={{
-            color: t.numColor,
+            color: 'hsl(var(--foreground))',
             fontSize: 'clamp(28px, 3.5vw, 46px)',
             fontVariantNumeric: 'tabular-nums',
           }}
@@ -144,7 +145,7 @@ function KpiCard({ label, value, note, href, icon: Icon, tone, critical, rawNumb
         </p>
 
         {/* Note */}
-        <p className="mt-auto pt-3 text-[10px] leading-relaxed text-muted-foreground/60">
+        <p className="mt-auto pt-3 text-[10px] leading-relaxed text-muted-foreground/50">
           {note}
         </p>
       </Link>
@@ -159,8 +160,8 @@ function CardSkeleton({ index }: { index: number }) {
       animate={{ opacity: 1 }}
       transition={{ delay: index * 0.06 }}
     >
-      <div className="min-h-[160px] rounded-xl border border-white/[0.05] bg-[#111111] p-5 space-y-4">
-        <Skeleton className="h-9 w-9 rounded-lg" />
+      <div className="min-h-[160px] rounded-2xl border border-border/50 bg-card p-5 space-y-4">
+        <Skeleton className="h-9 w-9 rounded-xl" />
         <Skeleton className="mt-4 h-2.5 w-20 rounded" />
         <Skeleton className="mt-1 h-9 w-28 rounded" />
         <Skeleton className="mt-auto h-2 w-36 rounded" />

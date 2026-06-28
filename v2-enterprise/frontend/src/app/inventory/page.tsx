@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, type Variants } from 'framer-motion'
 import {
-  ArrowUpRight, Car, Download, Eye,
-  Fuel, Gauge, LayoutGrid, List, Palette, Plus, Search, Settings, X, Clock,
+  ArrowUpRight, Building2, Car, Download, Eye,
+  Fuel, Gauge, LayoutGrid, List, Palette, Plus, Search, Settings, X, Clock, MapPin,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { RowAction } from '@/components/shared/AdvancedTable'
@@ -21,6 +21,10 @@ import { Pagination } from '@/components/ui/pagination'
 import { exportXlsx } from '@/lib/export'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
+import { toast } from 'sonner'
+import { useBranchStore } from '@/lib/stores/branch-store'
+import { ShowroomPlanner } from '@/components/inventory/ShowroomPlanner'
+import { useAuthStore } from '@/lib/stores/auth-store'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -182,25 +186,114 @@ function SidebarFilter({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+// ── Assign Branch Modal ───────────────────────────────────────────────────────
+
+function AssignBranchModal({ car, onClose }: { car: any; onClose: () => void }) {
+  const { branches } = useBranchStore()
+  const token = useAuthStore(s => s.token)
+  const queryClient = useQueryClient()
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function handleAssign() {
+    if (selectedBranch === null) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/inventory/${car.id}/assign-branch`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ branchId: selectedBranch }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message)
+      toast.success(data.message)
+      await queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      onClose()
+    } catch (e: any) {
+      toast.error(e.message ?? 'فشل تعيين الفرع')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-2xl border border-border/50 bg-card p-6 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+        dir="rtl"
+      >
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+            <Building2 className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-foreground">تعيين للفرع</p>
+            <p className="text-xs text-muted-foreground">{car.brand} {car.model} {car.year}</p>
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-5">
+          {branches.map(b => (
+            <button
+              key={b.id}
+              onClick={() => setSelectedBranch(b.id)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors text-start',
+                selectedBranch === b.id
+                  ? 'border-primary/50 bg-primary/10 text-primary'
+                  : 'border-border/40 hover:bg-secondary/40 text-foreground',
+              )}
+            >
+              <Building2 className="h-4 w-4 shrink-0" />
+              <span className="font-medium">{b.name}</span>
+              {b.is_main && <span className="mr-auto text-[10px] font-bold text-primary/60 border border-primary/20 rounded px-1.5 py-0.5">رئيسي</span>}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            disabled={selectedBranch === null || loading}
+            onClick={handleAssign}
+          >
+            {loading ? 'جاري التعيين...' : 'تعيين'}
+          </Button>
+          <Button variant="outline" onClick={onClose} className="flex-1">إلغاء</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function InventoryPage() {
   const router = useRouter()
   const [search,    setSearch]    = useState('')
   const [status,    setStatus]    = useState('all')
   const [condition, setCondition] = useState('all')
-  const [view,      setView]      = useState<'cards' | 'table'>('cards')
+  const [view,      setView]      = useState<'cards' | 'table' | 'planner'>('cards')
   const [page,      setPage]      = useState(1)
   const [exporting, setExporting] = useState(false)
+  const [assignCar, setAssignCar] = useState<any>(null)
+  const { branches } = useBranchStore()
+  const canSeeAll = branches.length > 1
   const perPage = 18
 
   // Persist view toggle in localStorage
   useEffect(() => {
     const savedView = localStorage.getItem('inventory_view')
-    if (savedView === 'cards' || savedView === 'table') {
-      setView(savedView)
+    if (savedView === 'cards' || savedView === 'table' || savedView === 'planner') {
+      setView(savedView as any)
     }
   }, [])
 
-  const handleSetView = (newView: 'cards' | 'table') => {
+  const handleSetView = (newView: 'cards' | 'table' | 'planner') => {
     setView(newView)
     localStorage.setItem('inventory_view', newView)
   }
@@ -287,7 +380,18 @@ export default function InventoryPage() {
       key: 'actions',
       header: '',
       render: (car) => (
-        <div className="text-end" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+          {canSeeAll && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="تعيين للفرع"
+              onClick={() => setAssignCar(car)}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button asChild variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-foreground">
             <Link href={`/inventory/${car.id}`}>
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -295,7 +399,7 @@ export default function InventoryPage() {
           </Button>
         </div>
       ),
-      width: 60,
+      width: 80,
     }
   ], [])
 
@@ -312,6 +416,35 @@ export default function InventoryPage() {
     staleTime: 30_000,
     retry: 1,
   })
+
+  // Query to get all available cars when the planner view is enabled
+  const { data: allAvailableData } = useQuery({
+    queryKey: ['inventory-all-available'],
+    queryFn: () => getCars({ per_page: 500, status: 'Available' }),
+    staleTime: 30_000,
+    enabled: view === 'planner',
+  })
+
+  // Format the available cars list for the ShowroomPlanner component
+  const plannerCars = useMemo(() => {
+    const raw = allAvailableData?.items ?? []
+    return raw.map(c => ({
+      id: String(c.id),
+      brand: c.brand || undefined,
+      model: c.model,
+      year: c.manufacturing_year,
+      color: c.color || undefined,
+      chassisNumber: c.vin || '',
+      plateNumber: c.plate_number || undefined,
+      sellingPrice: c.selling_price ?? undefined,
+      currency: (c.currency === 'USD' || c.currency === 'IQD') ? c.currency : undefined,
+      status: c.status,
+      coverPhoto: c.cover_photo ? {
+        filename: c.cover_photo.filename,
+        subfolder: c.cover_photo.subfolder || undefined,
+      } : undefined
+    }))
+  }, [allAvailableData])
 
   const { data: counts } = useQuery({
     queryKey: ['inventory-counts'],
@@ -360,12 +493,17 @@ export default function InventoryPage() {
 
   const viewToggle = (
     <div className="flex rounded-lg border border-border/60 bg-secondary/30 p-0.5">
-      {([['cards', LayoutGrid], ['table', List]] as const).map(([v, Icon]) => (
+      {([
+        ['cards', LayoutGrid, 'عرض بطاقات'],
+        ['table', List, 'عرض جدول'],
+        ['planner', MapPin, 'مخطط الصالة']
+      ] as const).map(([v, Icon, label]) => (
         <button
           key={v}
           type="button"
           onClick={() => handleSetView(v)}
-          aria-label={v === 'cards' ? 'عرض بطاقات' : 'عرض جدول'}
+          aria-label={label}
+          title={label}
           className={cn(
             'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
             view === v
@@ -380,6 +518,7 @@ export default function InventoryPage() {
   )
 
   return (
+    <>
     <div dir="rtl">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
@@ -446,91 +585,95 @@ export default function InventoryPage() {
       )}
 
       {/* ── Search & Filter Chips ── */}
-      <div className="space-y-3 mt-4">
-        {view !== 'table' && (
-          <div className="relative">
-            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-            <Input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
-              placeholder="بحث بالماركة أو الموديل أو رقم الهيكل..."
-              className="h-10 bg-[var(--s1)] ps-10 text-sm border-border/40 focus:border-primary/50"
-            />
-            {search && (
-              <button
-                type="button"
-                aria-label="مسح البحث"
-                onClick={() => { setSearch(''); setPage(1) }}
-                className="absolute end-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+      {view !== 'planner' && (
+        <div className="space-y-3 mt-4">
+          {view !== 'table' && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
+              <Input
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1) }}
+                placeholder="بحث بالماركة أو الموديل أو رقم الهيكل..."
+                className="h-10 bg-[var(--s1)] ps-10 text-sm border-border/40 focus:border-primary/50"
+              />
+              {search && (
+                <button
+                  type="button"
+                  aria-label="مسح البحث"
+                  onClick={() => { setSearch(''); setPage(1) }}
+                  className="absolute end-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
 
-        {/* Brand / Status Filter Chips */}
-        <div className="flex flex-wrap items-center gap-2 pb-1 overflow-x-auto">
-          <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.07em] select-none">تصفية:</span>
+          {/* Brand / Status Filter Chips */}
+          <div className="flex flex-wrap items-center gap-2 pb-1 overflow-x-auto">
+            <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.07em] select-none">تصفية:</span>
 
-          {/* Status Chips */}
-          <div className="flex items-center gap-1.5 border-e border-border/25 pe-3">
-            {STATUS_OPTS.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => { setStatus(opt.value); setPage(1) }}
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all select-none',
-                  status === opt.value
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-secondary/40 border border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60',
-                )}
-              >
-                {status === opt.value && <span className="h-1.5 w-1.5 rounded-full bg-white/70 shrink-0" />}
-                {opt.label}
-              </button>
-            ))}
-          </div>
+            {/* Status Chips */}
+            <div className="flex items-center gap-1.5 border-e border-border/25 pe-3">
+              {STATUS_OPTS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setStatus(opt.value); setPage(1) }}
+                  className={cn(
+                    'flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all select-none',
+                    status === opt.value
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'bg-secondary/40 border border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60',
+                  )}
+                >
+                  {status === opt.value && <span className="h-1.5 w-1.5 rounded-full bg-white/70 shrink-0" />}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
-          {/* Condition Chips */}
-          <div className="flex items-center gap-1.5">
-            {CONDITION_OPTS.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => { setCondition(opt.value); setPage(1) }}
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all select-none',
-                  condition === opt.value
-                    ? 'bg-primary/15 border border-primary/30 text-primary'
-                    : 'bg-secondary/40 border border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60',
-                )}
-              >
-                {condition === opt.value && <span className="h-1.5 w-1.5 rounded-full bg-primary/80 shrink-0" />}
-                {opt.label}
-              </button>
-            ))}
+            {/* Condition Chips */}
+            <div className="flex items-center gap-1.5">
+              {CONDITION_OPTS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setCondition(opt.value); setPage(1) }}
+                  className={cn(
+                    'flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all select-none',
+                    condition === opt.value
+                      ? 'bg-primary/15 border border-primary/30 text-primary'
+                      : 'bg-secondary/40 border border-border/30 text-muted-foreground hover:text-foreground hover:border-border/60',
+                  )}
+                >
+                  {condition === opt.value && <span className="h-1.5 w-1.5 rounded-full bg-primary/80 shrink-0" />}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Body: sidebar + content ──────────────────────────────────────── */}
       <div className="mt-5 flex items-start gap-5">
 
         {/* Sidebar — desktop only */}
-        <aside className="hidden w-[210px] shrink-0 lg:block lg:sticky lg:top-[76px]">
-          <SidebarFilter
-            status={status}
-            onStatusChange={s => { setStatus(s); setPage(1) }}
-            condition={condition}
-            onConditionChange={c => { setCondition(c); setPage(1) }}
-            hasFilters={hasFilters}
-            onReset={resetFilters}
-            counts={counts}
-            totalCount={totalCount}
-          />
-        </aside>
+        {view !== 'planner' && (
+          <aside className="hidden w-[210px] shrink-0 lg:block lg:sticky lg:top-[76px]">
+            <SidebarFilter
+              status={status}
+              onStatusChange={s => { setStatus(s); setPage(1) }}
+              condition={condition}
+              onConditionChange={c => { setCondition(c); setPage(1) }}
+              hasFilters={hasFilters}
+              onReset={resetFilters}
+              counts={counts}
+              totalCount={totalCount}
+            />
+          </aside>
+        )}
 
         {/* Main content */}
         <div className="min-w-0 flex-1">
@@ -698,7 +841,7 @@ export default function InventoryPage() {
                     return (
                       <motion.div key={car.id} variants={cardVariants}>
                         <div
-                          className="group relative bg-[#161616] border border-white/5 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-glow-primary hover:border-[#00d4aa]/30 flex flex-col h-full select-none"
+                          className="group relative bg-card border border-border/50 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-md hover:border-primary/30 flex flex-col h-full select-none shadow-xs"
                         >
                           {/* Image & Status & Urgency Overlay */}
                           <div className="relative h-[200px] overflow-hidden bg-white/[0.02] w-full shrink-0 flex items-center justify-center">
@@ -839,9 +982,17 @@ export default function InventoryPage() {
             />
           )}
 
+          {/* ── Showroom Planner View ──────────────────────────────────── */}
+          {view === 'planner' && (
+            <ShowroomPlanner cars={plannerCars} />
+          )}
+
         </div>
       </div>
 
     </div>
+
+    {assignCar && <AssignBranchModal car={assignCar} onClose={() => setAssignCar(null)} />}
+    </>
   )
 }

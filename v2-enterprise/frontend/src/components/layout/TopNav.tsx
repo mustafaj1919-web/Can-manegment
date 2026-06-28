@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BranchSelector } from './BranchSelector'
 import { GlobalSearch } from './GlobalSearch'
@@ -137,6 +137,15 @@ export function TopNav({ collapsed, onToggleSidebar, onToggleMobile }: {
       
       {/* ── Right: Live Time, Active Branch & Contextual Breadcrumbs ── */}
       <div className="flex items-center gap-3.5 min-w-0">
+        {/* Toggle Sidebar Button for Desktop */}
+        <button
+          onClick={onToggleSidebar}
+          className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-border/40 bg-secondary/20 hover:bg-secondary/40 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+          title={collapsed ? "توسيع القائمة" : "تصغير القائمة"}
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+
         {/* Live Datetime & Active Branch Info */}
         <div className="hidden md:flex items-center gap-1.5 rounded-full bg-secondary/40 border border-border/40 px-3 py-1 text-[11px] font-medium text-muted-foreground shrink-0 select-none">
           <span className="relative flex h-1.5 w-1.5 shrink-0">

@@ -29,9 +29,6 @@ WORKDIR /app
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV COMPlus_EnableDiagnostics=0
 
-# تحديث الحزم لسد الثغرات الأمنية
-RUN apk update && apk upgrade --no-cache
-
 # إنشاء مستخدم أمني غير مسؤول لتشغيل الحاوية بأمان
 RUN addgroup -g 10001 -S appgroup && \
     adduser -u 10001 -S appuser -G appgroup

@@ -27,9 +27,6 @@ WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
-# تحديث الحزم لسد الثغرات الأمنية
-RUN apk update && apk upgrade --no-cache
-
 # Create unprivileged system user for execution
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

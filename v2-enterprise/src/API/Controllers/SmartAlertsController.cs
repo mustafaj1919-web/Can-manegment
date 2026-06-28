@@ -23,34 +23,31 @@ namespace CarShowroomManagementV2.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetSmartAlerts()
         {
-            var today = DateTime.UtcNow.Date;
+            var today    = DateTime.UtcNow.Date;
+            var tomorrow = today.AddDays(1);
+
+            var overdueCount     = await _context.Installments.CountAsync(i => i.Status != "Paid" && (i.Status == "Overdue" || i.DueDate < today));
+            var overdueAmount    = await _context.Installments.Where(i => i.Status != "Paid" && (i.Status == "Overdue" || i.DueDate < today)).SumAsync(i => (decimal?)(i.Amount - i.PaidAmount)) ?? 0m;
+            var dueTodayCount    = await _context.Installments.CountAsync(i => i.Status != "Paid" && i.DueDate.Date == today);
+            var availableCount   = await _context.Vehicles.CountAsync(v => v.Status == "Available");
+            var dueTomorrowCount = await _context.Installments.CountAsync(i => i.Status != "Paid" && i.DueDate.Date == tomorrow);
 
             var alerts = new List<AlertDto>();
 
-            // 1. أقساط متأخرة
-            var overdueInstallments = await _context.Installments
-                .Where(i => i.Status != "Paid" && (i.Status == "Overdue" || i.DueDate < today))
-                .ToListAsync();
-
-            if (overdueInstallments.Count > 0)
+            if (overdueCount > 0)
             {
-                var overdueAmount = overdueInstallments.Sum(i => i.Amount - i.PaidAmount);
                 alerts.Add(new AlertDto
                 {
                     type      = "overdue_installments",
                     severity  = "critical",
-                    title     = $"أقساط متأخرة: {overdueInstallments.Count}",
+                    title     = $"أقساط متأخرة: {overdueCount}",
                     body      = $"إجمالي المتأخر: {overdueAmount:N0} د.ع",
                     link      = "/installments?filter=overdue",
-                    count     = overdueInstallments.Count,
+                    count     = overdueCount,
                     amount    = overdueAmount,
                     currency  = "IQD"
                 });
             }
-
-            // 2. أقساط مستحقة اليوم
-            var dueTodayCount = await _context.Installments
-                .CountAsync(i => i.Status != "Paid" && i.DueDate.Date == today);
 
             if (dueTodayCount > 0)
             {
@@ -65,8 +62,6 @@ namespace CarShowroomManagementV2.API.Controllers
                 });
             }
 
-            // 3. مخزون منخفض
-            var availableCount = await _context.Vehicles.CountAsync(v => v.Status == "Available");
             if (availableCount < 5)
             {
                 alerts.Add(new AlertDto
@@ -80,11 +75,6 @@ namespace CarShowroomManagementV2.API.Controllers
                     link     = "/inventory"
                 });
             }
-
-            // 4. أقساط مستحقة غداً (تحذير مسبق)
-            var tomorrow        = today.AddDays(1);
-            var dueTomorrowCount = await _context.Installments
-                .CountAsync(i => i.Status != "Paid" && i.DueDate.Date == tomorrow);
 
             if (dueTomorrowCount > 0)
             {

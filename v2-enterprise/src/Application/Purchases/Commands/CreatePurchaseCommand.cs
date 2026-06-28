@@ -16,8 +16,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
     {
         public Guid SupplierId { get; set; }
         public decimal PurchaseCost { get; set; }
-        public decimal? PaidAmount { get; set; } // null = دفع كامل، رقم أقل = دفعة أولى
-        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // Cash, Bank, Cheque
+        public decimal? PaidAmount { get; set; } // null or 0 = full credit; > 0 = immediate payment
+        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // used only when PaidAmount > 0
 
         // تفاصيل السيارة
         public string? Brand { get; set; }
@@ -27,10 +27,6 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public string? Color { get; set; }
         public int Year { get; set; }
         public decimal TargetSellingPrice { get; set; }
-
-        // حقول جدول الأقساط (اختياري)
-        public int InstallmentPeriodMonths { get; set; } = 0;
-        public DateTime? InstallmentStartDate { get; set; }
     }
 
     public class CreatePurchaseCommandValidator : AbstractValidator<CreatePurchaseCommand>
@@ -127,12 +123,12 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 _context.VehicleCosts.Add(detailedCost);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 3. تحديد طريقة الدفع والمبلغ المدفوع
-                var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? purchaseCost);
+                // 3. تحديد المبلغ المدفوع — الافتراضي 0 (آجل كامل على حساب المورد)
+                var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? 0m);
                 if (paidAmount < 0) paidAmount = 0;
                 if (paidAmount > purchaseCost) paidAmount = purchaseCost;
-                var isPartialPayment = paidAmount < purchaseCost;
-                var effectiveMethod = isPartialPayment ? PaymentMethod.Installment : request.PaymentMethod;
+                var hasImmediatePayment = paidAmount > 0;
+                var effectiveMethod = paidAmount >= purchaseCost ? request.PaymentMethod : PaymentMethod.Cheque;
 
                 // حساب المخزون: 1201
                 var inventoryAccount = await _context.Accounts
@@ -190,25 +186,9 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 Guid mainCreditAccountId;
                 string mainCreditDesc;
 
-                if (!isPartialPayment && cashOrBankAccountId.HasValue)
-                {
-                    // التحقق من كفاية رصيد الصندوق/البنك للدفع الكامل
-                    var availableBalance = await _context.JournalLines
-                        .Where(l => l.AccountId == cashOrBankAccountId.Value)
-                        .SumAsync(l => l.Debit - l.Credit, cancellationToken);
-                    if (availableBalance < purchaseCost)
-                        throw new InvalidOperationException($"رصيد الحساب غير كافٍ. المتاح: {availableBalance:N0}، المطلوب: {purchaseCost:N0}.");
-
-                    // دفع كامل نقداً أو بنكياً: دائن الصندوق/البنك مباشرة
-                    mainCreditAccountId = cashOrBankAccountId.Value;
-                    mainCreditDesc = $"دفع قيمة الشراء للسيارة {vehicle.Model} عبر {cashOrBankDesc}";
-                }
-                else
-                {
-                    // دفع آجل أو جزئي أو بشيك: دائن حساب المورد
-                    mainCreditAccountId = supplier.AccountId;
-                    mainCreditDesc = $"إثبات استحقاق قيمة الشراء للمورد {supplier.Name}";
-                }
+                // القيد الرئيسي دائماً: دائن حساب المورد بالمبلغ الكامل (نُسجّل الدين)
+                mainCreditAccountId = supplier.AccountId;
+                mainCreditDesc = $"إثبات استحقاق قيمة الشراء للمورد {supplier.Name}";
 
                 var journalEntry = new JournalEntry
                 {
@@ -248,8 +228,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 _context.JournalEntries.Add(journalEntry);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 6. إذا كان الدفع جزئياً — قيد الدفعة الأولى: مدين المورد / دائن الصندوق أو البنك
-                if (isPartialPayment && paidAmount > 0 && cashOrBankAccountId.HasValue)
+                // 6. قيد الدفعة الفورية إن وُجدت — مدين المورد / دائن الصندوق أو البنك
+                if (hasImmediatePayment && cashOrBankAccountId.HasValue)
                 {
                     // التحقق من كفاية رصيد الصندوق/البنك للدفعة الأولى
                     var availableBalance = await _context.JournalLines
@@ -315,50 +295,6 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
                     _context.JournalEntries.Add(payJournal);
                     initialPayment.JournalEntryId = payJournal.Id;
-                    await _context.SaveChangesAsync(cancellationToken);
-                }
-
-                // 7. إنشاء خطة التقسيط وجدول الأقساط للمورد (إذا طُلب ذلك)
-                if (isPartialPayment && request.InstallmentPeriodMonths > 0)
-                {
-                    var remainingForPlan = purchaseCost - paidAmount;
-                    var monthlyAmount = AccountingAmount.RoundMoney(remainingForPlan / request.InstallmentPeriodMonths);
-                    var baseDate = request.InstallmentStartDate.HasValue
-                        ? DateTime.SpecifyKind(request.InstallmentStartDate.Value, DateTimeKind.Utc)
-                        : DateTime.UtcNow;
-
-                    var plan = new InstallmentPlan
-                    {
-                        Id = Guid.NewGuid(),
-                        SalesContractId = null,
-                        PurchaseId = purchase.Id,
-                        TotalAmount = remainingForPlan,
-                        DownPayment = paidAmount,
-                        InstallmentPeriodMonths = request.InstallmentPeriodMonths,
-                        ProfitRatePercentage = 0,
-                        TotalProfit = 0,
-                        TotalPlanAmount = remainingForPlan,
-                        MonthlyInstallmentAmount = monthlyAmount,
-                        Status = "Active",
-                        BranchId = branchId
-                    };
-                    _context.InstallmentPlans.Add(plan);
-                    await _context.SaveChangesAsync(cancellationToken);
-
-                    for (int i = 1; i <= request.InstallmentPeriodMonths; i++)
-                    {
-                        _context.Installments.Add(new Installment
-                        {
-                            Id = Guid.NewGuid(),
-                            InstallmentPlanId = plan.Id,
-                            InstallmentNumber = i,
-                            DueDate = baseDate.AddMonths(i),
-                            Amount = monthlyAmount,
-                            PaidAmount = 0,
-                            Status = "Pending",
-                            BranchId = branchId
-                        });
-                    }
                     await _context.SaveChangesAsync(cancellationToken);
                 }
 

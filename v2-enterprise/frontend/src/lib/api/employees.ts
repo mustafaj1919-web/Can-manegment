@@ -5,8 +5,8 @@ import { apiClient } from './client'
 
 export interface Employee {
   id: number
-  branch_id: number | null
-  branch?: { id: number; name: string; is_main: boolean } | null
+  branch_id: string | null
+  branch?: { id: string; name: string; is_main: boolean } | null
   full_name: string
   phone: string
   id_number: string | null

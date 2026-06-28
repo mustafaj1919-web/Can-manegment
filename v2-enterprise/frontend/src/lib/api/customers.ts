@@ -48,7 +48,7 @@ export interface Customer {
   customer_type: 'Individual' | 'Company'
   notes?: string | null
   branch_id?: number | null
-  branch?: { id: number; name: string; is_main: boolean; created_at?: string } | null
+  branch?: { id: string; name: string; is_main: boolean; created_at?: string } | null
   created_at: string | null
   documents_count?: number
   sales_count?: number

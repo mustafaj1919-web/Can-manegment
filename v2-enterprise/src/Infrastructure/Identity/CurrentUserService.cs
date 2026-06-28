@@ -22,12 +22,17 @@ namespace CarShowroomManagementV2.Infrastructure.Identity
             {
                 var branchClaim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("BranchId");
                 if (Guid.TryParse(branchClaim, out var branchId))
-                {
                     return branchId;
-                }
-                
-                // في حالة الاختبارات أو عدم وجود مستخدم نشط، نستخدم معرّفاً افتراضياً لفرع رئيسي ثابت لتجنب الانهيار
                 return Guid.Parse("11111111-1111-1111-1111-111111111111");
+            }
+        }
+
+        public bool CanSeeAllBranches
+        {
+            get
+            {
+                var claim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("CanSeeAllBranches");
+                return claim == "true";
             }
         }
     }

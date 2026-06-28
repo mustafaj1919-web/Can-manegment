@@ -227,24 +227,26 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
         Log.Warning(ex, "Schema migration warning (non-fatal).");
     }
 
-    // أ. إنشاء الفرع الرئيسي الافتراضي
-    var defaultBranchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    // أ. إنشاء الفروع
+    var defaultBranchId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    var branchSeeds = new[]
+    {
+        new Branch { Id = defaultBranchId,                                    Name = "الأصدقاء",  Code = "BR-01", Address = "بغداد", IsActive = true },
+        new Branch { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Name = "الأصدقاء ٢", Code = "BR-02", Address = "بغداد", IsActive = true },
+    };
+
+    foreach (var br in branchSeeds)
+    {
+        if (!await context.Branches.IgnoreQueryFilters().AnyAsync(b => b.Id == br.Id))
+        {
+            context.Branches.Add(br);
+        }
+    }
+    await context.SaveChangesAsync();
+
     var defaultBranch = await context.Branches.IgnoreQueryFilters()
         .FirstOrDefaultAsync(b => b.Id == defaultBranchId);
-
-    if (defaultBranch == null)
-    {
-        defaultBranch = new Branch
-        {
-            Id = defaultBranchId,
-            Name = "الفرع الرئيسي - بغداد",
-            Code = "HQ-01",
-            Address = "بغداد، الكرادة",
-            IsActive = true
-        };
-        context.Branches.Add(defaultBranch);
-        await context.SaveChangesAsync();
-    }
 
     // ب. إنشاء شجرة الحسابات الأولية (Chart of Accounts)
     if (!await context.Accounts.IgnoreQueryFilters().AnyAsync())

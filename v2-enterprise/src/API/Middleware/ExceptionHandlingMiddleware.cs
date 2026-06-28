@@ -49,9 +49,14 @@ namespace CarShowroomManagementV2.API.Middleware
                 context.Response.StatusCode = (int)statusCode;
                 return context.Response.WriteAsync(validationResponse);
             }
-            else if (exception is InvalidOperationException || exception.Message.Contains("قوانين الأمان المالي"))
+            else if (exception.Message.Contains("قوانين الأمان المالي"))
             {
                 statusCode = HttpStatusCode.Forbidden;
+                message = exception.Message;
+            }
+            else if (exception is InvalidOperationException)
+            {
+                statusCode = HttpStatusCode.BadRequest;
                 message = exception.Message;
             }
             else if (exception.Message.Contains("غير موجود") || exception.Message.Contains("غير نشط"))

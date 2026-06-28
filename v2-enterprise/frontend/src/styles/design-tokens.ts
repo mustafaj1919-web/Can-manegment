@@ -1,22 +1,22 @@
 // Design Tokens for Friends Showroom Enterprise (RTL Premium Light ERP System)
 export const DESIGN_TOKENS = {
   colors: {
-    background: '#F8FAFC',        // Slate 50
-    foreground: '#0F172A',        // Slate 900
-    card: '#FFFFFF',              // Pure White
-    cardForeground: '#0F172A',
-    border: '#E2E8F0',            // Slate 200
-    input: '#F1F5F9',             // Slate 100
-    ring: '#EF1B2D',              // Automotive Red
-    primary: '#EF1B2D',           // Brand Primary
+    background: '#F6F8FB',        // Calm canvas background
+    foreground: '#1E293B',        // Slate 800 (no pure black)
+    card: '#FFFFFF',              // Pure White Cards
+    cardForeground: '#1E293B',
+    border: '#E5E7EB',            // Very subtle border
+    input: '#F9FAFB',             // Clean light inputs
+    ring: '#10B981',              // Emerald focus ring
+    primary: '#10B981',           // Emerald Brand Primary accent
     primaryForeground: '#FFFFFF',
     secondary: '#F1F5F9',         // Slate 100
     secondaryForeground: '#1E293B',
-    muted: '#F8FAFC',
+    muted: '#F9FAFB',             // Secondary background
     mutedForeground: '#64748B',   // Slate 500
-    accent: '#10B981',            // Emerald Accent
+    accent: '#2563EB',            // Blue secondary accent
     accentForeground: '#FFFFFF',
-    destructive: '#E11D48',       // Rose 600
+    destructive: '#E11D48',       // Rose danger/alert
     destructiveForeground: '#FFFFFF',
   },
   statusColors: {

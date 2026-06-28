@@ -40,6 +40,13 @@ export interface UpdateSupplierPayload {
   notes?: string | null
 }
 
+export interface BulkVehicleOverride {
+  color?: string
+  plateNumber?: string
+  notes?: string
+  targetSellingPrice?: number
+}
+
 export interface BulkPurchasePayload {
   supplierId: string
   brand?: string
@@ -47,13 +54,11 @@ export interface BulkPurchasePayload {
   year: number
   color?: string
   purchaseCost: number
-  paidAmount?: number
+  paidAmount: number  // 0 = full credit on supplier account
   targetSellingPrice: number
   paymentMethod: 'Cash' | 'Bank' | 'Cheque'
   chassisNumbers: string[]
-  installmentPeriodCount?: number
-  installmentFrequency?: 'Daily' | 'Weekly' | 'Monthly'
-  installmentStartDate?: string | null
+  vehicleOverrides?: Record<string, BulkVehicleOverride>
 }
 
 export interface BulkPurchaseResult {
@@ -62,6 +67,7 @@ export interface BulkPurchaseResult {
   purchase_ids: string[]
   errors: string[]
   message: string
+  chassis_to_vehicle_id?: Record<string, string>
 }
 
 export async function getSuppliers(params: { page?: number; per_page?: number; search?: string } = {}): Promise<SuppliersListResponse> {
@@ -95,12 +101,14 @@ export async function deleteSupplier(id: string): Promise<{ success: boolean }> 
   return del<any>(`/Suppliers/${id}`)
 }
 
-export async function paySupplier(id: string, payload: { amount: number; paymentMethod: string; creditAccountCode?: string }): Promise<{ success: boolean; paymentId: string }> {
+export async function paySupplier(id: string, payload: { amount: number; paymentMethod: string; creditAccountCode?: string; notes?: string }): Promise<{ success: boolean; paymentId: string }> {
+  const methodMap: Record<string, number> = { Cash: 1, Bank: 2, Cheque: 3 }
   const body = {
     SupplierId: id,
     Amount: payload.amount,
-    PaymentMethod: payload.paymentMethod === 'Cash' ? 1 : 2,
-    CreditAccountCode: payload.creditAccountCode ?? '111001',
+    PaymentMethod: methodMap[payload.paymentMethod] ?? 1,
+    CreditAccountCode: payload.creditAccountCode ?? (payload.paymentMethod === 'Bank' ? '112001' : '111001'),
+    Notes: payload.notes ?? null,
   }
   return post<any>(`/Suppliers/${id}/pay`, body)
 }
@@ -117,12 +125,30 @@ export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<
     Year: payload.year,
     TargetSellingPrice: payload.targetSellingPrice,
     ChassisNumbers: payload.chassisNumbers,
-    PaidAmount: payload.paidAmount ?? null,
-    InstallmentPeriodCount: payload.installmentPeriodCount ?? 0,
-    InstallmentFrequency: payload.installmentFrequency === 'Daily' ? 1 : payload.installmentFrequency === 'Weekly' ? 2 : 3,
-    InstallmentStartDate: payload.installmentStartDate ?? null,
+    PaidAmount: payload.paidAmount,
+    VehicleOverrides: payload.vehicleOverrides
+      ? Object.fromEntries(
+          Object.entries(payload.vehicleOverrides).map(([vin, o]) => [
+            vin,
+            {
+              Color: o.color ?? null,
+              PlateNumber: o.plateNumber ?? null,
+              Notes: o.notes ?? null,
+              TargetSellingPrice: o.targetSellingPrice ?? null,
+            },
+          ])
+        )
+      : null,
   }
-  return post<BulkPurchaseResult>('/Purchases/bulk', body)
+  const res = await post<any>('/Purchases/bulk', body)
+  return {
+    success: res.success ?? true,
+    created_count: res.createdCount ?? res.created_count ?? 0,
+    purchase_ids: res.purchaseIds ?? res.purchase_ids ?? [],
+    errors: res.errors ?? [],
+    message: res.message ?? '',
+    chassis_to_vehicle_id: res.chassisToVehicleId ?? res.chassis_to_vehicle_id ?? {},
+  } satisfies BulkPurchaseResult
 }
 
 // ─── Supplier Ledger ─────────────────────────────────────────────────────────

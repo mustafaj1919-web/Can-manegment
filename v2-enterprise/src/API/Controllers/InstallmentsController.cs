@@ -42,6 +42,10 @@ namespace CarShowroomManagementV2.API.Controllers
                     .ThenInclude(sc => sc!.Customer)
                 .Include(p => p.SalesContract)
                     .ThenInclude(sc => sc!.Vehicle)
+                .Include(p => p.Purchase)
+                    .ThenInclude(pu => pu!.Supplier)
+                .Include(p => p.Purchase)
+                    .ThenInclude(pu => pu!.Vehicle)
                 .Include(p => p.Installments)
                 .AsQueryable();
 
@@ -56,8 +60,9 @@ namespace CarShowroomManagementV2.API.Controllers
 
             var itemsList = allPlans.Select(p => {
                 var sc = p.SalesContract;
-                var vehicle = sc?.Vehicle;
+                var vehicle = sc?.Vehicle ?? p.Purchase?.Vehicle;
                 var customer = sc?.Customer;
+                var supplier = p.Purchase?.Supplier;
 
                 var total = p.TotalPlanAmount;
                 var paid = p.Installments.Sum(i => i.PaidAmount);
@@ -79,11 +84,13 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     id = p.Id,
                     sale_id = p.SalesContractId,
-                    invoice_number = sc?.ContractNumber,
+                    purchase_id = p.PurchaseId,
+                    plan_type = p.PurchaseId.HasValue ? "purchase" : "sale",
+                    invoice_number = sc?.ContractNumber ?? p.Purchase?.PurchaseNumber,
                     car_name = vehicle != null ? $"{vehicle.Model} {vehicle.Year}" : null,
                     buyer_id = sc?.CustomerId,
-                    buyer_name = customer != null ? (customer.FullName ?? customer.Name) : null,
-                    buyer_phone = customer?.Phone,
+                    buyer_name = customer != null ? (customer.FullName ?? customer.Name) : (supplier != null ? $"مورد: {supplier.Name}" : null),
+                    buyer_phone = customer?.Phone ?? supplier?.Phone,
                     total_amount = total,
                     paid_amount = paid,
                     remaining_amount = remaining,
@@ -222,6 +229,10 @@ namespace CarShowroomManagementV2.API.Controllers
                     .ThenInclude(sc => sc!.Customer)
                 .Include(p => p.SalesContract)
                     .ThenInclude(sc => sc!.Vehicle)
+                .Include(p => p.Purchase)
+                    .ThenInclude(pu => pu!.Supplier)
+                .Include(p => p.Purchase)
+                    .ThenInclude(pu => pu!.Vehicle)
                 .Include(p => p.Installments)
                 .FirstOrDefaultAsync(p => p.Id == planId);
 
@@ -232,7 +243,8 @@ namespace CarShowroomManagementV2.API.Controllers
 
             var sc = plan.SalesContract;
             var customer = sc?.Customer;
-            var vehicle = sc?.Vehicle;
+            var vehicle = sc?.Vehicle ?? plan.Purchase?.Vehicle;
+            var supplier = plan.Purchase?.Supplier;
 
             var paid = plan.Installments.Where(i => i.Status == "Paid").Sum(i => i.PaidAmount);
             var remaining = Math.Max(0, plan.TotalPlanAmount - plan.Installments.Sum(i => i.PaidAmount));
@@ -270,12 +282,14 @@ namespace CarShowroomManagementV2.API.Controllers
             {
                 id = plan.Id,
                 sale_id = plan.SalesContractId,
+                purchase_id = plan.PurchaseId,
+                plan_type = plan.PurchaseId.HasValue ? "purchase" : "sale",
                 branch_id = plan.BranchId,
-                notes = "خطة تقسيط نشطة لعقد البيع",
-                invoice_number = sc?.ContractNumber,
+                notes = plan.PurchaseId.HasValue ? "خطة تقسيط مستحقات مورد" : "خطة تقسيط نشطة لعقد البيع",
+                invoice_number = sc?.ContractNumber ?? plan.Purchase?.PurchaseNumber,
                 car_name = vehicle != null ? $"{vehicle.Model} {vehicle.Year}" : null,
-                buyer_name = customer != null ? (customer.FullName ?? customer.Name) : null,
-                buyer_phone = customer?.Phone,
+                buyer_name = customer != null ? (customer.FullName ?? customer.Name) : (supplier != null ? $"مورد: {supplier.Name}" : null),
+                buyer_phone = customer?.Phone ?? supplier?.Phone,
                 total_amount = plan.TotalPlanAmount,
                 paid_amount = paid,
                 remaining_amount = remaining,

@@ -67,202 +67,221 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                 throw new InvalidOperationException("خطة التقسيط المرتبطة بالقسط غير موجودة.");
             }
 
-            // 2. جلب عقد البيع والعميل
-            var contract = await _context.SalesContracts
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(sc => sc.Id == plan.SalesContractId && sc.BranchId == branchId, cancellationToken);
+            // 2. تحديد نوع الخطة: بيع أم شراء
+            var isPurchasePlan = plan.PurchaseId.HasValue;
 
-            if (contract == null)
+            // متغيرات مشتركة
+            Domain.Entities.SalesContract? contract = null;
+            Domain.Entities.Customer? customer = null;
+            Domain.Entities.Purchase? purchase = null;
+            Domain.Entities.Supplier? supplier = null;
+            Guid   counterpartAccountId;
+            string counterpartName;
+
+            if (!isPurchasePlan)
             {
-                throw new InvalidOperationException("عقد البيع المرتبط بالأقساط غير موجود.");
+                // ── أقساط بيع: نتحصّل من العميل ──────────────────────────────
+                contract = await _context.SalesContracts
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(sc => sc.Id == plan.SalesContractId && sc.BranchId == branchId, cancellationToken);
+
+                if (contract == null)
+                    throw new InvalidOperationException("عقد البيع المرتبط بالأقساط غير موجود.");
+
+                customer = await _context.Customers
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(c => c.Id == contract.CustomerId && c.BranchId == branchId, cancellationToken);
+
+                if (customer == null)
+                    throw new InvalidOperationException("العميل المرتبط بعقد البيع غير موجود.");
+
+                counterpartAccountId = customer.AccountId;
+                counterpartName      = customer.FullName ?? customer.Name;
+            }
+            else
+            {
+                // ── أقساط شراء: نسدّد للمورد ─────────────────────────────────
+                purchase = await _context.Purchases
+                    .IgnoreQueryFilters()
+                    .Include(p => p.Supplier)
+                    .FirstOrDefaultAsync(p => p.Id == plan.PurchaseId && p.BranchId == branchId, cancellationToken);
+
+                if (purchase == null)
+                    throw new InvalidOperationException("فاتورة الشراء المرتبطة بالأقساط غير موجودة.");
+
+                supplier = purchase.Supplier;
+                if (supplier == null)
+                    throw new InvalidOperationException("المورد المرتبط بفاتورة الشراء غير موجود.");
+
+                // حساب المورد من دليل الحسابات
+                var supplierAccount = await _context.Accounts
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(a => a.Id == supplier.AccountId && a.BranchId == branchId, cancellationToken);
+
+                if (supplierAccount == null)
+                    throw new InvalidOperationException("حساب المورد غير موجود في دليل الحسابات.");
+
+                counterpartAccountId = supplier.AccountId;
+                counterpartName      = supplier.Name;
             }
 
-            var customer = await _context.Customers
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(c => c.Id == contract.CustomerId && c.BranchId == branchId, cancellationToken);
-
-            if (customer == null)
-            {
-                throw new InvalidOperationException("العميل المرتبط بعقد البيع غير موجود.");
-            }
-
-            // 3. جلب حسابات القيد
-            var debitAccount = await _context.Accounts
+            // 3. جلب حساب الصندوق/البنك
+            var cashBankAccount = await _context.Accounts
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(a => a.AccountCode == request.DebitAccountCode && a.BranchId == branchId, cancellationToken);
 
-            if (debitAccount == null)
-            {
-                throw new InvalidOperationException($"حساب الاستلام المحدد ({request.DebitAccountCode}) غير موجود في هذا الفرع.");
-            }
+            if (cashBankAccount == null)
+                throw new InvalidOperationException($"حساب الصندوق/البنك ({request.DebitAccountCode}) غير موجود في هذا الفرع.");
 
-            // حسابات أرباح التقسيط للاعتراف التدريجي
-            var deferredProfitAccount = await _context.Accounts
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(a => a.AccountCode == "2301" && a.BranchId == branchId, cancellationToken);
+            // حسابات أرباح التقسيط (للبيع فقط)
+            var deferredProfitAccount = !isPurchasePlan
+                ? await _context.Accounts.IgnoreQueryFilters().FirstOrDefaultAsync(a => a.AccountCode == "2301" && a.BranchId == branchId, cancellationToken)
+                : null;
 
-            var recognizedProfitAccount = await _context.Accounts
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(a => a.AccountCode == "4102" && a.BranchId == branchId, cancellationToken);
+            var recognizedProfitAccount = !isPurchasePlan
+                ? await _context.Accounts.IgnoreQueryFilters().FirstOrDefaultAsync(a => a.AccountCode == "4102" && a.BranchId == branchId, cancellationToken)
+                : null;
 
             var dbContext = _context as DbContext;
             if (dbContext == null)
-            {
                 throw new InvalidOperationException("DbContext context is invalid.");
-            }
 
             using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 4. تحديث القسط والمبالغ
+                // 4. تحديث القسط
                 var amount = AccountingAmount.RoundMoney(request.Amount);
                 var remainingInstallmentAmount = AccountingAmount.RoundMoney(installment.Amount - installment.PaidAmount);
                 if (amount > remainingInstallmentAmount)
-                {
                     throw new InvalidOperationException($"المبلغ المدخل ({amount}) أكبر من قيمة القسط المتبقية ({remainingInstallmentAmount}).");
-                }
 
                 installment.PaidAmount = AccountingAmount.RoundMoney(installment.PaidAmount + amount);
-                if (installment.PaidAmount >= installment.Amount)
-                {
-                    installment.Status = "Paid";
-                    installment.PaymentDate = DateTime.UtcNow;
-                }
-                else
-                {
-                    installment.Status = "PartiallyPaid";
-                }
-
+                installment.Status     = installment.PaidAmount >= installment.Amount ? "Paid" : "PartiallyPaid";
+                if (installment.Status == "Paid") installment.PaymentDate = DateTime.UtcNow;
                 _context.Installments.Update(installment);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 5. تحديث عقد البيع وخطة التقسيط
-                contract.RemainingBalance = AccountingAmount.RoundMoney(contract.RemainingBalance - amount);
-                if (contract.RemainingBalance < 0) contract.RemainingBalance = 0;
-                _context.SalesContracts.Update(contract);
+                // 5. تحديث الكيان المرتبط وخطة التقسيط
+                if (contract != null)
+                {
+                    contract.RemainingBalance = AccountingAmount.RoundMoney(Math.Max(0, contract.RemainingBalance - amount));
+                    _context.SalesContracts.Update(contract);
+                }
 
-                // التحقق مما إذا سُددت كافة الأقساط بالخطة
                 var allPaid = await _context.Installments
                     .IgnoreQueryFilters()
                     .Where(i => i.InstallmentPlanId == plan.Id && i.BranchId == branchId)
                     .AllAsync(i => i.Status == "Paid", cancellationToken);
 
-                if (allPaid)
-                {
-                    plan.Status = "Completed";
-                    _context.InstallmentPlans.Update(plan);
-                }
-
+                if (allPaid) { plan.Status = "Completed"; _context.InstallmentPlans.Update(plan); }
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 6. احتساب قيمة أرباح التقسيط المحققة من هذا السداد نسبياً
+                // 6. أرباح التقسيط (أقساط بيع فقط)
                 decimal recognizedProfit = 0;
-                if (plan.TotalPlanAmount > 0 && plan.TotalProfit > 0)
+                if (!isPurchasePlan && plan.TotalPlanAmount > 0 && plan.TotalProfit > 0)
                 {
                     recognizedProfit = AccountingAmount.RoundMoney(amount * (plan.TotalProfit / plan.TotalPlanAmount));
+                    if (recognizedProfit > 0 && (deferredProfitAccount == null || recognizedProfitAccount == null))
+                        throw new InvalidOperationException("حسابات الاعتراف بأرباح التقسيط (2301) و (4102) غير متوفرة بالفرع.");
                 }
 
-                if (recognizedProfit > 0 && (deferredProfitAccount == null || recognizedProfitAccount == null))
-                {
-                    throw new InvalidOperationException("حسابات الاعتراف بأرباح التقسيط (2301) و (4102) غير متوفرة بالفرع.");
-                }
-
-                // 7. إنشاء سجل سند القبض (Payment Receipt)
+                // 7. سند مالي
                 var totalPaymentsCount = await _context.Payments.IgnoreQueryFilters().CountAsync(cancellationToken);
-                var referenceNumber = $"REC-{DateTime.UtcNow:yyyyMMdd}-{totalPaymentsCount + 1:D5}";
+                var referenceNumber    = $"REC-{DateTime.UtcNow:yyyyMMdd}-{totalPaymentsCount + 1:D5}";
+                var invoiceRef         = contract?.ContractNumber ?? purchase?.PurchaseNumber ?? "";
 
                 var payment = new Payment
                 {
-                    Id = Guid.NewGuid(),
-                    Type = PaymentType.Receipt,
-                    Method = request.PaymentMethod,
-                    Amount = amount,
+                    Id              = Guid.NewGuid(),
+                    Type            = isPurchasePlan ? PaymentType.Payment : PaymentType.Receipt,
+                    Method          = request.PaymentMethod,
+                    Amount          = amount,
                     ReferenceNumber = referenceNumber,
-                    Description = $"سداد القسط رقم {installment.InstallmentNumber} لعقد البيع {contract.ContractNumber} للعميل {customer.Name}",
-                    AccountId = debitAccount.Id,
-                    ContraAccountId = customer.AccountId,
-                    BranchId = branchId
+                    Description     = isPurchasePlan
+                        ? $"سداد القسط رقم {installment.InstallmentNumber} لفاتورة الشراء {invoiceRef} للمورد {counterpartName}"
+                        : $"سداد القسط رقم {installment.InstallmentNumber} لعقد البيع {invoiceRef} للعميل {counterpartName}",
+                    AccountId       = cashBankAccount.Id,
+                    ContraAccountId = counterpartAccountId,
+                    BranchId        = branchId
                 };
-
                 _context.Payments.Add(payment);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 8. إنشاء القيد المحاسبي المتوازن لعملية السداد مع الاعتراف بأرباح التقسيط
+                // 8. القيد المحاسبي
                 var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
-                var entryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
+                var entryNumber       = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
 
                 var journalEntry = new JournalEntry
                 {
-                    Id = Guid.NewGuid(),
-                    EntryNumber = entryNumber,
-                    EntryDate = DateTime.UtcNow,
-                    Description = $"قيد تحصيل القسط رقم {installment.InstallmentNumber} لعقد {contract.ContractNumber} - سند: {referenceNumber}",
-                    IsPosted = true,
-                    BranchId = branchId,
+                    Id            = Guid.NewGuid(),
+                    EntryNumber   = entryNumber,
+                    EntryDate     = DateTime.UtcNow,
+                    Description   = isPurchasePlan
+                        ? $"قيد سداد قسط رقم {installment.InstallmentNumber} لفاتورة {invoiceRef} - سند: {referenceNumber}"
+                        : $"قيد تحصيل القسط رقم {installment.InstallmentNumber} لعقد {invoiceRef} - سند: {referenceNumber}",
+                    IsPosted      = true,
+                    BranchId      = branchId,
                     ReferenceType = "Payment",
-                    ReferenceId = payment.Id,
-                    CreatedBy = _currentUserService.UserId
+                    ReferenceId   = payment.Id,
+                    CreatedBy     = _currentUserService.UserId
                 };
 
-                // أ. السطر الأساسي للتحصيل:
-                // مدين: الصندوق أو البنك المستلم
-                journalEntry.Lines.Add(new JournalLine
+                if (isPurchasePlan)
                 {
-                    Id = Guid.NewGuid(),
-                    JournalEntryId = journalEntry.Id,
-                    AccountId = debitAccount.Id,
-                    Debit = amount,
-                    Credit = 0,
-                    Description = $"استلام مبالغ سداد قسط من العميل {customer.Name}"
-                });
-
-                // دائن: حساب العميل الفرعي
-                journalEntry.Lines.Add(new JournalLine
-                {
-                    Id = Guid.NewGuid(),
-                    JournalEntryId = journalEntry.Id,
-                    AccountId = customer.AccountId,
-                    Debit = 0,
-                    Credit = amount,
-                    Description = $"تخفيض مديونية العميل {customer.Name} بسداد قسط مالي"
-                });
-
-                // ب. سطر الاعتراف التدريجي بالأرباح (إن وجد):
-                if (recognizedProfit > 0)
-                {
-                    // مدين: حساب أرباح الأقساط المؤجلة (2301) لتخفيض الالتزام
+                    // أقساط شراء: مدين حساب المورد (يُقلّل الدين) ← دائن الصندوق/البنك
                     journalEntry.Lines.Add(new JournalLine
                     {
-                        Id = Guid.NewGuid(),
-                        JournalEntryId = journalEntry.Id,
-                        AccountId = deferredProfitAccount!.Id,
-                        Debit = recognizedProfit,
-                        Credit = 0,
-                        Description = $"تخفيض أرباح التقسيط المؤجلة لسداد العميل {customer.Name}"
+                        Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
+                        AccountId = counterpartAccountId, Debit = amount, Credit = 0,
+                        Description = $"تخفيض المستحق للمورد {counterpartName} بسداد قسط"
                     });
-
-                    // دائن: حساب إيرادات الأقساط المحققة (4102) كإيراد فعلي
                     journalEntry.Lines.Add(new JournalLine
                     {
-                        Id = Guid.NewGuid(),
-                        JournalEntryId = journalEntry.Id,
-                        AccountId = recognizedProfitAccount!.Id,
-                        Debit = 0,
-                        Credit = recognizedProfit,
-                        Description = $"الاعتراف بأرباح التقسيط المحققة بنسبة السداد للعميل {customer.Name}"
+                        Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
+                        AccountId = cashBankAccount.Id, Debit = 0, Credit = amount,
+                        Description = $"صرف دفعة قسط للمورد {counterpartName} من الصندوق/البنك"
                     });
+                }
+                else
+                {
+                    // أقساط بيع: مدين الصندوق/البنك ← دائن حساب العميل
+                    journalEntry.Lines.Add(new JournalLine
+                    {
+                        Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
+                        AccountId = cashBankAccount.Id, Debit = amount, Credit = 0,
+                        Description = $"استلام مبالغ سداد قسط من العميل {counterpartName}"
+                    });
+                    journalEntry.Lines.Add(new JournalLine
+                    {
+                        Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
+                        AccountId = counterpartAccountId, Debit = 0, Credit = amount,
+                        Description = $"تخفيض مديونية العميل {counterpartName} بسداد قسط مالي"
+                    });
+
+                    if (recognizedProfit > 0)
+                    {
+                        journalEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
+                            AccountId = deferredProfitAccount!.Id, Debit = recognizedProfit, Credit = 0,
+                            Description = $"تخفيض أرباح التقسيط المؤجلة لسداد العميل {counterpartName}"
+                        });
+                        journalEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
+                            AccountId = recognizedProfitAccount!.Id, Debit = 0, Credit = recognizedProfit,
+                            Description = $"الاعتراف بأرباح التقسيط المحققة بنسبة السداد للعميل {counterpartName}"
+                        });
+                    }
                 }
 
                 if (!journalEntry.IsBalanced)
-                {
-                    throw new InvalidOperationException("القيد المحاسبي لعملية التحصيل والاعتراف بالأرباح غير متوازن.");
-                }
+                    throw new InvalidOperationException("القيد المحاسبي غير متوازن.");
 
                 _context.JournalEntries.Add(journalEntry);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // ربط القيد بسند القبض
                 payment.JournalEntryId = journalEntry.Id;
                 _context.Payments.Update(payment);
                 await _context.SaveChangesAsync(cancellationToken);

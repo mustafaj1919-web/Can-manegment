@@ -207,59 +207,58 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasForeignKey(i => i.InstallmentPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // تفعيل فلاتر الاستعلام العامة لعزل الفروع (Global Branch Query Filters)
-            // سيتم إخفاء أي بيانات تنتمي لفروع أخرى تلقائياً
+            // Global Branch Query Filters — bypassed for Owner/Admin/Accountant (CanSeeAllBranches)
             modelBuilder.Entity<Account>()
-                .HasQueryFilter(a => a.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(a => _currentUserService.CanSeeAllBranches || a.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<JournalEntry>()
-                .HasQueryFilter(j => j.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(j => _currentUserService.CanSeeAllBranches || j.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Vehicle>()
-                .HasQueryFilter(v => v.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(v => _currentUserService.CanSeeAllBranches || v.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Payment>()
-                .HasQueryFilter(p => p.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(p => _currentUserService.CanSeeAllBranches || p.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<AuditLog>()
-                .HasQueryFilter(al => al.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(al => _currentUserService.CanSeeAllBranches || al.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Customer>()
-                .HasQueryFilter(c => c.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(c => _currentUserService.CanSeeAllBranches || c.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Supplier>()
-                .HasQueryFilter(s => s.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(s => _currentUserService.CanSeeAllBranches || s.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<SalesContract>()
-                .HasQueryFilter(sc => sc.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(sc => _currentUserService.CanSeeAllBranches || sc.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Purchase>()
-                .HasQueryFilter(p => p.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(p => _currentUserService.CanSeeAllBranches || p.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<InstallmentPlan>()
-                .HasQueryFilter(ip => ip.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(ip => _currentUserService.CanSeeAllBranches || ip.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Installment>()
-                .HasQueryFilter(i => i.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(i => _currentUserService.CanSeeAllBranches || i.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Expense>()
-                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<Employee>()
-                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<CrmInteraction>()
-                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<Deal>()
-                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<EmployeeCommission>()
-                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<EmployeeTarget>()
-                .HasQueryFilter(e => e.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<FiscalYear>()
-                .HasQueryFilter(f => f.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(f => _currentUserService.CanSeeAllBranches || f.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<RecurringJournalTemplate>()
-                .HasQueryFilter(r => r.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(r => _currentUserService.CanSeeAllBranches || r.BranchId == _currentUserService.BranchId);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

@@ -66,11 +66,19 @@ namespace CarShowroomManagementV2.Infrastructure.Identity
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+            var canSeeAll = false;
+            foreach (var userRole in user.UserRoles)
+            {
+                if (userRole.Role?.Name is "Owner" or "Admin" or "Accountant")
+                    canSeeAll = true;
+            }
+
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim("BranchId", (branchId ?? user.DefaultBranchId).ToString())
+                new Claim("BranchId", (branchId ?? user.DefaultBranchId).ToString()),
+                new Claim("CanSeeAllBranches", canSeeAll ? "true" : "false")
             };
 
             foreach (var userRole in user.UserRoles)

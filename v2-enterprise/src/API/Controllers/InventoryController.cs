@@ -269,5 +269,28 @@ namespace CarShowroomManagementV2.API.Controllers
                 return NotFound(new { success = false, message = ex.Message });
             }
         }
+
+        // 8. تعيين السيارة لفرع محدد
+        [HttpPut("{id}/assign-branch")]
+        [Authorize(Roles = "Owner,Admin")]
+        public async Task<IActionResult> AssignBranch(Guid id, [FromBody] AssignBranchRequest request)
+        {
+            var db = HttpContext.RequestServices.GetRequiredService<IApplicationDbContext>();
+            var vehicle = await db.Vehicles.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(v => v.Id == id);
+            if (vehicle == null)
+                return NotFound(new { success = false, message = "السيارة غير موجودة." });
+
+            var branch = await db.Branches.FirstOrDefaultAsync(b => b.Id == request.BranchId && b.IsActive);
+            if (branch == null)
+                return BadRequest(new { success = false, message = "الفرع المحدد غير موجود أو غير نشط." });
+
+            vehicle.BranchId = request.BranchId;
+            await db.SaveChangesAsync(default);
+
+            return Ok(new { success = true, message = $"تم تعيين السيارة إلى فرع {branch.Name} بنجاح." });
+        }
+
+        public record AssignBranchRequest(Guid BranchId);
     }
 }

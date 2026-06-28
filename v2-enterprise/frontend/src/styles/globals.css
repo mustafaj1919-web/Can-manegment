@@ -133,10 +133,146 @@
     --glow-warning: rgba(245, 158, 11, 0.14);
     --glow-danger: rgba(244, 63, 94, 0.14);
 
+    /* ── Surface Variables (Solid Carbon dark theme) ── */
+    --s0: #050507;
+    --s1: #0a0a0f;
+    --s2: #111118;
+    --s3: #161622;
+    --s4: #1e1e2d;
+
     /* ── Layout ── */
     --sidebar-width: 260px;
-    --sidebar-collapsed-width: 56px;
+    --sidebar-collapsed-width: 72px; /* Collapsed width matches Stripe/Linear icon rail */
     --topnav-height: 56px;
+  }
+}
+
+/* ─── Light Mode ─────────────────────────────────────────────────────────── */
+@layer base {
+  html.light {
+    color-scheme: light;
+
+    /* ── Surfaces ── */
+    --bg-base:    216 20% 97.5%;   /* #F6F8FB — calm slate-tint base */
+    --bg-surface: 210 10% 98.5%;   /* #F9FAFB — secondary background */
+    --bg-card:    0 0% 100%;       /* #FFFFFF — pure white cards */
+    --bg-hover:   rgba(15, 23, 42, 0.03);
+    --bg-page:    var(--bg-base);
+    --bg-elevated:var(--bg-surface);
+    --bg-overlay: var(--bg-card);
+
+    /* ── Core tokens ── */
+    --background:         var(--bg-base);
+    --foreground:         220 14% 16%;   /* #1e293b — slate 800 text (no pure black) */
+    --card:               var(--bg-card);
+    --card-foreground:    220 14% 16%;
+    --popover:            var(--bg-card);
+    --popover-foreground: 220 14% 16%;
+
+    /* ── Accents ── */
+    --primary:            160 84% 39%;   /* #10B981 — emerald primary CTA */
+    --primary-foreground: 0 0% 100%;
+    --ring:               160 84% 39%;
+
+    /* ── Neutral / Secondary ── */
+    --secondary:          210 10% 96%;   /* #F1F5F9 — slate 100 */
+    --secondary-foreground:220 14% 20%;
+    --muted:              210 10% 98.5%; /* #F9FAFB */
+    --muted-foreground:   220 10% 46%;   /* #64748B — slate 500 */
+
+    /* ── Borders ── */
+    --border:             220 13% 91%;   /* #E5E7EB — very subtle borders */
+    --input:              220 13% 91%;
+    --border-subtle:      rgba(229, 231, 235, 0.4);
+    --border-default:     rgba(229, 231, 235, 0.6);
+    --border-strong:      rgba(16, 185, 129, 0.35);
+
+    /* ── Text ── */
+    --text-strong:  #1e293b;
+    --text-soft:    #475569;
+    --text-faint:   #94a3b8;
+
+    /* ── Glass / surfaces ── */
+    --glass-bg:           rgba(255, 255, 255, 0.85);
+    --glass-elevated-bg:  rgba(255, 255, 255, 0.96);
+    --glass-hover-bg:     rgba(15, 23, 42, 0.03);
+    --glass-border-strong:rgba(16, 185, 129, 0.20);
+    --surface-3:          #ffffff;
+
+    /* ── Navigation ── */
+    --topnav-bg:    rgba(246, 248, 251, 0.85);
+    --topnav-shadow:0 1px 0 rgba(229, 231, 235, 0.6);
+    --sidebar-bg:   #ffffff; /* White floating sidebar */
+
+    /* ── Panels / rows ── */
+    --surface-panel:       var(--bg-card);
+    --surface-panel-solid: var(--bg-card);
+    --surface-row:         rgba(15, 23, 42, 0.015);
+    --surface-row-hover:   rgba(15, 23, 42, 0.035);
+
+    /* ── Interactive ── */
+    --focus-ring:          rgba(16, 185, 129, 0.15);
+    --focus-ring-strong:   rgba(16, 185, 129, 0.40);
+    --interactive-hover:   rgba(15, 23, 42, 0.02);
+    --interactive-active:  rgba(15, 23, 42, 0.04);
+    --interactive-selected:rgba(16, 185, 129, 0.07);
+
+    /* ── Surface Variables (Light Theme Premium) ── */
+    --s0: #F6F8FB; /* Base Canvas BG */
+    --s1: #FFFFFF; /* Pure White Card Surfaces */
+    --s2: #F9FAFB; /* Secondary / Hover BG */
+    --s3: #FFFFFF; /* Dropdowns & Popovers */
+    --s4: #E5E7EB; /* Very light active/selected borders */
+
+    --radius: 16px; /* Rounded corners (16-20px) for premium look */
+
+    /* ── Shadows — soft, elegant & minimal elevation ── */
+    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.02);
+    --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.03);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.05);
+    --shadow-xl: 0 16px 40px rgba(15, 23, 42, 0.07);
+    --elevated-shadow:    var(--shadow-sm);
+    --interactive-shadow: var(--shadow-md);
+    --card-hover-shadow:  0 8px 24px rgba(15, 23, 42, 0.05);
+
+    /* ── Glows ── */
+    --glow-primary:  rgba(16, 185, 129, 0.10);
+    --glow-gold:     rgba(37, 99, 235, 0.08); /* Secondary Blue */
+    --glow-success:  rgba(16, 185, 129, 0.08);
+    --glow-warning:  rgba(245, 158, 11, 0.08);
+    --glow-danger:   rgba(244, 63, 94, 0.08);
+  }
+}
+
+/* ─── Light Mode component overrides ─────────────────────────────────────── */
+@layer base {
+  /* body background: clean canvas with a very soft subtle gradient */
+  html.light body {
+    background:
+      radial-gradient(ellipse 80% 30% at 50% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 70%),
+      hsl(var(--background));
+    background-attachment: fixed;
+  }
+
+  /* Remove the dot-grid overlay in light mode — looks noisy */
+  html.light body::before {
+    opacity: 0.10;
+    background-image: radial-gradient(rgba(15, 23, 42, 0.05) 0.5px, transparent 0.5px);
+  }
+
+  /* Scrollbar: lighter track */
+  html.light ::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.12);
+  }
+  html.light ::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 23, 42, 0.20);
+  }
+
+  /* Selection */
+  html.light ::selection {
+    background: rgba(16, 185, 129, 0.14);
+    color: #1e293b;
   }
 }
 
@@ -154,6 +290,10 @@
     color-scheme: dark;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  html.light {
+    color-scheme: light;
   }
 
   /* RTL: use direction attribute — logical props handle the rest */
@@ -2192,3 +2332,81 @@
     padding-top: 12px !important;
   }
 }
+/* ─── Light Mode — Component Overrides ───────────────────────────────────── */
+
+/* Sidebar — clean light with left border accent */
+html.light [class*="sidebar"],
+html.light nav[class*="bg-"] {
+  border-color: rgba(15, 23, 42, 0.07) !important;
+}
+
+/* Sidebar nav items in light mode */
+html.light .sidebar-scroll {
+  background: var(--sidebar-bg);
+}
+
+/* Cards — white with real shadow */
+html.light .card,
+html.light [class*="rounded-xl"][class*="border"],
+html.light [class*="rounded-2xl"][class*="border"] {
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+}
+
+/* KPI cards in light mode */
+html.light .kpi-primary-card {
+  background: linear-gradient(135deg, #009975 0%, #00b28a 100%) !important;
+  box-shadow: 0 4px 20px rgba(0, 153, 117, 0.25), 0 1px 4px rgba(0,0,0,0.08) !important;
+}
+
+/* Command center in light mode */
+html.light .command-center {
+  background: rgba(255,255,255,0.95) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+  box-shadow: 0 20px 60px rgba(15,23,42,0.15), 0 4px 12px rgba(15,23,42,0.08) !important;
+}
+
+/* Table rows */
+html.light table tbody tr:hover {
+  background-color: rgba(0, 153, 117, 0.04) !important;
+}
+
+/* Topnav accent line — teal in light mode */
+html.light .app-topnav::after {
+  background: linear-gradient(to right, transparent, hsl(168 84% 34%), transparent);
+  opacity: 0.6;
+}
+
+/* Input fields — white bg in light mode */
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Dropdown menus */
+html.light [role="menu"],
+html.light [data-radix-popper-content-wrapper] > div {
+  background: #ffffff !important;
+  border-color: rgba(15,23,42,0.09) !important;
+  box-shadow: 0 8px 32px rgba(15,23,42,0.12), 0 2px 8px rgba(15,23,42,0.06) !important;
+}
+
+/* Sidebar brand glow — subtle in light mode */
+html.light .sidebar-top-glow {
+  opacity: 0.3 !important;
+}
+
+/* Badge / pill overrides for light mode readability */
+html.light .bg-emerald-500\/10 { background-color: rgba(16,185,129,0.12) !important; }
+html.light .bg-amber-500\/10  { background-color: rgba(245,158,11,0.12) !important; }
+html.light .bg-rose-500\/10   { background-color: rgba(244,63,94,0.12) !important; }
+html.light .bg-violet-500\/10 { background-color: rgba(139,92,246,0.12) !important; }
+html.light .bg-blue-500\/10   { background-color: rgba(59,130,246,0.12) !important; }
+
+/* Status pills — ensure readable text in light mode */
+html.light .text-emerald-400 { color: #059669 !important; }
+html.light .text-amber-400   { color: #d97706 !important; }
+html.light .text-rose-400    { color: #e11d48 !important; }
+html.light .text-violet-400  { color: #7c3aed !important; }
+html.light .text-blue-400    { color: #2563eb !important; }

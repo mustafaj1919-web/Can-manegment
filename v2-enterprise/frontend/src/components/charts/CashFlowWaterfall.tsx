@@ -23,9 +23,9 @@ export function CashFlowWaterfall() {
   const netProfit = data?.monthly_profit ?? salesPaid - purchasesPaid
 
   const chartData = [
-    { name: 'مبيعات', value: salesPaid, color: '#00d4aa' },
-    { name: 'مشتريات', value: -purchasesPaid, color: '#ef4444' },
-    { name: 'صافي الربح', value: netProfit, color: netProfit >= 0 ? '#7c3aed' : '#ef4444' },
+    { name: 'مبيعات', value: salesPaid, color: '#10B981' },
+    { name: 'مشتريات', value: -purchasesPaid, color: '#F43F5E' },
+    { name: 'صافي الربح', value: netProfit, color: netProfit >= 0 ? '#2563EB' : '#F43F5E' },
   ]
 
   return (
@@ -35,21 +35,21 @@ export function CashFlowWaterfall() {
         <BarChart data={chartData} barSize={36} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="waterfallGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#00d4aa" />
-              <stop offset="100%" stopColor="#00d4aa" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#10B981" />
+              <stop offset="100%" stopColor="#10B981" stopOpacity={0.4} />
             </linearGradient>
             <linearGradient id="waterfallRed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" />
-              <stop offset="100%" stopColor="#991b1b" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#F43F5E" />
+              <stop offset="100%" stopColor="#E11D48" stopOpacity={0.4} />
             </linearGradient>
-            <linearGradient id="waterfallViolet" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#a78bfa" />
-              <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.4} />
+            <linearGradient id="waterfallBlue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2563EB" />
+              <stop offset="100%" stopColor="#1D4ED8" stopOpacity={0.4} />
             </linearGradient>
           </defs>
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
           <YAxis tickFormatter={shortenIQD} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={40} />
-          <ReferenceLine y={0} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+          <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="4 4" />
           <Tooltip content={(props) => (
             <ChartTooltip
               {...props}
@@ -59,17 +59,17 @@ export function CashFlowWaterfall() {
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, i) => {
               let fillUrl = 'url(#waterfallGreen)'
-              let stroke = '#00d4aa'
+              let stroke = '#10B981'
               if (entry.name === 'مشتريات') {
                 fillUrl = 'url(#waterfallRed)'
-                stroke = '#ef4444'
+                stroke = '#F43F5E'
               } else if (entry.name === 'صافي الربح') {
                 if (entry.value >= 0) {
-                  fillUrl = 'url(#waterfallViolet)'
-                  stroke = '#7c3aed'
+                  fillUrl = 'url(#waterfallBlue)'
+                  stroke = '#2563EB'
                 } else {
                   fillUrl = 'url(#waterfallRed)'
-                  stroke = '#ef4444'
+                  stroke = '#F43F5E'
                 }
               }
               return <Cell key={i} fill={fillUrl} stroke={stroke} strokeOpacity={0.3} />

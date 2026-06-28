@@ -190,56 +190,88 @@ namespace CarShowroomManagementV2.API.Controllers
                 .FirstOrDefaultAsync(s => s.Id == id && s.BranchId == branchId);
             if (supplier == null) return NotFound(new { success = false, message = "المورد غير موجود" });
 
-            var fromDate = from != null ? DateTime.TryParse(from, out var fd) ? fd.ToUniversalTime() : DateTime.MinValue : DateTime.MinValue;
-            var toDate   = to != null ? DateTime.TryParse(to, out var td) ? td.ToUniversalTime() : DateTime.UtcNow : DateTime.UtcNow;
+            var fromDate = from != null && DateTime.TryParse(from, out var fd) ? (DateTime?)fd.ToUniversalTime() : null;
+            var toDate   = to   != null && DateTime.TryParse(to,   out var td) ? td.ToUniversalTime().AddDays(1).AddSeconds(-1) : DateTime.UtcNow;
 
-            // جلب حركات الحساب
-            var lines = await _context.JournalLines
-                .Include(l => l.JournalEntry)
-                .Where(l => l.AccountId == supplier.AccountId
-                    && l.JournalEntry != null && l.JournalEntry.IsPosted
-                    && l.JournalEntry.EntryDate >= fromDate && l.JournalEntry.EntryDate <= toDate)
-                .OrderBy(l => l.JournalEntry!.EntryDate)
-                .Select(l => new {
-                    date = l.JournalEntry!.EntryDate,
-                    entry_number = l.JournalEntry.EntryNumber,
-                    description = l.Description ?? l.JournalEntry.Description,
-                    debit = l.Debit,
-                    credit = l.Credit,
-                    reference_type = l.JournalEntry.ReferenceType
-                })
+            // جلب جميع المشتريات من هذا المورد
+            var purchases = await _context.Purchases
+                .IgnoreQueryFilters()
+                .Include(p => p.Vehicle)
+                .Where(p => p.SupplierId == id && p.BranchId == branchId)
+                .OrderBy(p => p.CreatedAt)
                 .ToListAsync();
+
+            // جلب الدفعات المستقلة (سداد لاحق للأقساط)
+            var supplierPayments = await _context.Payments
+                .IgnoreQueryFilters()
+                .Where(p => p.ContraAccountId == supplier.AccountId && p.BranchId == branchId)
+                .OrderBy(p => p.CreatedAt)
+                .ToListAsync();
+
+            // بناء الحركات كـ flat list
+            var raw = new List<(DateTime Date, string EntryNumber, string Description, decimal Debit, decimal Credit, string RefType)>();
+
+            foreach (var p in purchases)
+            {
+                var carName = p.Vehicle != null
+                    ? $"{p.Vehicle.Brand} {p.Vehicle.Model} {p.Vehicle.Year} - {p.Vehicle.ChassisNumber}"
+                    : p.PurchaseNumber;
+
+                // الشراء: دائن (يزيد الدين للمورد)
+                raw.Add((p.CreatedAt, p.PurchaseNumber, $"شراء: {carName}", 0m, p.PurchaseCost, "Purchase"));
+
+                // الدفعة الفورية: مدين (يخفض الدين)
+                if (p.AmountPaid > 0)
+                    raw.Add((p.CreatedAt, p.PurchaseNumber, $"دفع فوري عند الشراء - {carName}", p.AmountPaid, 0m, "Payment"));
+            }
+
+            foreach (var pay in supplierPayments)
+            {
+                raw.Add((pay.CreatedAt,
+                    pay.ReferenceNumber ?? pay.Id.ToString()[..8],
+                    pay.Description ?? "دفعة للمورد",
+                    pay.Amount, 0m, "Payment"));
+            }
+
+            // الشراء يسبق الدفع دائماً عند تساوي التاريخ
+            raw.Sort((a, b) => {
+                var cmp = a.Date.CompareTo(b.Date);
+                if (cmp != 0) return cmp;
+                if (a.RefType == "Purchase" && b.RefType != "Purchase") return -1;
+                if (a.RefType != "Purchase" && b.RefType == "Purchase") return 1;
+                return 0;
+            });
+
+            // فلترة حسب الفترة
+            var filtered = raw.Where(r => (!fromDate.HasValue || r.Date >= fromDate.Value) && r.Date <= toDate).ToList();
 
             // رصيد متراكم
             decimal running = 0;
-            var rows = lines.Select(l => {
-                running += l.credit - l.debit; // حساب مورد طبيعته دائن
+            var rows = filtered.Select(r =>
+            {
+                running += r.Credit - r.Debit;
                 return new {
-                    l.date,
-                    l.entry_number,
-                    l.description,
-                    l.debit,
-                    l.credit,
+                    date            = r.Date,
+                    entry_number    = r.EntryNumber,
+                    description     = r.Description,
+                    debit           = r.Debit,
+                    credit          = r.Credit,
                     running_balance = running,
-                    l.reference_type
+                    reference_type  = r.RefType
                 };
             }).ToList();
 
-            var totalDebit  = lines.Sum(l => l.debit);
-            var totalCredit = lines.Sum(l => l.credit);
+            var totalDebit  = rows.Sum(r => r.debit);
+            var totalCredit = rows.Sum(r => r.credit);
             var balance     = totalCredit - totalDebit;
-
-            // إجمالي المشتريات غير المسددة
-            var unpaidAmount = await _context.Purchases.IgnoreQueryFilters()
-                .Where(p => p.SupplierId == id && p.Status == "Active" && p.AmountPaid < p.PurchaseCost)
-                .SumAsync(p => p.PurchaseCost - p.AmountPaid);
+            var unpaidAmount = purchases.Where(p => p.PurchaseCost > p.AmountPaid).Sum(p => p.PurchaseCost - p.AmountPaid);
 
             return Ok(new {
-                success = true,
+                success  = true,
                 supplier = new { id = supplier.Id, name = supplier.Name, phone = supplier.Phone, account_id = supplier.AccountId },
-                period = new { from = fromDate, to = toDate },
-                summary = new { total_debit = totalDebit, total_credit = totalCredit, balance, unpaid_purchases = unpaidAmount },
-                entries = rows
+                period   = new { from = fromDate ?? DateTime.MinValue, to = toDate },
+                summary  = new { total_debit = totalDebit, total_credit = totalCredit, balance, unpaid_purchases = unpaidAmount },
+                entries  = rows
             });
         }
     }

@@ -34,12 +34,12 @@ export function ArAgingChart() {
         <BarChart data={chartData} barSize={48} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="arGood" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#00d4aa" />
-              <stop offset="100%" stopColor="#00d4aa" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#10B981" />
+              <stop offset="100%" stopColor="#10B981" stopOpacity={0.4} />
             </linearGradient>
             <linearGradient id="arBad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" />
-              <stop offset="100%" stopColor="#991b1b" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#F43F5E" />
+              <stop offset="100%" stopColor="#E11D48" stopOpacity={0.4} />
             </linearGradient>
           </defs>
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
@@ -49,7 +49,7 @@ export function ArAgingChart() {
           )} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]} name="المبلغ">
             {chartData.map((_, i) => (
-              <Cell key={i} fill={i === 0 ? 'url(#arGood)' : 'url(#arBad)'} stroke={i === 0 ? '#00d4aa' : '#ef4444'} strokeOpacity={0.3} />
+              <Cell key={i} fill={i === 0 ? 'url(#arGood)' : 'url(#arBad)'} stroke={i === 0 ? '#10B981' : '#F43F5E'} strokeOpacity={0.3} />
             ))}
           </Bar>
         </BarChart>

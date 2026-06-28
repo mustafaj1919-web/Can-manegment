@@ -10,25 +10,29 @@ using CarShowroomManagementV2.Application.Common.Interfaces;
 using CarShowroomManagementV2.Application.Common.Helpers;
 using CarShowroomManagementV2.Domain.Entities;
 using CarShowroomManagementV2.Domain.Enums;
-using static CarShowroomManagementV2.Domain.Enums.InstallmentFrequency;
-
 namespace CarShowroomManagementV2.Application.Purchases.Commands
 {
     public class BulkCreatePurchaseCommand : IRequest<BulkCreatePurchaseResult>
     {
         public Guid SupplierId { get; set; }
         public decimal PurchaseCost { get; set; }
-        public decimal? PaidAmount { get; set; }
-        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
+        public decimal? PaidAmount { get; set; } // null or 0 = full credit; > 0 = partial/full immediate payment
+        public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // used only when PaidAmount > 0
         public string? Brand { get; set; }
         public string Model { get; set; } = string.Empty;
         public string? Color { get; set; }
         public int Year { get; set; }
         public decimal TargetSellingPrice { get; set; }
         public List<string> ChassisNumbers { get; set; } = new();
-        public int InstallmentPeriodCount { get; set; } = 0;
-        public InstallmentFrequency InstallmentFrequency { get; set; } = InstallmentFrequency.Monthly;
-        public DateTime? InstallmentStartDate { get; set; }
+        public Dictionary<string, BulkVehicleOverride>? VehicleOverrides { get; set; }
+    }
+
+    public class BulkVehicleOverride
+    {
+        public string? Color { get; set; }
+        public string? PlateNumber { get; set; }
+        public string? Notes { get; set; }
+        public decimal? TargetSellingPrice { get; set; }
     }
 
     public class BulkCreatePurchaseResult
@@ -36,6 +40,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public List<Guid> PurchaseIds { get; set; } = new();
         public int CreatedCount { get; set; }
         public List<string> Errors { get; set; } = new();
+        public Dictionary<string, Guid> ChassisToVehicleId { get; set; } = new();
     }
 
     public class BulkCreatePurchaseCommandValidator : AbstractValidator<BulkCreatePurchaseCommand>
@@ -119,11 +124,13 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 var purchaseCost = AccountingAmount.RoundMoney(request.PurchaseCost);
                 var targetSellingPrice = AccountingAmount.RoundMoney(request.TargetSellingPrice);
 
-                var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? purchaseCost);
+                // Default: 0 = full credit purchase (owed to supplier), explicit value = immediate payment
+                var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? 0m);
                 if (paidAmount < 0) paidAmount = 0;
                 if (paidAmount > purchaseCost) paidAmount = purchaseCost;
-                var isPartialPayment = paidAmount < purchaseCost;
-                var effectiveMethod = isPartialPayment ? PaymentMethod.Installment : request.PaymentMethod;
+                var hasImmediatePayment = paidAmount > 0;
+                // If fully paid immediately → use chosen method; otherwise → Cheque (credit/payable to supplier)
+                var effectiveMethod = paidAmount >= purchaseCost ? request.PaymentMethod : PaymentMethod.Cheque;
 
                 // لأقساط: حساب الدفع الفوري (نقد/بنك)
                 Guid? cashOrBankAccountId = null;
@@ -157,17 +164,24 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         continue;
                     }
 
+                    var overrides = request.VehicleOverrides?.GetValueOrDefault(vin);
+                    var effectiveTargetPrice = overrides?.TargetSellingPrice.HasValue == true
+                        ? AccountingAmount.RoundMoney(overrides.TargetSellingPrice.Value)
+                        : targetSellingPrice;
+
                     var vehicle = new Vehicle
                     {
                         Id = Guid.NewGuid(),
                         Brand = request.Brand,
                         Model = request.Model,
                         ChassisNumber = vin,
-                        Color = request.Color,
+                        Color = !string.IsNullOrWhiteSpace(overrides?.Color) ? overrides.Color : request.Color,
+                        PlateNumber = overrides?.PlateNumber,
+                        Notes = overrides?.Notes,
                         Year = request.Year,
                         PurchaseCost = purchaseCost,
                         BookValue = purchaseCost,
-                        TargetSellingPrice = targetSellingPrice,
+                        TargetSellingPrice = effectiveTargetPrice,
                         Status = "Available",
                         IsSold = false,
                         BranchId = branchId
@@ -209,19 +223,9 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
                     var entryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
 
-                    // القيد الرئيسي: مدين المخزون / دائن المورد أو الصندوق
-                    Guid mainCreditAccountId;
-                    string mainCreditDesc;
-                    if (!isPartialPayment && cashOrBankAccountId.HasValue)
-                    {
-                        mainCreditAccountId = cashOrBankAccountId.Value;
-                        mainCreditDesc = $"دفع قيمة الشراء عبر {cashOrBankDesc}";
-                    }
-                    else
-                    {
-                        mainCreditAccountId = supplier.AccountId;
-                        mainCreditDesc = $"إثبات استحقاق قيمة الشراء للمورد {supplier.Name}";
-                    }
+                    // القيد الرئيسي: مدين المخزون / دائن حساب المورد دائماً (نُسجّل الدين الكامل)
+                    var mainCreditAccountId = supplier.AccountId;
+                    var mainCreditDesc = $"إثبات استحقاق قيمة الشراء للمورد {supplier.Name}";
 
                     var journalEntry = new JournalEntry
                     {
@@ -261,8 +265,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     _context.JournalEntries.Add(journalEntry);
                     await _context.SaveChangesAsync(cancellationToken);
 
-                    // قيد الدفعة الأولى إذا كان الدفع جزئياً
-                    if (isPartialPayment && paidAmount > 0 && cashOrBankAccountId.HasValue)
+                    // قيد الدفعة الفورية إذا وُجدت (يُقلّل الدين للمورد ويُخرج النقدية/البنك)
+                    if (hasImmediatePayment && cashOrBankAccountId.HasValue)
                     {
                         var totalEntriesCount2 = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
                         var payEntryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount2 + 1:D5}";
@@ -307,58 +311,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         await _context.SaveChangesAsync(cancellationToken);
                     }
 
-                    // إنشاء خطة التقسيط لكل سيارة
-                    if (isPartialPayment && request.InstallmentPeriodCount > 0)
-                    {
-                        var remaining = purchaseCost - paidAmount;
-                        var installmentAmount = AccountingAmount.RoundMoney(remaining / request.InstallmentPeriodCount);
-                        var baseDate = request.InstallmentStartDate.HasValue
-                            ? DateTime.SpecifyKind(request.InstallmentStartDate.Value, DateTimeKind.Utc)
-                            : DateTime.UtcNow;
-
-                        var plan = new InstallmentPlan
-                        {
-                            Id = Guid.NewGuid(),
-                            SalesContractId = null,
-                            PurchaseId = purchase.Id,
-                            TotalAmount = remaining,
-                            DownPayment = paidAmount,
-                            InstallmentPeriodMonths = request.InstallmentPeriodCount,
-                            ProfitRatePercentage = 0,
-                            TotalProfit = 0,
-                            TotalPlanAmount = remaining,
-                            MonthlyInstallmentAmount = installmentAmount,
-                            Status = "Active",
-                            BranchId = branchId
-                        };
-                        _context.InstallmentPlans.Add(plan);
-                        await _context.SaveChangesAsync(cancellationToken);
-
-                        for (int i = 1; i <= request.InstallmentPeriodCount; i++)
-                        {
-                            var dueDate = request.InstallmentFrequency switch
-                            {
-                                Daily   => baseDate.AddDays(i),
-                                Weekly  => baseDate.AddDays(i * 7),
-                                _       => baseDate.AddMonths(i)
-                            };
-
-                            _context.Installments.Add(new Installment
-                            {
-                                Id = Guid.NewGuid(),
-                                InstallmentPlanId = plan.Id,
-                                InstallmentNumber = i,
-                                DueDate = dueDate,
-                                Amount = installmentAmount,
-                                PaidAmount = 0,
-                                Status = "Pending",
-                                BranchId = branchId
-                            });
-                        }
-                        await _context.SaveChangesAsync(cancellationToken);
-                    }
-
                     result.PurchaseIds.Add(purchase.Id);
+                    result.ChassisToVehicleId[vin] = vehicle.Id;
                     result.CreatedCount++;
                 }
 

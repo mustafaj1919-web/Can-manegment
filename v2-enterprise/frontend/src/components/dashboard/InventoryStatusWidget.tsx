@@ -9,9 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getDashboardStats } from '@/lib/api/dashboard'
 
 const SEGMENTS = [
-  { key: 'available_cars', label: 'متاحة',  color: '#00d4aa', glow: 'text-[#00d4aa]' },
-  { key: 'sold_cars',      label: 'مباعة',   color: '#8888aa', glow: 'text-[#8888aa]'  },
-  { key: 'reserved_cars',  label: 'محجوزة', color: '#7c3aed', glow: 'text-[#7c3aed]'   },
+  { key: 'available_cars', label: 'متاحة',  color: '#10B981', glow: 'text-emerald-600 dark:text-emerald-400' },
+  { key: 'sold_cars',      label: 'مباعة',   color: '#2563EB', glow: 'text-blue-600 dark:text-blue-400'  },
+  { key: 'reserved_cars',  label: 'محجوزة', color: '#F59E0B', glow: 'text-amber-600 dark:text-amber-400'   },
 ] as const
 
 function PieTooltipContent({ active, payload }: any) {
@@ -41,14 +41,14 @@ export function InventoryStatusWidget() {
   const isEmpty = !isLoading && !isError && total === 0
 
   return (
-    <div className="glass rounded-xl overflow-hidden">
+    <div className="border border-border/50 rounded-2xl overflow-hidden bg-card shadow-xs">
       {/* Header */}
       <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border/50">
-        <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-          <Car className="h-4 w-4 text-violet-400" />
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Car className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-foreground">حالة المخزون</p>
+          <p className="text-sm font-bold text-foreground">حالة المخزون</p>
           <p className="text-xs text-muted-foreground">
             {isLoading ? '...' : isError ? 'خطأ' : isEmpty ? 'لا توجد بيانات' : `${total} سيارة`}
           </p>

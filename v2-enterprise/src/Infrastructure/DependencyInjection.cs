@@ -41,6 +41,9 @@ namespace CarShowroomManagementV2.Infrastructure
             // تسجيل خدمة الفاتورة الإلكترونية
             services.AddScoped<IEInvoiceService, EInvoiceService>();
 
+            // تسجيل خدمة الإشعارات التلقائية والرسائل
+            services.AddScoped<IMessageNotificationService, MessageNotificationService>();
+
             return services;
         }
     }

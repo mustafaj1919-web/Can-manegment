@@ -7,7 +7,7 @@ import { ChartSkeleton } from './ChartSkeleton'
 import { ChartError } from './ChartError'
 import { ChartTooltip } from './ChartTooltip'
 
-const COLORS = ['#00d4aa', '#7c3aed', '#8888aa']
+const COLORS = ['#10B981', '#F59E0B', '#2563EB']
 const LABELS = ['متاحة', 'محجوزة', 'مباعة']
 
 export function InventoryDonut() {
@@ -43,9 +43,9 @@ export function InventoryDonut() {
             dataKey="value"
           >
             {chartData.map((entry, i) => {
-              let color = '#00d4aa'
-              if (entry.name === 'محجوزة') color = '#7c3aed'
-              else if (entry.name === 'مباعة') color = '#8888aa'
+              let color = '#10B981'
+              if (entry.name === 'محجوزة') color = '#F59E0B'
+              else if (entry.name === 'مباعة') color = '#2563EB'
               return <Cell key={i} fill={color} stroke="var(--bg-card)" strokeWidth={2} />
             })}
           </Pie>

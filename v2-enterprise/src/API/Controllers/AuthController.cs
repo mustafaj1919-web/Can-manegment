@@ -78,7 +78,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     id = b.Id,
                     name = b.Name,
-                    is_main = b.Code == "HQ-01",
+                    is_main = b.Code == "BR-01",
                     created_at = ""
                 })
                 .ToListAsync();
@@ -152,7 +152,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     id = b.Id,
                     name = b.Name,
-                    is_main = b.Code == "HQ-01",
+                    is_main = b.Code == "BR-01",
                     created_at = ""
                 })
                 .ToListAsync();
@@ -252,7 +252,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     id = b.Id,
                     name = b.Name,
-                    is_main = b.Code == "HQ-01",
+                    is_main = b.Code == "BR-01",
                     created_at = ""
                 })
                 .ToListAsync();

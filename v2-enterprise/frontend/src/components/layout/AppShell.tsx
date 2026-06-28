@@ -14,6 +14,7 @@ import { TopNav } from './TopNav'
 import { getCurrentUser } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
+import { useUiStore } from '@/lib/stores/ui-store'
 import { getNotifications } from '@/lib/api/dashboard'
 import { cn } from '@/lib/utils'
 import { useInstallmentAlerts } from '@/hooks/useInstallmentAlerts'
@@ -49,6 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const prefersReducedMotion = useReducedMotion()
   const { isAuthenticated, isLoading, setAuth, clearAuth, setLoading } = useAuthStore()
   const { setBranches, setActiveBranch } = useBranchStore()
+  const { sidebarCollapsed, toggleSidebar } = useUiStore()
 
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
 
@@ -165,8 +167,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content + Topbar */}
       <div className="flex flex-col flex-1 min-h-screen min-w-0 transition-all duration-200">
         <TopNav
-          collapsed={true}
-          onToggleSidebar={() => {}}
+          collapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
           onToggleMobile={() => {}}
         />
         
