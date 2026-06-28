@@ -961,6 +961,194 @@ namespace CarShowroomManagementV2.API.Controllers
             });
         }
 
+        public record AiParseRequest(string Prompt);
+
+        /// <summary>
+        /// POST /api/Accounting/ai-parse-entry
+        /// Parses natural language accounting text and extracts Debit, Credit, Amount, and Currency.
+        /// Matches account codes dynamically based on active accounts in current branch.
+        /// </summary>
+        [Authorize(Roles = "Owner,Admin,Accountant")]
+        [HttpPost("ai-parse-entry")]
+        public async Task<IActionResult> AiParseEntry([FromBody] AiParseRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Prompt))
+            {
+                return BadRequest(new { success = false, message = "يرجى كتابة نص العملية المالية." });
+            }
+
+            var prompt = request.Prompt.Trim().ToLower();
+            string debitCode = "";
+            string creditCode = "";
+            decimal amount = 0;
+            string currency = "IQD";
+            string description = request.Prompt;
+
+            // 1. Extract Amount and Currency
+            var matches = System.Text.RegularExpressions.Regex.Matches(prompt, @"\b\d+([.,]\d+)?\b");
+            if (matches.Count > 0)
+            {
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    var cleanNum = match.Value.Replace(",", "");
+                    if (decimal.TryParse(cleanNum, out decimal parsedAmount))
+                    {
+                        if (parsedAmount > amount) amount = parsedAmount;
+                    }
+                }
+            }
+
+            if (prompt.Contains("دولار") || prompt.Contains("dollar") || prompt.Contains("$"))
+            {
+                currency = "USD";
+            }
+
+            // 2. Fetch active accounts in this branch
+            var branchId = _currentUserService.BranchId;
+            var accounts = await _context.Accounts
+                .Where(a => a.IsActive && a.BranchId == branchId)
+                .ToListAsync();
+
+            // Helpers to search for matches in name
+            Func<string[], Account?> findAccount = (keywords) => {
+                return accounts.FirstOrDefault(a => 
+                    keywords.Any(k => a.Name.ToLower().Contains(k) || a.AccountCode == k)
+                );
+            };
+
+            // Standard fallback accounts
+            var mainCashAccount = accounts.FirstOrDefault(a => a.AccountCode == "111001" || a.Name.Contains("الصندوق الرئيسي"));
+            var branchCashAccount = accounts.FirstOrDefault(a => a.AccountCode == "111002" || a.Name.Contains("صندوق أربيل"))
+                                 ?? accounts.FirstOrDefault(a => a.AccountCode == "111003" || a.Name.Contains("صندوق بغداد"))
+                                 ?? mainCashAccount;
+
+            var defaultCash = prompt.Contains("أربيل") || prompt.Contains("اربيل") ? branchCashAccount : mainCashAccount;
+            if (defaultCash == null) defaultCash = accounts.FirstOrDefault(a => a.AccountCode.StartsWith("111")); // fallback to any cash
+            if (defaultCash == null) defaultCash = accounts.FirstOrDefault(a => a.AccountCode.StartsWith("11")); // fallback to current asset
+
+            // Determine Debit and Credit based on keywords
+            if (prompt.Contains("صرفنا") || prompt.Contains("دفعنا") || prompt.Contains("مصروف") || prompt.Contains("اشترينا") || prompt.Contains("صيانة"))
+            {
+                // Credit side is the payment source (Cash or Bank)
+                var bankAcct = findAccount(new[] { "البنك", "المصرف", "رافدين", "رشيد", "tbi" });
+                creditCode = bankAcct?.AccountCode ?? defaultCash?.AccountCode ?? "111001";
+
+                // Debit side is the expense category
+                if (prompt.Contains("كهرباء") || prompt.Contains("مولد") || prompt.Contains("ماء"))
+                {
+                    var acct = findAccount(new[] { "كهرباء", "مياه", "مرفق", "ماء" });
+                    debitCode = acct?.AccountCode ?? "511001";
+                }
+                else if (prompt.Contains("راتب") || prompt.Contains("رواتب") || prompt.Contains("أجور") || prompt.Contains("اجور") || prompt.Contains("موظف"))
+                {
+                    var acct = findAccount(new[] { "رواتب", "أجور", "اجور", "موظف" });
+                    debitCode = acct?.AccountCode ?? "511002";
+                }
+                else if (prompt.Contains("صيانة") || prompt.Contains("تصليح") || prompt.Contains("تصليح سيارات"))
+                {
+                    var acct = findAccount(new[] { "صيانة", "تصليح" });
+                    debitCode = acct?.AccountCode ?? "511003";
+                }
+                else if (prompt.Contains("إيجار") || prompt.Contains("ايجار") || prompt.Contains("مكتب"))
+                {
+                    var acct = findAccount(new[] { "إيجار", "ايجار", "مكتب" });
+                    debitCode = acct?.AccountCode ?? "511004";
+                }
+                else
+                {
+                    // Generic operating expense
+                    var acct = accounts.FirstOrDefault(a => a.AccountCode.StartsWith("5")) 
+                            ?? accounts.FirstOrDefault(a => a.Name.Contains("مصاريف"));
+                    debitCode = acct?.AccountCode ?? "511005";
+                }
+            }
+            else if (prompt.Contains("استلمنا") || prompt.Contains("قبضنا") || prompt.Contains("إيراد") || prompt.Contains("ايراد") || prompt.Contains("دفعة") || prompt.Contains("قسط"))
+            {
+                // Debit side is the receipt destination (Cash or Bank)
+                var bankAcct = findAccount(new[] { "البنك", "المصرف", "رافدين", "رشيد", "tbi" });
+                debitCode = bankAcct?.AccountCode ?? defaultCash?.AccountCode ?? "111001";
+
+                // Credit side is the source of funds
+                if (prompt.Contains("عميل") || prompt.Contains("ذمم") || prompt.Contains("قسط") || prompt.Contains("تسديد"))
+                {
+                    // Try to find the specific customer's account if their name is mentioned in the prompt!
+                    Account? matchedCustomerAcct = null;
+                    foreach (var acct in accounts.Where(a => a.AccountCode.StartsWith("1301") || a.Name.Contains("عميل")))
+                    {
+                        var cleanName = acct.Name.Replace("حساب عميل - ", "").Replace("عميل - ", "").Trim();
+                        if (!string.IsNullOrWhiteSpace(cleanName) && prompt.Contains(cleanName.ToLower()))
+                        {
+                            matchedCustomerAcct = acct;
+                            break;
+                        }
+                    }
+                    var defaultArAcct = matchedCustomerAcct 
+                                     ?? accounts.FirstOrDefault(a => a.AccountCode.StartsWith("13"))
+                                     ?? accounts.FirstOrDefault(a => a.Name.Contains("الذمم المدينة"));
+                    creditCode = defaultArAcct?.AccountCode ?? "13010010";
+                }
+                else if (prompt.Contains("بيع") || prompt.Contains("سيارة"))
+                {
+                    var acct = findAccount(new[] { "مبيعات", "إيراد مبيعات", "ايرادات" })
+                            ?? accounts.FirstOrDefault(a => a.AccountCode.StartsWith("4"));
+                    creditCode = acct?.AccountCode ?? "411001";
+                }
+                else
+                {
+                    var acct = accounts.FirstOrDefault(a => a.AccountCode.StartsWith("4"))
+                            ?? accounts.FirstOrDefault(a => a.Name.Contains("إيراد"));
+                    creditCode = acct?.AccountCode ?? "412001";
+                }
+            }
+            else if (prompt.Contains("تحويل") || prompt.Contains("حولنا"))
+            {
+                // Internal transfer between cash/bank
+                if (prompt.Contains("من الصندوق الى البنك") || prompt.Contains("من الصندوق للمصرف"))
+                {
+                    var bankAcct = findAccount(new[] { "البنك", "المصرف" });
+                    debitCode = bankAcct?.AccountCode ?? "112001";
+                    creditCode = defaultCash?.AccountCode ?? "111001";
+                }
+                else if (prompt.Contains("من البنك الى الصندوق") || prompt.Contains("من المصرف للصندوق"))
+                {
+                    debitCode = defaultCash?.AccountCode ?? "111001";
+                    var bankAcct = findAccount(new[] { "البنك", "المصرف" });
+                    creditCode = bankAcct?.AccountCode ?? "112001";
+                }
+                else if (prompt.Contains("أربيل") || prompt.Contains("اربيل"))
+                {
+                    // Transfer from main to Erbil
+                    debitCode = branchCashAccount?.AccountCode ?? "111002";
+                    creditCode = mainCashAccount?.AccountCode ?? "111001";
+                }
+                else
+                {
+                    var bankAcct = findAccount(new[] { "البنك", "المصرف" });
+                    debitCode = bankAcct?.AccountCode ?? "112001";
+                    creditCode = defaultCash?.AccountCode ?? "111001";
+                }
+            }
+            else
+            {
+                // Fallback generic
+                debitCode = accounts.FirstOrDefault(a => a.AccountCode.StartsWith("5"))?.AccountCode ?? "511005";
+                creditCode = defaultCash?.AccountCode ?? "111001";
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "تم تحليل العملية وتصنيف القيد المحاسبي بنجاح.",
+                data = new
+                {
+                    debitCode,
+                    creditCode,
+                    amount,
+                    currency,
+                    description = description
+                }
+            });
+        }
     }
 
     public record ComputeDepreciationRequest(int Month, int Year, decimal? AnnualRatePercent);

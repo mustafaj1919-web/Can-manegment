@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { post } from '@/lib/api/client'
 
 function toWaPhone(phone: string) {
   const d = phone.replace(/\D/g, '')
@@ -98,17 +99,15 @@ function PayModal({
             />
             {amt > schedule.remaining_amount && (
               <p className="text-[11px] text-rose-400 mt-1">
-                يتجاوز المبلغ المتبقي ({formatMoney(schedule.remaining_amount, schedule.currency)})
+                المبلغ أكبر من المتبقي ({formatMoney(schedule.remaining_amount, schedule.currency)})
               </p>
             )}
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">طريقة الدفع</Label>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">طريقة الدفع *</Label>
             <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger className="bg-secondary/30 border-border/50">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="bg-secondary/30 border-border/50"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {PAYMENT_METHODS.map(m => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -120,29 +119,26 @@ function PayModal({
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">ملاحظات</Label>
             <Input
-              placeholder="اختياري..."
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              className="bg-secondary/30 border-border/50"
+              placeholder="أي تفاصيل إضافية..."
+              className="bg-secondary/30 border-border/50 text-sm"
             />
           </div>
+        </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="ghost" className="flex-1" onClick={onClose}
-              disabled={mutation.isPending}>
-              إلغاء
-            </Button>
-            <Button
-              className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
-              disabled={mutation.isPending || amt <= 0 || amt > schedule.remaining_amount}
-              onClick={() => mutation.mutate()}
-            >
-              {mutation.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />جاري...</>
-                : <><CheckCircle2 className="h-4 w-4" />تأكيد الدفعة</>
-              }
-            </Button>
-          </div>
+        {/* Footer */}
+        <div className="px-5 py-3.5 border-t border-border/50 bg-secondary/10 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-xs">إلغاء</Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || amt <= 0 || amt > schedule.remaining_amount}
+            size="sm"
+            className="text-xs gap-1.5"
+          >
+            {mutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+            تسجيل
+          </Button>
         </div>
       </motion.div>
     </div>
@@ -154,6 +150,25 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
   const planId = rawId
   const qc = useQueryClient()
   const [payingSchedule, setPayingSchedule] = useState<InstallmentScheduleItem | null>(null)
+  const [isReminderSending, setIsReminderSending] = useState<string | null>(null)
+
+  const handleSendServerReminder = async (installmentId: string) => {
+    setIsReminderSending(installmentId)
+    try {
+      const res = await post<any>('/WhatsApp/send-reminder', {
+        installmentId: installmentId
+      })
+      if (res && res.success) {
+        toast.success('تم إرسال تذكير القسط بالواتساب تلقائياً وتوثيقه في سجل CRM!')
+      } else {
+        toast.error('فشل في إرسال تذكير الواتساب.')
+      }
+    } catch (err: any) {
+      toast.error('خطأ أثناء إرسال تذكير الواتساب: ' + (err?.response?.data?.message ?? err.message))
+    } finally {
+      setIsReminderSending(null)
+    }
+  }
 
   const { data: plan, isLoading, isError } = useQuery({
     queryKey: ['installment-plan', planId],
@@ -469,23 +484,20 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
                               دفع
                             </Button>
                           )}
-                          {canPay && plan.buyer_phone && (() => {
-                            const msg = [
-                              `مرحباً ${plan.buyer_name ?? ''}،`,
-                              `نود تذكيركم بالقسط رقم ${sc.installment_number} لسيارة ${plan.car_name ?? ''}.`,
-                              `📅 تاريخ الاستحقاق: ${formatDate(sc.due_date)}`,
-                              `💰 المبلغ المستحق: ${formatMoney(sc.remaining_amount, sc.currency)}`,
-                              '',
-                              'شركة الأصدقاء لتجارة السيارات 🚗',
-                            ].join('\n')
-                            return (
-                              <a href={`https://wa.me/${toWaPhone(plan.buyer_phone!)}?text=${encodeURIComponent(msg)}`}
-                                target="_blank" rel="noopener noreferrer" title="تذكير واتساب"
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                          {canPay && plan.buyer_phone && (
+                            <button
+                              onClick={() => handleSendServerReminder(String(sc.id))}
+                              disabled={isReminderSending === String(sc.id)}
+                              title="إرسال تذكير تلقائي عبر الواتساب"
+                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50 transition-colors"
+                            >
+                              {isReminderSending === String(sc.id) ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
                                 <MessageCircle className="h-3.5 w-3.5" />
-                              </a>
-                            )
-                          })()}
+                              )}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>

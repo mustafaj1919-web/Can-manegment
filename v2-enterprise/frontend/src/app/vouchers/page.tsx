@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, X, RefreshCw,
-  AlertCircle, FileText, RotateCcw,
+  AlertCircle, FileText, RotateCcw, Sparkles, Loader2, MessageSquare, Send
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,9 @@ import {
   type Voucher, type VoucherType, type CreateVoucherPayload,
 } from '@/lib/api/vouchers'
 import { getChartOfAccounts, type ChartAccountNode } from '@/lib/api/accounting'
+import { get, post } from '@/lib/api/client'
+import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const TABS: { type: VoucherType; label: string; icon: typeof ArrowDownLeft; prefix: string; color: string }[] = [
   { type: 'receipt',  label: 'سندات القبض',  icon: ArrowDownLeft,  prefix: 'RV', color: 'emerald' },
@@ -63,6 +66,106 @@ export default function VouchersPage() {
   const [formDescription,  setFormDescription]   = useState('')
   const [formError,        setFormError]         = useState('')
 
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [isAiParsing, setIsAiParsing] = useState(false)
+
+  const handleAiParse = async () => {
+    if (!aiPrompt.trim()) return
+    setIsAiParsing(true)
+    setFormError('')
+    try {
+      const res = await post<any>('/Accounting/ai-parse-entry', { prompt: aiPrompt })
+      if (res && res.success && res.data) {
+        const { debitCode, creditCode, amount, currency, description } = res.data
+        if (amount) setFormAmount(String(amount))
+        if (currency) setFormCurrency(currency)
+        if (description) setFormDescription(description)
+        
+        if (debitCode) {
+          const match = allLeafAccounts.find(a => a.code === debitCode)
+          if (match) setFormDebitCode(debitCode)
+          else toast.warning(`تم الكشف عن الحساب المدين ${debitCode} ولكنه غير نشط في هذا الفرع.`)
+        }
+        
+        if (creditCode) {
+          const match = allLeafAccounts.find(a => a.code === creditCode)
+          if (match) setFormCreditCode(creditCode)
+          else toast.warning(`تم الكشف عن الحساب الدائن ${creditCode} ولكنه غير نشط في هذا الفرع.`)
+        }
+
+        toast.success('تم تحليل المعاملة وتعبئة استمارة القيد المحاسبي بنجاح!')
+      } else {
+        toast.error('فشل في تحليل القيد بالذكاء الاصطناعي.')
+      }
+    } catch (err: any) {
+      toast.error('حدث خطأ أثناء الاتصال بخدمة التحليل: ' + (err?.response?.data?.message ?? err.message))
+    } finally {
+      setIsAiParsing(false)
+    }
+  }
+
+  // WhatsApp Dialog & Logs state
+  const [showWaDialog, setShowWaDialog] = useState(false)
+  const [waVoucher, setWaVoucher] = useState<Voucher | null>(null)
+  const [waPhone, setWaPhone] = useState('')
+  const [waMessage, setWaMessage] = useState('')
+  const [isWaSending, setIsWaSending] = useState(false)
+
+  const [showLogsDialog, setShowLogsDialog] = useState(false)
+  const [waLogs, setWaLogs] = useState<any[]>([])
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+
+  const handleOpenWaDialog = (v: Voucher) => {
+    setWaVoucher(v)
+    setWaPhone('9647700000000') // default Iraqi country code mockup
+    
+    const typeLabel = v.voucher_type === 'receipt' ? 'سند قبض' : 'سند صرف'
+    const currencyLabel = v.currency === 'USD' ? 'دولار أمريكي' : 'دينار عراقي'
+    const amtFormatted = new Intl.NumberFormat('en-US').format(v.amount)
+    
+    const msg = `مرحباً العميل الكريم،\n\nتم إصدار ${typeLabel} برقم (${v.voucher_number}) بقيمة ${amtFormatted} ${currencyLabel} بنجاح.\nالبيان: ${v.description ?? 'سداد دفعات'}\nالتاريخ: ${v.voucher_date ?? ''}\n\nشكراً لتعاملكم معنا.\nمعرض سيارات كود V2 الرواد.`
+    
+    setWaMessage(msg)
+    setShowWaDialog(true)
+  }
+
+  const handleSendWa = async () => {
+    if (!waVoucher) return
+    setIsWaSending(true)
+    try {
+      const res = await post<any>('/WhatsApp/send-receipt', {
+        voucherId: waVoucher.id,
+        customMessage: waMessage,
+        customPhone: waPhone
+      })
+      if (res && res.success) {
+        toast.success('تم إرسال السند تلقائياً عبر الواتساب بنجاح!')
+        setShowWaDialog(false)
+      } else {
+        toast.error('فشل في إرسال السند بالواتساب.')
+      }
+    } catch (err: any) {
+      toast.error('خطأ أثناء إرسال الواتساب: ' + (err?.response?.data?.message ?? err.message))
+    } finally {
+      setIsWaSending(false)
+    }
+  }
+
+  const handleOpenLogs = async () => {
+    setShowLogsDialog(true)
+    setIsLoadingLogs(true)
+    try {
+      const res = await get<any>('/WhatsApp/logs')
+      if (res && res.success && res.items) {
+        setWaLogs(res.items)
+      }
+    } catch (err: any) {
+      toast.error('فشل في تحميل سجل الواتساب')
+    } finally {
+      setIsLoadingLogs(false)
+    }
+  }
+
   const qc = useQueryClient()
   const perPage = 20
 
@@ -84,10 +187,16 @@ export default function VouchersPage() {
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateVoucherPayload) => createVoucher(payload),
-    onSuccess: () => {
+    onSuccess: (newVoucher) => {
       qc.invalidateQueries({ queryKey: ['vouchers'] })
       resetForm()
       setShowForm(false)
+      if (newVoucher && newVoucher.id) {
+        post('/WhatsApp/send-receipt', { voucherId: newVoucher.id }).catch(() => {})
+        toast.success(`تم إنشاء السند رقم ${newVoucher.voucher_number} بنجاح، وجاري إرسال إشعار الواتساب التلقائي للعميل.`)
+      } else {
+        toast.success('تم إنشاء السند بنجاح.')
+      }
     },
     onError: (err: any) => setFormError(err?.response?.data?.error ?? 'حدث خطأ'),
   })
@@ -104,6 +213,7 @@ export default function VouchersPage() {
   function resetForm() {
     setFormDate(''); setFormDebitCode(''); setFormCreditCode('')
     setFormAmount(''); setFormCurrency('IQD'); setFormDescription(''); setFormError('')
+    setAiPrompt('')
   }
 
   function handleSubmit() {
@@ -144,6 +254,10 @@ export default function VouchersPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="glass" size="sm" onClick={handleOpenLogs} className="h-8 gap-1.5 text-xs border-emerald-500/25 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400">
+            <MessageSquare className="h-3.5 w-3.5" />
+            سجل الواتساب
+          </Button>
           <Button variant="glass" size="sm" onClick={() => refetch()} className="h-8 gap-1.5 text-xs">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
@@ -179,6 +293,44 @@ export default function VouchersPage() {
       {showForm && (
         <div className="glass rounded-xl p-5 space-y-4 border border-border/50">
           <p className="text-sm font-semibold text-foreground">{tab.label} — سند جديد ({tab.prefix})</p>
+          
+          {/* AI Copilot Panel */}
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+              <Sparkles className="h-4 w-4 animate-pulse" />
+              <span>مساعد الإدخال الذكي بالذكاء الاصطناعي (AI Copilot)</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              اكتب تفاصيل العملية المالية باللغة العربية (العامية أو الفصحى) ليقوم الذكاء الاصطناعي بتصنيف القيد المحاسبي وتعبئة الحقول والمبالغ تلقائياً.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="مثال: دفعنا 500,000 دينار من الصندوق الرئيسي كأجور صيانة للسيارات..."
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                className="h-9 bg-secondary/30 border-border/50 text-xs text-foreground placeholder:text-muted-foreground/50"
+              />
+              <Button
+                type="button"
+                onClick={handleAiParse}
+                disabled={isAiParsing || !aiPrompt.trim()}
+                className="h-9 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 font-family-cairo"
+              >
+                {isAiParsing ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    جاري التحليل...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    تحليل وتعبئة
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className="text-[11px] text-muted-foreground mb-1 block">التاريخ</label>
@@ -278,20 +430,29 @@ export default function VouchersPage() {
                 <span className="hidden sm:block text-[11px] text-muted-foreground truncate">{v.debit_account_name ?? v.debit_account_code ?? '—'}</span>
                 <span className="hidden sm:block font-numeric text-xs text-emerald-400">{formatMoney(v.amount, v.currency as 'USD' | 'IQD')}</span>
                 <span className="hidden sm:flex"><StatusBadge status={v.status} /></span>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-1.5">
                   {v.status === 'posted' && !v.reversal_of_id && (
-                    <button
-                      onClick={() => {
-                        if (!confirm(`إلغاء السند ${v.voucher_number}?`)) return
-                        setCancellingId(v.id)
-                        cancelMutation.mutate(v.id)
-                      }}
-                      disabled={cancellingId === v.id}
-                      title="إلغاء السند"
-                      className="p-1 rounded text-muted-foreground/40 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleOpenWaDialog(v)}
+                        title="إرسال عبر الواتساب"
+                        className="p-1 rounded text-muted-foreground/40 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!confirm(`إلغاء السند ${v.voucher_number}?`)) return
+                          setCancellingId(v.id)
+                          cancelMutation.mutate(v.id)
+                        }}
+                        disabled={cancellingId === v.id}
+                        title="إلغاء السند"
+                        className="p-1 rounded text-muted-foreground/40 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -308,6 +469,130 @@ export default function VouchersPage() {
           </>
         )}
       </div>
+      {/* WhatsApp Dialog Modal */}
+      <AnimatePresence>
+        {showWaDialog && waVoucher && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="glass rounded-2xl w-full max-w-md overflow-hidden border border-emerald-500/20"
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-border/50 bg-emerald-500/5 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-emerald-400">
+                  <Sparkles className="h-4 w-4" />
+                  <span>إرسال السند عبر الواتساب (WhatsApp Automation)</span>
+                </div>
+                <button onClick={() => setShowWaDialog(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">رقم هاتف العميل (WhatsApp) *</label>
+                  <Input
+                    placeholder="9647700000000"
+                    value={waPhone}
+                    onChange={e => setWaPhone(e.target.value)}
+                    className="bg-secondary/30 border-border/50 text-sm font-mono text-left"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">نص الرسالة *</label>
+                  <textarea
+                    rows={6}
+                    value={waMessage}
+                    onChange={e => setWaMessage(e.target.value)}
+                    className="w-full rounded-lg bg-secondary/30 border border-border/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/50 leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3.5 border-t border-border/50 bg-secondary/10 flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setShowWaDialog(false)} className="text-xs">
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={handleSendWa}
+                  disabled={isWaSending || !waPhone.trim() || !waMessage.trim()}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+                >
+                  {isWaSending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      جاري الإرسال...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      إرسال بالواتساب
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* WhatsApp Logs Dialog */}
+      <AnimatePresence>
+        {showLogsDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass rounded-2xl w-full max-w-lg overflow-hidden border border-border/50"
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-border/50 bg-secondary/10 flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">سجل إرسال الواتساب التلقائي</span>
+                <button onClick={() => setShowLogsDialog(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 max-h-[400px] overflow-y-auto space-y-3">
+                {isLoadingLogs ? (
+                  <div className="space-y-2 py-4">
+                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
+                  </div>
+                ) : waLogs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-8">لا توجد رسائل مرسلة بعد.</p>
+                ) : (
+                  waLogs.map((log: any) => (
+                    <div key={log.id} className="p-3 rounded-lg border border-border/20 bg-secondary/20 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-bold text-indigo-400">{log.customerName}</span>
+                        <span className="text-muted-foreground">{new Date(log.date).toLocaleString('ar-IQ')}</span>
+                      </div>
+                      <p className="text-xs text-foreground/80 whitespace-pre-wrap leading-relaxed">{log.notes}</p>
+                      <div className="flex justify-end">
+                        <span className={cn(
+                          "rounded-full px-2 py-0.5 text-[9px] font-bold",
+                          log.outcome === 'delivered' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                        )}>
+                          {log.outcome === 'delivered' ? 'تم التسليم' : 'فشل الإرسال'}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

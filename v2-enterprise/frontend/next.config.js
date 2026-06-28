@@ -13,6 +13,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  turbopack: {},
   async redirects() {
     return [
       {
