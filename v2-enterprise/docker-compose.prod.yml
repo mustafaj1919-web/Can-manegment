@@ -45,10 +45,13 @@ services:
       dockerfile: src/API/Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_AllowedHosts=*
       - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
       - JwtSettings__Secret=${JWT_SECRET}
       - JwtSettings__Issuer=${JWT_ISSUER}
       - JwtSettings__Audience=${JWT_AUDIENCE}
+      - AdminSettings__InitialPassword=${ADMIN_INITIAL_PASSWORD}
+      - AdminSettings__ForceResetPassword=${RESET_ADMIN_PASSWORD:-false}
     depends_on:
       v2-postgres-db:
         condition: service_healthy
