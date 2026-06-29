@@ -1,5 +1,4 @@
 {
-  "dotnet.dotnetPath": "/usr/local/share/dotnet/dotnet",
   "dotnet.server.useOmnisharp": false,
   "omnisharp.dotnetPath": "/usr/local/share/dotnet/dotnet",
   "csharp.dotnet.server.useOmnisharp": false,

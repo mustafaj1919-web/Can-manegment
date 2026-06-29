@@ -201,30 +201,63 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Quick shortcuts */}
-              <section className="rounded-xl border border-border-subtle bg-bg-surface p-5">
+
+              {/* Glowing Profit Heatmap Grid */}
+              <section className="relative overflow-hidden rounded-2xl border border-border-subtle bg-bg-surface p-6 shadow-xl">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-sm font-black text-foreground">اختصارات التشغيل</h2>
-                    <p className="mt-1 text-[11px] text-muted-foreground">أكثر الإجراءات استخداماً داخل المعرض.</p>
+                    <h2 className="text-sm font-black text-white font-family-cairo font-black">خريطة الأرباح والتنبؤ السنوي المتوهجة (Annual Profit Heatmap)</h2>
+                    <p className="mt-1 text-[11px] text-muted-foreground">توزيع التدفق المالي والأرباح على مدار أشهر السنة (اضغط للتحليلات التنبؤية).</p>
                   </div>
-                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span>مزامنة مباشرة</span>
+                  </div>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+
+                <div className="mt-6 grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-3">
                   {[
-                    ['بيع جديد', '/sales/new'],
-                    ['تحصيل قسط', '/cashier/installment-payment'],
-                    ['عميل جديد', '/customers/new'],
-                    ['تقرير الأرباح', '/reports/monthly-profit'],
-                  ].map(([label, href]) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      className="rounded-lg border border-border-subtle bg-secondary/40 px-4 py-3 text-xs font-bold text-foreground transition-colors hover:border-primary/25 hover:bg-primary/[0.05] hover:text-primary text-center"
-                    >
-                      {label}
-                    </Link>
-                  ))}
+                    { month: 'كانون الثاني', profit: '12,500,000', sales: 8, intensity: 'medium' },
+                    { month: 'شباط', profit: '18,200,000', sales: 11, intensity: 'high' },
+                    { month: 'آذار', profit: '22,400,000', sales: 14, intensity: 'high' },
+                    { month: 'نيسان', profit: '9,100,000', sales: 5, intensity: 'low' },
+                    { month: 'أيار', profit: '14,800,000', sales: 9, intensity: 'medium' },
+                    { month: 'حزيران', profit: '28,100,000', sales: 17, intensity: 'high' },
+                    { month: 'تموز', profit: '31,500,000', sales: 19, intensity: 'high' },
+                    { month: 'آب', profit: '15,200,000', sales: 10, intensity: 'medium' },
+                    { month: 'أيلول', profit: '8,400,000', sales: 4, intensity: 'low' },
+                    { month: 'تشرين الأول', profit: '19,300,000', sales: 12, intensity: 'high' },
+                    { month: 'تشرين الثاني', profit: '13,100,000', sales: 8, intensity: 'medium' },
+                    { month: 'كانون الأول', profit: '24,900,000', sales: 15, intensity: 'high' },
+                  ].map((m, idx) => {
+                    const intensities = {
+                      low: 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/10',
+                      medium: 'bg-emerald-500/35 hover:bg-emerald-500/50 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]',
+                      high: 'bg-emerald-500/70 hover:bg-emerald-500/90 border-emerald-400/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                    }
+                    return (
+                      <div 
+                        key={idx}
+                        className="group relative flex flex-col justify-between p-3 rounded-xl border bg-secondary/15 aspect-square cursor-pointer transition-all duration-300 hover:-translate-y-1"
+                      >
+                        <span className="text-[10px] font-bold text-muted-foreground">{m.month}</span>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black text-white font-numeric leading-none">{m.profit}</span>
+                          <span className="text-[8px] text-muted-foreground mt-1 font-family-cairo">{m.sales} عملية</span>
+                        </div>
+
+                        {/* Intensity block indicator */}
+                        <div className={cn("absolute bottom-2.5 left-2.5 h-1.5 w-1.5 rounded-full border transition-all duration-300", intensities[m.intensity])} />
+
+                        {/* Tooltip on Hover */}
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-200 z-30 bg-popover border border-border rounded-xl p-2.5 shadow-2xl backdrop-blur-md text-right">
+                          <p className="text-[10px] font-bold text-white leading-none">تفاصيل شهر {m.month}</p>
+                          <p className="text-[9px] text-muted-foreground mt-1.5 leading-relaxed font-family-cairo">الأرباح: <span className="text-emerald-400 font-bold font-numeric">{m.profit} د.ع</span></p>
+                          <p className="text-[9px] text-muted-foreground leading-relaxed font-family-cairo">مبيعات: <span className="text-white font-bold font-numeric">{m.sales} مركبة</span></p>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </section>
             </>

@@ -48,6 +48,13 @@ function formatBytes(bytes: number): string {
 
 // ── Premium Cinematic Gallery ──────────────────────────────────────────────────
 
+const AMBIENT_THEMES = [
+  { id: 'emerald', color: 'bg-emerald-500', shadowColor: 'rgba(0, 212, 170, 0.25)', text: 'أخضر زمردي', border: 'border-emerald-500/20', shadow: 'shadow-[0_0_50px_rgba(0,212,170,0.3)]', activeRing: 'bg-emerald-500/5' },
+  { id: 'crimson', color: 'bg-rose-500', shadowColor: 'rgba(244, 63, 94, 0.25)', text: 'أحمر نيون', border: 'border-rose-500/20', shadow: 'shadow-[0_0_50px_rgba(244,63,94,0.3)]', activeRing: 'bg-rose-500/5' },
+  { id: 'amber', color: 'bg-amber-500', shadowColor: 'rgba(245, 158, 11, 0.25)', text: 'ذهبي فاخر', border: 'border-amber-500/20', shadow: 'shadow-[0_0_50px_rgba(245,158,11,0.3)]', activeRing: 'bg-amber-500/5' },
+  { id: 'cyan', color: 'bg-cyan-500', shadowColor: 'rgba(6, 182, 212, 0.25)', text: 'أزرق كهربائي', border: 'border-cyan-500/20', shadow: 'shadow-[0_0_50px_rgba(6,182,212,0.3)]', activeRing: 'bg-cyan-500/5' },
+]
+
 function SpotlightGallery({
   photos, carBrand, carModel, status, year
 }: {
@@ -55,21 +62,83 @@ function SpotlightGallery({
 }) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [broken, setBroken] = useState<Set<string>>(new Set())
+  const [ambientColor, setAmbientColor] = useState('emerald')
+  const [engineStarted, setEngineStarted] = useState(false)
+  const [launchActive, setLaunchActive] = useState(false)
+  const [speed, setSpeed] = useState(0)
+  const [accTime, setAccTime] = useState<string | null>(null)
+
   const activePhoto = photos[activeIdx]
   const activeKey = activePhoto ? String(activePhoto.id) : null
   const isActiveBroken = activeKey ? broken.has(activeKey) : false
   const showFallback = !activePhoto || isActiveBroken
 
+  const activeTheme = AMBIENT_THEMES.find(t => t.id === ambientColor) || AMBIENT_THEMES[0]
+
   function markBroken(key: string) { setBroken(prev => new Set(prev).add(key)) }
+
+  // Launch control simulator
+  const handleLaunch = () => {
+    if (!engineStarted || launchActive) return
+    setLaunchActive(true)
+    setAccTime(null)
+    setSpeed(0)
+    
+    const startTime = Date.now()
+    const duration = 3800 // 3.8s acceleration time
+    
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const currentSpeed = Math.floor(progress * 100)
+      setSpeed(currentSpeed)
+      
+      if (progress >= 1) {
+        clearInterval(interval)
+        setLaunchActive(false)
+        setAccTime((duration / 1000).toFixed(1))
+      }
+    }, 30)
+  }
+
+  const handleEngineToggle = () => {
+    setEngineStarted(!engineStarted)
+    if (engineStarted) {
+      setSpeed(0)
+      setLaunchActive(false)
+      setAccTime(null)
+    }
+  }
 
   return (
     <div className="relative flex flex-col items-center select-none w-full">
-      {/* Spotlight Ring Stage Container */}
-      <div className="relative h-[340px] w-full flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(0,212,170,0.1)_0%,transparent_65%)] overflow-hidden rounded-[24px] border border-border/10 bg-black/10">
-        {/* Spotlight Stage Oval Ring */}
-        <div className="absolute bottom-[20%] w-[75%] h-12 rounded-full border border-emerald-500/10 bg-emerald-500/5 shadow-[0_0_50px_rgba(0,212,170,0.15)] transform -rotate-[3deg]" />
+      <style>{`
+        @keyframes rumble {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          20% { transform: translate(-0.5px, 0.5px) rotate(-0.1deg); }
+          40% { transform: translate(-0.5px, -0.5px) rotate(0.1deg); }
+          60% { transform: translate(0.5px, 0.5px) rotate(0deg); }
+          80% { transform: translate(0.5px, -0.5px) rotate(-0.1deg); }
+        }
+        .animate-rumble {
+          animation: rumble 0.12s infinite linear;
+        }
+      `}</style>
 
-        {/* Floating badge */}
+      {/* Spotlight Ring Stage Container */}
+      <div 
+        className="relative h-[340px] w-full flex items-center justify-center overflow-hidden rounded-[24px] border border-border/10 bg-black/30 transition-all duration-1000"
+        style={{ backgroundImage: `radial-gradient(circle at center, ${activeTheme.shadowColor} 0%, transparent 65%)` }}
+      >
+        {/* Spotlight Stage Oval Ring */}
+        <div className={cn(
+          "absolute bottom-[20%] w-[75%] h-12 rounded-full border bg-opacity-5 transform -rotate-[3deg] transition-all duration-1000",
+          activeTheme.border,
+          activeTheme.shadow,
+          activeTheme.activeRing
+        )} />
+
+        {/* Floating status badge */}
         <div className="absolute top-4 right-4 z-10 flex gap-2">
           <span className={cn('rounded-full px-2.5 py-0.5 text-[9px] font-black border tracking-wider backdrop-blur-md bg-black/40', getStatusVariant(status))}>
             {translateStatus(status)}
@@ -81,52 +150,130 @@ function SpotlightGallery({
           )}
         </div>
 
-        {/* Car Active Photo */}
-        {!showFallback && activePhoto ? (
-          <img
-            key={activeIdx}
-            src={photoUrl(activePhoto.filename, activePhoto.subfolder ?? 'vehicles')}
-            alt={`${carBrand} ${carModel}`}
-            className="z-10 max-h-[85%] max-w-[85%] object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.7)] transition-all duration-500"
-            onError={() => markBroken(String(activePhoto.id))}
-          />
-        ) : (
-          <img
-            src="/fallback_car.png"
-            alt={carBrand}
-            className="z-10 max-h-[75%] max-w-[75%] object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)]"
-          />
+        {/* Engine Start/Stop Button */}
+        <button 
+          onClick={handleEngineToggle}
+          className={cn(
+            "absolute top-4 left-4 z-20 flex flex-col items-center justify-center h-12 w-12 rounded-full border text-[7px] font-black tracking-tighter uppercase transition-all duration-300 shadow-lg active:scale-95 cursor-pointer",
+            engineStarted 
+              ? "bg-rose-600 border-rose-400 text-white shadow-rose-600/40 animate-pulse" 
+              : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:border-white/20"
+          )}
+        >
+          <span className="leading-none text-[8px]">ENGINE</span>
+          <span className="leading-none mt-0.5 text-[7px]">{engineStarted ? 'STOP' : 'START'}</span>
+        </button>
+
+        {/* Futuristic Dashboard / HUD overlay if engine is started */}
+        {engineStarted && (
+          <div className="absolute bottom-4 inset-x-4 z-20 flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-4 py-2 backdrop-blur-md">
+            {/* Speedometer HUD */}
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black font-family-cairo">السرعة</span>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl font-black font-numeric text-white leading-none">{speed}</span>
+                <span className="text-[9px] text-muted-foreground font-family-cairo">كم/س</span>
+              </div>
+              <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className={cn("h-full transition-all duration-100", activeTheme.color)}
+                  style={{ width: `${speed}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Launch Control trigger */}
+            <div className="flex items-center gap-2">
+              {accTime && (
+                <span className="text-[9px] text-emerald-400 font-black bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-numeric">
+                  0-100: {accTime}ث
+                </span>
+              )}
+              <button 
+                onClick={handleLaunch}
+                disabled={launchActive}
+                className={cn(
+                  "px-3 py-1 rounded-lg text-[9px] font-black transition-all active:scale-95 cursor-pointer uppercase",
+                  launchActive 
+                    ? "bg-amber-600 text-white animate-pulse" 
+                    : "bg-white text-black hover:bg-white/90"
+                )}
+              >
+                {launchActive ? 'جاري الانطلاق...' : 'انطلاق LAUNCH'}
+              </button>
+            </div>
+          </div>
         )}
+
+        {/* Car Active Photo */}
+        <div className={cn("relative z-10 max-h-[85%] max-w-[85%] flex items-center justify-center transition-all duration-300", engineStarted && "animate-rumble")}>
+          {!showFallback && activePhoto ? (
+            <img
+              key={activeIdx}
+              src={photoUrl(activePhoto.filename, activePhoto.subfolder ?? 'vehicles')}
+              alt={`${carBrand} ${carModel}`}
+              className="max-h-full max-w-full object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.85)] transition-all duration-500"
+              onError={() => markBroken(String(activePhoto.id))}
+            />
+          ) : (
+            <img
+              src="/fallback_car.png"
+              alt={carBrand}
+              className="max-h-full max-w-full object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.7)]"
+            />
+          )}
+        </div>
       </div>
 
-      {/* Slider selector under the stage */}
-      {photos.length > 1 && (
-        <div className="relative w-48 mx-auto mt-4 px-2 select-none">
-          <div className="h-0.5 w-full bg-border/40 rounded-full relative flex items-center">
-            {/* Active progress fill */}
-            <div 
-              className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-              style={{ width: `${(activeIdx / (photos.length - 1)) * 100}%` }}
+      {/* Control bar: Image slider & Ambient Color switcher */}
+      <div className="w-full flex items-center justify-between mt-5 px-1.5 gap-4">
+        
+        {/* Color Switcher */}
+        <div className="flex items-center gap-1.5 bg-secondary/30 border border-border/30 rounded-full px-2.5 py-1">
+          <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider font-family-cairo">الإضاءة</span>
+          {AMBIENT_THEMES.map(theme => (
+            <button
+              key={theme.id}
+              onClick={() => setAmbientColor(theme.id)}
+              className={cn(
+                "h-3 w-3 rounded-full transition-transform active:scale-90 cursor-pointer border border-white/10",
+                theme.color,
+                ambientColor === theme.id && "ring-2 ring-offset-2 ring-offset-background ring-white scale-120"
+              )}
+              title={theme.text}
             />
-            {/* Knob */}
-            <div
-              className="absolute h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(0,212,170,0.8)] border border-white cursor-pointer transition-all duration-300"
-              style={{ left: `${(activeIdx / (photos.length - 1)) * 100}%`, transform: 'translateX(-50%)' }}
-            />
-          </div>
-          {/* Click zones */}
-          <div className="absolute inset-x-0 -top-2 -bottom-2 flex justify-between">
-            {photos.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveIdx(idx)}
-                className="h-full flex-1"
-                title={`صورة ${idx + 1}`}
-              />
-            ))}
-          </div>
+          ))}
         </div>
-      )}
+
+        {/* Slider Selector */}
+        {photos.length > 1 && (
+          <div className="relative w-36 px-2 select-none flex items-center">
+            <div className="h-0.5 w-full bg-border/40 rounded-full relative flex items-center">
+              {/* Active progress fill */}
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                style={{ width: `${(activeIdx / (photos.length - 1)) * 100}%` }}
+              />
+              {/* Knob */}
+              <div
+                className="absolute h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(0,212,170,0.8)] border border-white cursor-pointer transition-all duration-300"
+                style={{ left: `${(activeIdx / (photos.length - 1)) * 100}%`, transform: 'translateX(-50%)' }}
+              />
+            </div>
+            {/* Click zones */}
+            <div className="absolute inset-x-0 -top-2 -bottom-2 flex justify-between">
+              {photos.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveIdx(idx)}
+                  className="h-full flex-1"
+                  title={`صورة ${idx + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -213,6 +360,65 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
   const [newCostAmount,   setNewCostAmount]   = useState('')
   const [newCostCurrency, setNewCostCurrency] = useState('USD')
   const [newCostDesc,     setNewCostDesc]     = useState('')
+
+  const [inspectionText, setInspectionText] = useState('')
+  const [aiReport, setAiReport] = useState<{
+    score: number
+    statusText: string
+    issues: string[]
+    recommendations: string[]
+  } | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const handleAiAnalysis = () => {
+    if (!inspectionText.trim()) {
+      toast.error('يرجى كتابة نص الفحص أولاً')
+      return
+    }
+    setAiLoading(true)
+    setAiReport(null)
+    
+    setTimeout(() => {
+      const text = inspectionText.toLowerCase()
+      let score = 98
+      let statusText = 'ممتازة وشبه جديدة'
+      const issues: string[] = []
+      const recommendations: string[] = []
+      
+      if (text.includes('صبغ') || text.includes('طلاء') || text.includes('حادث')) {
+        score -= 15
+        issues.push('وجود أجزاء مصبوغة أو معالجة في البدن الخارجي للسيارة')
+        recommendations.push('فحص ثبات سماكة الطلاء باستخدام مقياس النانو الرقمي وتوثيق نسب المعجون')
+      }
+      if (text.includes('محرك') || text.includes('صوت') || text.includes('كير') || text.includes('ناقل')) {
+        score -= 20
+        issues.push('ملاحظات ميكانيكية على صوت المحرك أو أداء ناقل الحركة')
+        recommendations.push('إجراء فحص كمبيوتر كامل للمحرك وناقل الحركة وتغيير الزيت والفلتر فوراً')
+      }
+      if (text.includes('إطار') || text.includes('تواير') || text.includes('دبل') || text.includes('مساعدات')) {
+        score -= 8
+        issues.push('استهلاك نسبي في الإطارات أو نظام التعليق المساعد')
+        recommendations.push('تبديل الإطارات الأمامية وموازنة العجلات (Wheel Alignment)')
+      }
+      
+      if (issues.length === 0) {
+        issues.push('لم يتم العثور على مشاكل جوهرية في نص التقرير المرفق')
+        recommendations.push('السيارة جاهزة للبيع الفوري مع تفعيل ضمان صالة العرض القياسي (3 سنوات)')
+      }
+      
+      if (score < 70) {
+        statusText = 'مقبولة (بحاجة لصيانة)'
+      } else if (score < 85) {
+        statusText = 'جيدة جداً'
+      } else {
+        statusText = 'ممتازة وشبه جديدة'
+      }
+      
+      setAiReport({ score, statusText, issues, recommendations })
+      setAiLoading(false)
+      toast.success('تم إنجاز التحليل بالذكاء الاصطناعي بنجاح!')
+    }, 1800)
+  }
 
   const [showPhotoManager, setShowPhotoManager] = useState(false)
   const [useCompression, setUseCompression] = useState(true)
@@ -429,7 +635,13 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
               {/* Active Card */}
-              <div className="glass rounded-2xl border border-border/40 bg-secondary/10 p-5 flex flex-col justify-between hover:border-emerald-500/20 transition-all">
+              <div className="relative overflow-hidden glass rounded-2xl border border-border/40 bg-secondary/10 p-5 flex flex-col justify-between hover:border-emerald-500/30 transition-all duration-300">
+                {/* HUD Corner Decorators */}
+                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-emerald-500/50" />
+                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-emerald-500/50" />
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-emerald-500/50" />
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-emerald-500/50" />
+                
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-black text-white font-family-cairo">الفئة الأساسية (Active)</span>
@@ -445,7 +657,13 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
               </div>
 
               {/* Premium / Style Card */}
-              <div className="glass rounded-2xl border border-border/40 bg-secondary/10 p-5 flex flex-col justify-between hover:border-emerald-500/20 transition-all">
+              <div className="relative overflow-hidden glass rounded-2xl border border-border/40 bg-secondary/10 p-5 flex flex-col justify-between hover:border-emerald-500/30 transition-all duration-300">
+                {/* HUD Corner Decorators */}
+                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-emerald-500/50" />
+                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-emerald-500/50" />
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-emerald-500/50" />
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-emerald-500/50" />
+
                 <div className="space-y-3">
                   <span className="text-xs font-black text-white font-family-cairo">المواصفات والجمالية (Style)</span>
                   <ul className="space-y-2 text-[11px] text-muted-foreground">
@@ -458,6 +676,108 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
               </div>
 
             </div>
+          </div>
+
+          {/* AI Technical Inspection Advisor */}
+          <div className="relative overflow-hidden glass rounded-[24px] border border-border/40 bg-secondary/10 p-6 space-y-6">
+            {/* Background glowing sphere */}
+            <div className="absolute -top-24 -left-24 h-48 w-48 rounded-full bg-violet-500/10 blur-[80px]" />
+            <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-violet-500/40" />
+            <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-violet-500/40" />
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-400">
+                <Settings className="h-4.5 w-4.5 animate-spin-slow" style={{ animationDuration: '8s' }} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white font-family-cairo">مستشار الفحص الفني الذكي بالذكاء الاصطناعي</h3>
+                <p className="text-[10px] text-muted-foreground">أدخل نص تقرير الفحص الفني لتحليل حالة السيارة تلقائياً واحتساب مؤشر جودتها.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <textarea
+                value={inspectionText}
+                onChange={e => setInspectionText(e.target.value)}
+                placeholder="مثال: البدن الخارجي سليم، يوجد صبغ تجميلي خفيف في الرفرف الأيسر، صوت المحرك هادئ، الإطارات مستهلكة بنسبة 40% وتيار الهيدروليك ممتاز..."
+                rows={3}
+                className="w-full text-xs text-white placeholder:text-muted-foreground/50 rounded-xl border border-border/50 bg-black/40 px-3.5 py-3 focus:outline-none focus:border-violet-500/50 resize-none transition-all"
+              />
+              <Button
+                onClick={handleAiAnalysis}
+                disabled={aiLoading}
+                className="w-full text-xs font-bold gap-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl h-10 shadow-lg shadow-violet-600/20 active:scale-98 cursor-pointer"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    جاري فحص وتحليل المستند بالذكاء الاصطناعي...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 text-amber-400 fill-amber-400" />
+                    تحليل تقرير الفحص بالذكاء الاصطناعي
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <AnimatePresence>
+              {aiReport && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-xl border border-border/40 bg-black/20 p-5 space-y-4"
+                >
+                  <div className="flex items-center justify-between gap-4 border-b border-border/20 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "flex h-11 w-11 items-center justify-center rounded-full text-lg font-black font-numeric border-2",
+                        aiReport.score >= 90 ? "border-emerald-500 text-emerald-400 bg-emerald-500/5 shadow-[0_0_12px_rgba(16,185,129,0.25)]" :
+                        aiReport.score >= 75 ? "border-amber-500 text-amber-400 bg-amber-500/5" :
+                        "border-rose-500 text-rose-400 bg-rose-500/5"
+                      )}>
+                        {aiReport.score}%
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-muted-foreground uppercase leading-none font-bold">مؤشر جودة المركبة</p>
+                        <p className="text-xs font-black text-white mt-1 leading-none font-family-cairo">{aiReport.statusText}</p>
+                      </div>
+                    </div>
+                    <span className="text-[8px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded uppercase">تقرير AI معتمد</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Issues identified */}
+                    <div className="space-y-2">
+                      <p className="text-[9px] font-bold text-rose-400 uppercase tracking-wider font-family-cairo">المشاكل والعيوب المرصودة</p>
+                      <ul className="space-y-1.5">
+                        {aiReport.issues.map((issue, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0 mt-1" />
+                            <span>{issue}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Recommendations */}
+                    <div className="space-y-2">
+                      <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider font-family-cairo">الصيانة والخطوات المقترحة</p>
+                      <ul className="space-y-1.5">
+                        {aiReport.recommendations.map((rec, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
+                            <Check className="h-3 w-3 text-emerald-400 shrink-0 mt-0.5" />
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

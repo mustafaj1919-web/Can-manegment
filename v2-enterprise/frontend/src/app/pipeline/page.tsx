@@ -15,7 +15,7 @@ import {
 import { getCustomers } from '@/lib/api/customers'
 import { getAvailableCars } from '@/lib/api/sales'
 import { getEmployees } from '@/lib/api/employees'
-import { formatMoney } from '@/lib/utils'
+import { cn, formatMoney } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -214,30 +214,183 @@ import { FeatureUnavailable } from '@/components/ui/FeatureUnavailable'
 
 /* ─── Main Page ─────────────────────────────────────────────────────────── */
 
+/* ─── Main Page ─────────────────────────────────────────────────────────── */
+
 export default function PipelinePage() {
+  const qc = useQueryClient()
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [filterEmployee, setFilterEmployee] = useState<string>('all')
+
+  const { data: employeesData } = useQuery({ queryKey: ['employees-list'], queryFn: () => getEmployees({ per_page: 200 }), staleTime: 60_000 })
+  const employees = employeesData?.items ?? []
+
+  const { data: pipelineData, isLoading, refetch } = useQuery({
+    queryKey: ['pipeline', filterEmployee],
+    queryFn: () => getPipeline(filterEmployee === 'all' ? {} : { employee_id: filterEmployee }),
+    staleTime: 30_000,
+  })
+
+  const moveMutation = useMutation({
+    mutationFn: ({ dealId, stage }: { dealId: string | number; stage: PipelineStage }) => 
+      moveDealStage(dealId, stage),
+    onSuccess: () => {
+      toast.success('تم نقل الصفقة بنجاح')
+      refetch()
+    },
+    onError: (e) => toast.error(extractApiError(e))
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (dealId: string | number) => deleteDeal(dealId),
+    onSuccess: () => {
+      toast.success('تم حذف الصفقة')
+      refetch()
+    },
+    onError: (e) => toast.error(extractApiError(e))
+  })
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, dealId: string) => {
+    e.dataTransfer.setData('dealId', dealId)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: React.DragEvent, targetStage: PipelineStage) => {
+    const dealId = e.dataTransfer.getData('dealId')
+    if (dealId) {
+      moveMutation.mutate({ dealId, stage: targetStage })
+    }
+  }
+
+  const dealStagesData = (pipelineData?.by_stage ?? {}) as Record<PipelineStage, Deal[]>
+
   return (
-    <div className="space-y-5" dir="rtl">
+    <div className="space-y-6" dir="rtl">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
-            <TrendingUp className="h-5 w-5 text-violet-300" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
+            <TrendingUp className="h-6 w-6 text-violet-300" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-foreground">خط أنابيب المبيعات</h1>
-            <p className="text-xs text-muted-foreground">تتبع كل فرصة من الاهتمام حتى الإغلاق</p>
+            <h1 className="text-xl font-black text-white font-family-cairo">خط أنابيب الصفقات والمبيعات (CRM Pipeline)</h1>
+            <p className="text-xs text-muted-foreground">قم بسحب وإفلات الصفقات بين المراحل لتحديث حالتها فورياً.</p>
           </div>
         </div>
-        <Button disabled size="sm" className="gap-2 bg-violet-600/50 hover:bg-violet-600/50 text-white/50 cursor-not-allowed text-xs">
-          <Plus className="h-3.5 w-3.5" />صفقة جديدة
-        </Button>
+
+        <div className="flex items-center gap-3">
+          {/* Employee Filter */}
+          <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+            <SelectTrigger className="h-10 w-44 border-border/50 bg-secondary/30 text-xs font-semibold rounded-xl text-white">
+              <SelectValue placeholder="تصفية بالمسؤول..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل المسؤولين</SelectItem>
+              {employees.map(emp => (
+                <SelectItem key={emp.id} value={String(emp.id)}>{emp.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button 
+            onClick={() => setShowAddForm(true)} 
+            size="sm" 
+            className="gap-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold h-10 px-4 rounded-xl shadow-lg shadow-violet-600/25 active:scale-95"
+          >
+            <Plus className="h-4 w-4" /> صفقة جديدة
+          </Button>
+        </div>
       </div>
 
-      {/* Feature Unavailable State */}
-      <FeatureUnavailable 
-        title="خط أنابيب المبيعات غير متاح"
-        description="ميزة خط أنابيب المبيعات والصفقات (Pipeline) غير مدعومة في هذا الإصدار لعدم توفر نقاط النهاية الخاصة بها في خادم الخلفية."
-      />
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
+          {STAGES.map((s, idx) => (
+            <div key={idx} className="space-y-3">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-thin select-none">
+          {STAGES.map((stage) => {
+            const deals = (dealStagesData[stage] ?? []) as Deal[]
+            const totalSum = deals.reduce((sum, d) => sum + (d.expected_price ?? 0), 0)
+            
+            return (
+              <div 
+                key={stage}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, stage)}
+                className={cn(
+                  "flex-1 min-w-[280px] max-w-[320px] flex flex-col rounded-2xl border bg-black/20 p-4 transition-all duration-300",
+                  STAGE_HEADER[stage]
+                )}
+              >
+                {/* Column Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("h-2.5 w-2.5 rounded-full", 
+                      stage === 'lead' && 'bg-slate-400',
+                      stage === 'contacted' && 'bg-cyan-400',
+                      stage === 'test_drive' && 'bg-violet-400',
+                      stage === 'negotiating' && 'bg-amber-400',
+                      stage === 'reserved' && 'bg-orange-400',
+                      stage === 'won' && 'bg-emerald-400',
+                      stage === 'lost' && 'bg-rose-400'
+                    )} />
+                    <h3 className="text-xs font-black text-white font-family-cairo">{STAGE_LABELS[stage]}</h3>
+                    <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[9px] font-black text-muted-foreground">
+                      {deals.length}
+                    </span>
+                  </div>
+                  {totalSum > 0 && (
+                    <span className="text-[10px] font-numeric font-black text-white/90">
+                      {totalSum.toLocaleString()} د.ع
+                    </span>
+                  )}
+                </div>
+
+                {/* Deals List */}
+                <div className="flex-1 space-y-3 min-h-[300px] overflow-y-auto scrollbar-none">
+                  {deals.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-44 rounded-xl border border-dashed border-border/20 text-center p-4">
+                      <span className="text-[10px] text-muted-foreground/40 font-family-cairo">اسحب الصفقات إلى هنا</span>
+                    </div>
+                  ) : (
+                    deals.map((deal) => (
+                      <div 
+                        key={deal.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, String(deal.id))}
+                        className="cursor-grab active:cursor-grabbing"
+                      >
+                        <DealCard 
+                          deal={deal}
+                          onMove={(newStage) => moveMutation.mutate({ dealId: deal.id, stage: newStage })}
+                          onDelete={() => deleteMutation.mutate(deal.id)}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Add Deal Modal */}
+      {showAddForm && (
+        <AddDealForm 
+          onClose={() => setShowAddForm(false)}
+          onSuccess={() => { setShowAddForm(false); refetch() }}
+        />
+      )}
     </div>
   )
 }

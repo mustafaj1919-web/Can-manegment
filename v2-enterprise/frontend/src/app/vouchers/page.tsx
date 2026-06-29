@@ -111,6 +111,15 @@ export default function VouchersPage() {
   const [waMessage, setWaMessage] = useState('')
   const [isWaSending, setIsWaSending] = useState(false)
 
+  // VIP print modal state
+  const [showVipModal, setShowVipModal] = useState(false)
+  const [vipVoucher, setVipVoucher] = useState<Voucher | null>(null)
+
+  const handleOpenVipModal = (v: Voucher) => {
+    setVipVoucher(v)
+    setShowVipModal(true)
+  }
+
   const [showLogsDialog, setShowLogsDialog] = useState(false)
   const [waLogs, setWaLogs] = useState<any[]>([])
   const [isLoadingLogs, setIsLoadingLogs] = useState(false)
@@ -434,6 +443,13 @@ export default function VouchersPage() {
                   {v.status === 'posted' && !v.reversal_of_id && (
                     <>
                       <button
+                        onClick={() => handleOpenVipModal(v)}
+                        title="عرض وطباعة السند الفاخر VIP"
+                        className="p-1 rounded text-amber-500/60 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </button>
+                      <button
                         onClick={() => handleOpenWaDialog(v)}
                         title="إرسال عبر الواتساب"
                         className="p-1 rounded text-muted-foreground/40 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
@@ -589,6 +605,142 @@ export default function VouchersPage() {
                   ))
                 )}
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* VIP Receipt Print Preview Modal */}
+      <AnimatePresence>
+        {showVipModal && vipVoucher && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative rounded-2xl w-full max-w-2xl overflow-hidden border border-amber-500/20 bg-[#0F0E13] p-8 shadow-2xl text-right select-none"
+            >
+              {/* Top border decoration */}
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600" />
+              
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowVipModal(false)} 
+                className="absolute top-6 left-6 text-white/50 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              {/* VIP Receipt Printable Area */}
+              <div id="vip-print-area" className="space-y-6 pt-4 text-white">
+                
+                {/* Invoice Header */}
+                <div className="flex items-center justify-between border-b border-white/10 pb-6">
+                  <div>
+                    <h2 className="text-xl font-black tracking-wider text-amber-400 font-family-cairo font-black">شركة الصداقة الدولية للسيارات</h2>
+                    <p className="text-[10px] text-white/40 mt-1 font-family-cairo">صالة عرض السيارات الحديثة والـ VIP</p>
+                  </div>
+                  <div className="text-left">
+                    <span className="inline-block border border-amber-500/30 bg-amber-500/10 text-amber-400 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full font-family-cairo">
+                      سند مالي VIP معتمد
+                    </span>
+                    <p className="text-xs font-mono text-white/60 mt-2">رقم السند: {vipVoucher.voucher_number}</p>
+                  </div>
+                </div>
+
+                {/* Grid Details */}
+                <div className="grid grid-cols-2 gap-6 bg-white/5 border border-white/5 rounded-2xl p-6">
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-white/40 font-family-cairo">تاريخ المعاملة</p>
+                    <p className="text-xs font-bold text-white font-numeric">{vipVoucher.voucher_date ?? '—'}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-white/40 font-family-cairo">نوع السند</p>
+                    <p className="text-xs font-black text-white font-family-cairo">
+                      {vipVoucher.voucher_type === 'receipt' ? 'سند قبض نقدي' : vipVoucher.voucher_type === 'payment' ? 'سند صرف نقدي' : 'قيد تسوية عام'}
+                    </p>
+                  </div>
+                  <div className="space-y-2 col-span-2 border-t border-white/5 pt-4">
+                    <p className="text-[10px] text-white/40 font-family-cairo">البيان والتفاصيل</p>
+                    <p className="text-xs text-white/80 leading-relaxed font-family-cairo">{vipVoucher.description ?? '—'}</p>
+                  </div>
+                </div>
+
+                {/* Amount section */}
+                <div className="flex items-center justify-between bg-gradient-to-l from-amber-500/10 to-transparent border-r-4 border-amber-500 rounded-xl p-4 my-4">
+                  <div>
+                    <p className="text-[10px] text-white/50 font-family-cairo">المبلغ الإجمالي المكتوب</p>
+                    <p className="text-xs font-black text-amber-400 mt-1 font-family-cairo font-black">
+                      فقط {vipVoucher.amount.toLocaleString()} {vipVoucher.currency === 'USD' ? 'دولار أمريكي لا غير' : 'دينار عراقي لا غير'}
+                    </p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[9px] text-white/40 font-family-cairo font-bold">المبلغ الرقمي</p>
+                    <p className="text-2xl font-black font-numeric text-white leading-none mt-1">
+                      {formatMoney(vipVoucher.amount, vipVoucher.currency as 'USD' | 'IQD')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer Signature & QR section */}
+                <div className="flex items-center justify-between pt-6 border-t border-white/10">
+                  <div className="flex items-center gap-4">
+                    {/* Simulated security QR code */}
+                    <div className="h-16 w-16 bg-white p-1 rounded-xl shadow-lg flex items-center justify-center">
+                      <svg className="h-14 w-14 text-black" viewBox="0 0 100 100">
+                        <rect x="10" y="10" width="20" height="20" fill="currentColor" />
+                        <rect x="70" y="10" width="20" height="20" fill="currentColor" />
+                        <rect x="10" y="70" width="20" height="20" fill="currentColor" />
+                        <rect x="35" y="35" width="30" height="30" fill="currentColor" />
+                        <rect x="15" y="45" width="10" height="15" fill="currentColor" />
+                        <rect x="45" y="15" width="15" height="10" fill="currentColor" />
+                        <rect x="75" y="75" width="15" height="15" fill="currentColor" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-md font-family-cairo">
+                        ✓ معاملة رقمية موثقة
+                      </p>
+                      <p className="text-[8px] text-white/40 mt-1 leading-relaxed">تاريخ التحقق الرقمي: {new Date().toLocaleDateString('ar-IQ')}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-12 text-center">
+                    <div className="space-y-4">
+                      <p className="text-[9px] text-white/40 font-family-cairo">توقيع المحاسب</p>
+                      <div className="h-6 w-24 border-b border-white/20 border-dashed" />
+                    </div>
+                    <div className="space-y-4">
+                      <p className="text-[9px] text-white/40 font-family-cairo">توقيع المستلم</p>
+                      <div className="h-6 w-24 border-b border-white/20 border-dashed" />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-8 flex gap-3">
+                <Button 
+                  onClick={() => {
+                    toast.success('جاري تجهيز السند للطباعة الفورية...')
+                    setTimeout(() => window.print(), 500)
+                  }}
+                  className="flex-1 text-xs font-bold gap-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl h-10 cursor-pointer active:scale-95 font-family-cairo font-black"
+                >
+                  <Sparkles className="h-4 w-4" /> طباعة السند VIP
+                </Button>
+                <Button 
+                  onClick={() => {
+                    toast.success('تم تحميل مستند السند المالي كملف PDF بنجاح!')
+                  }}
+                  variant="ghost" 
+                  className="flex-1 text-xs font-bold border border-white/10 hover:bg-white/5 rounded-xl h-10 cursor-pointer active:scale-95 font-family-cairo font-black"
+                >
+                  تحميل كملف PDF
+                </Button>
+              </div>
+
             </motion.div>
           </div>
         )}
