@@ -816,19 +816,19 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground font-family-cairo">سعة المحرك</p>
-                <p className="text-lg font-black text-white">{car.engine_size ? `${car.engine_size} لتر` : '—'}</p>
+                <p className="text-lg font-black text-foreground">{car.engine_size ? `${car.engine_size} لتر` : '—'}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground font-family-cairo">نوع الوقود</p>
-                <p className="text-lg font-black text-white">{car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : '—'}</p>
+                <p className="text-lg font-black text-foreground">{car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : '—'}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground font-family-cairo">المسافة المقطوعة</p>
-                <p className="text-lg font-black text-white">{car.mileage != null ? `${formatNumber(car.mileage)} كم` : '—'}</p>
+                <p className="text-lg font-black text-foreground">{car.mileage != null ? `${formatNumber(car.mileage)} كم` : '—'}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground font-family-cairo">علبة التروس</p>
-                <p className="text-lg font-black text-white">{car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : '—'}</p>
+                <p className="text-lg font-black text-foreground">{car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : '—'}</p>
               </div>
             </div>
           </div>

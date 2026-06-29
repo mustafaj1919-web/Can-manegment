@@ -25,7 +25,7 @@ import {
   Tag,
   Wrench,
 } from 'lucide-react'
-import { getPublicCarById } from '@/lib/api/inventory'
+import { getCarById } from '@/lib/api/inventory'
 import { formatMoney, formatNumber, translateStatus } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -87,7 +87,7 @@ export default function CarSpecificationPage() {
 
   const { data: car, isLoading, isError } = useQuery({
     queryKey: ['car-spec', carId],
-    queryFn: () => getPublicCarById(carId),
+    queryFn: () => getCarById(carId),
     enabled: !!carId,
     retry: 1,
   })
