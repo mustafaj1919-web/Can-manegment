@@ -115,6 +115,49 @@ export default function CashboxPage() {
         </div>
       )}
 
+      {/* Cash boxes and Bank accounts balances */}
+      {dashData && (dashData.cash_accounts.length > 0 || dashData.bank_accounts.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SectionCard title="أرصدة حسابات الصناديق (النقدية)" contentClassName="divide-y divide-border/20">
+            {dashData.cash_accounts.map(acc => {
+              const isUsd = acc.name.includes('دولار') || acc.name.toLowerCase().includes('usd')
+              return (
+                <div key={acc.code} className="flex justify-between items-center py-2.5 px-1">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{acc.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{acc.code}</p>
+                  </div>
+                  <span className={cn("font-numeric text-xs font-bold", isUsd ? "text-amber-400" : "text-cyan-300")}>
+                    {formatMoney(acc.balance, isUsd ? 'USD' : 'IQD')}
+                  </span>
+                </div>
+              )
+            })}
+          </SectionCard>
+
+          <SectionCard title="أرصدة الحسابات البنكية" contentClassName="divide-y divide-border/20">
+            {dashData.bank_accounts.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-6 text-center">لا توجد حسابات بنكية معرفة</p>
+            ) : (
+              dashData.bank_accounts.map(acc => {
+                const isUsd = acc.name.includes('دولار') || acc.name.toLowerCase().includes('usd')
+                return (
+                  <div key={acc.code} className="flex justify-between items-center py-2.5 px-1">
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">{acc.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{acc.code}</p>
+                    </div>
+                    <span className={cn("font-numeric text-xs font-bold", isUsd ? "text-amber-400" : "text-sky-300")}>
+                      {formatMoney(acc.balance, isUsd ? 'USD' : 'IQD')}
+                    </span>
+                  </div>
+                )
+              })
+            )}
+          </SectionCard>
+        </div>
+      )}
+
       <div className="glass rounded-lg p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 border-border/50 bg-secondary/30" />

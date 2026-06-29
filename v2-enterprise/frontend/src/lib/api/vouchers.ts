@@ -1,4 +1,6 @@
 import { get, post } from './client'
+import { getTrialBalance } from './accounting'
+import { getExchangeRate } from './exchange-rate'
 
 export type VoucherType = 'receipt' | 'payment' | 'transfer'
 
@@ -156,24 +158,71 @@ export function getCurrentBalance(accountCode: string): Promise<{ account_code: 
 }
 
 export async function getCashDashboard(): Promise<CashDashboard> {
-  // نظرًا لعدم توفر لوحة نقدية بالخلفية، نقوم بحساب الأرصدة من إغلاقات الصندوق المتاحة
   try {
-    const closes = await getCashboxCloses()
-    const latest = closes[0]
+    const tb = await getTrialBalance()
+    
+    let exRate = 1500 // fallback rate
+    try {
+      const rateRes = await getExchangeRate()
+      if (rateRes?.rate) {
+        exRate = rateRes.rate
+      }
+    } catch {}
+
+    const cashAccounts = tb.accounts
+      .filter(a => a.code.startsWith('111'))
+      .map(a => ({
+        code: a.code,
+        name: a.name,
+        balance: a.balance,
+      }))
+
+    const bankAccounts = tb.accounts
+      .filter(a => a.code.startsWith('112'))
+      .map(a => ({
+        code: a.code,
+        name: a.name,
+        balance: a.balance,
+      }))
+
+    // Sum cashbox balance in IQD
+    const cashboxBalanceIqd = cashAccounts.reduce((sum, a) => {
+      const isUsd = a.name.includes('دولار') || a.name.toLowerCase().includes('usd')
+      const val = isUsd ? a.balance * exRate : a.balance
+      return sum + val
+    }, 0)
+
+    // Sum bank balance in IQD
+    const bankBalanceIqd = bankAccounts.reduce((sum, a) => {
+      const isUsd = a.name.includes('دولار') || a.name.toLowerCase().includes('usd')
+      const val = isUsd ? a.balance * exRate : a.balance
+      return sum + val
+    }, 0)
+
+    let latestClose = null
+    try {
+      const closes = await getCashboxCloses()
+      if (closes && closes.length > 0) {
+        const latest = closes[0]
+        latestClose = {
+          date: latest.close_date ?? '',
+          difference: latest.difference,
+          note: latest.note
+        }
+      }
+    } catch {}
+
     return {
-      cashbox_balance_iqd: latest?.actual_balance ?? 0,
-      bank_balance_iqd: 0,
+      cashbox_balance_iqd: cashboxBalanceIqd,
+      bank_balance_iqd: bankBalanceIqd,
       today_inflow_iqd: 0,
       today_outflow_iqd: 0,
-      last_close: latest ? {
-        date: latest.close_date ?? '',
-        difference: latest.difference,
-        note: latest.note
-      } : null,
-      cash_accounts: latest ? [{ code: latest.account_code ?? '111001', name: latest.account_name ?? 'الصندوق الرئيسي', balance: latest.actual_balance }] : [],
-      bank_accounts: []
+      last_close: latestClose,
+      cash_accounts: cashAccounts,
+      bank_accounts: bankAccounts
     }
-  } catch {
+  } catch (e) {
+    console.error(e)
     return {
       cashbox_balance_iqd: 0,
       bank_balance_iqd: 0,
