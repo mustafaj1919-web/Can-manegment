@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowRight, ReceiptText, Save } from 'lucide-react'
 import { createExpense, type CreateExpensePayload } from '@/lib/api/accounting'
+import { getExchangeRate } from '@/lib/api/exchange-rate'
 import { extractApiError } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +29,19 @@ export default function NewExpensePage() {
     notes: '',
     expense_date: todayInput(),
   })
+  const [exRate, setExRate] = useState('')
+
+  const { data: exRateData } = useQuery({
+    queryKey: ['exchange-rate-current'],
+    queryFn: getExchangeRate,
+    staleTime: 60_000,
+  })
+
+  useEffect(() => {
+    if (exRateData?.rate && !exRate) {
+      setExRate(String(exRateData.rate))
+    }
+  }, [exRateData, exRate])
 
   const mutation = useMutation({
     mutationFn: createExpense,
@@ -40,7 +54,10 @@ export default function NewExpensePage() {
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    mutation.mutate(form)
+    mutation.mutate({
+      ...form,
+      exchangeRate: form.currency === 'USD' ? (parseFloat(exRate) || 1500) : 1.0
+    })
   }
 
   return (
@@ -80,6 +97,19 @@ export default function NewExpensePage() {
               </SelectContent>
             </Select>
           </div>
+          {form.currency === 'USD' && (
+            <div>
+              <label className="mb-1.5 block text-xs text-muted-foreground">سعر الصرف (لكل 1 دولار) *</label>
+              <Input
+                type="number"
+                placeholder="مثال: 1550"
+                value={exRate}
+                onChange={(e) => setExRate(e.target.value)}
+                required
+                className="border-border/50 bg-secondary/30 text-amber-400 font-numeric"
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-xs text-muted-foreground">تاريخ المصروف</label>
             <Input type="date" value={form.expense_date} onChange={(e) => setForm((current) => ({ ...current, expense_date: e.target.value }))} required className="border-border/50 bg-secondary/30" />

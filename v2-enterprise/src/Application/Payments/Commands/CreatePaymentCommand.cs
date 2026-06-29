@@ -22,6 +22,8 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
         
         public Guid AccountId { get; set; } // الصندوق أو البنك
         public Guid ContraAccountId { get; set; } // العميل أو المورد
+        public decimal ExchangeRate { get; set; } = 1.0m;
+        public string Currency { get; set; } = "IQD";
     }
 
     public class CreatePaymentCommandValidator : AbstractValidator<CreatePaymentCommand>
@@ -79,15 +81,22 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
 
             try
             {
+                var isUsd = (request.Currency ?? "").Equals("USD", System.StringComparison.OrdinalIgnoreCase);
+                var rate = isUsd && request.ExchangeRate > 0 ? request.ExchangeRate : 1.0m;
+                var finalAmount = request.Amount * rate;
+                var finalDescription = isUsd
+                    ? $"[${request.Amount:N2} @ {rate:N0}] {request.Description}"
+                    : request.Description;
+
                 // 2. تسجيل سند القبض أو الصرف المالي
                 var payment = new Payment
                 {
                     Id = Guid.NewGuid(),
                     Type = request.Type,
                     Method = request.Method,
-                    Amount = request.Amount,
+                    Amount = finalAmount,
                     ReferenceNumber = request.ReferenceNumber,
-                    Description = request.Description,
+                    Description = finalDescription,
                     AccountId = request.AccountId,
                     ContraAccountId = request.ContraAccountId,
                     BranchId = branchId
@@ -105,7 +114,7 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
                     Id = Guid.NewGuid(),
                     EntryNumber = entryNumber,
                     EntryDate = DateTime.UtcNow,
-                    Description = request.Description,
+                    Description = finalDescription,
                     IsPosted = true,
                     BranchId = branchId,
                     ReferenceType = "Payment",
@@ -141,7 +150,7 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
                     Id = Guid.NewGuid(),
                     JournalEntryId = journalEntry.Id,
                     AccountId = debitAccountId,
-                    Debit = request.Amount,
+                    Debit = finalAmount,
                     Credit = 0,
                     Description = debitLineDesc
                 };
@@ -152,7 +161,7 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
                     JournalEntryId = journalEntry.Id,
                     AccountId = creditAccountId,
                     Debit = 0,
-                    Credit = request.Amount,
+                    Credit = finalAmount,
                     Description = creditLineDesc
                 };
 

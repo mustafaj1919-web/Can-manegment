@@ -85,6 +85,8 @@ namespace CarShowroomManagementV2.API.Controllers
                 Description = dto.Description ?? refNo,
                 AccountId = isReceipt ? debit.Id : credit.Id,
                 ContraAccountId = isReceipt ? credit.Id : debit.Id,
+                ExchangeRate = dto.ExchangeRate ?? 1.0m,
+                Currency = dto.Currency ?? "IQD",
             };
             var id = await Mediator.Send(command);
             return Ok(new { success = true, voucherId = id, voucher_number = refNo, message = "تم إنشاء السند وترحيله بنجاح." });
@@ -169,6 +171,7 @@ namespace CarShowroomManagementV2.API.Controllers
             public decimal Amount { get; set; }
             public string? Currency { get; set; }
             public string? Description { get; set; }
+            public decimal? ExchangeRate { get; set; }
         }
     }
 }

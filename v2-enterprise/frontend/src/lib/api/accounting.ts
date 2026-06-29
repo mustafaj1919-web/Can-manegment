@@ -36,6 +36,7 @@ export interface CreateExpensePayload {
   title: string
   amount: number
   currency: 'USD' | 'IQD'
+  exchangeRate?: number
   category?: string
   notes?: string
   expense_date: string
@@ -212,6 +213,7 @@ export async function createExpense(payload: CreateExpensePayload): Promise<Expe
     Title: payload.title,
     Amount: payload.amount,
     Currency: payload.currency,
+    ExchangeRate: payload.exchangeRate,
     Category: payload.category,
     Notes: payload.notes,
     ExpenseDate: payload.expense_date || null,

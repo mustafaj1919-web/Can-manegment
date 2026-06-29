@@ -19,9 +19,9 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
         public string? Category { get; set; }
         public string? Notes { get; set; }
         public DateTime? ExpenseDate { get; set; }
-        // حساب الدفع (الصندوق افتراضيًا) وحساب المصروف
         public string PaidFromAccountCode { get; set; } = "111001"; // صندوق النقدية
         public string ExpenseAccountCode { get; set; } = "5102";    // مصاريف تشغيل المعرض
+        public decimal ExchangeRate { get; set; } = 1.0m;
     }
 
     public class CreateExpenseCommandValidator : AbstractValidator<CreateExpenseCommand>
@@ -66,12 +66,19 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
             using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
             try
             {
+                var isUsd = (request.Currency ?? "").Equals("USD", StringComparison.OrdinalIgnoreCase);
+                var rate = isUsd && request.ExchangeRate > 0 ? request.ExchangeRate : 1.0m;
+                var finalAmount = request.Amount * rate;
+                var finalTitle = isUsd
+                    ? $"[${request.Amount:N2} @ {rate:N0}] {request.Title}"
+                    : request.Title;
+
                 var expense = new Expense
                 {
                     Id = Guid.NewGuid(),
-                    Title = request.Title,
-                    Amount = request.Amount,
-                    Currency = string.IsNullOrWhiteSpace(request.Currency) ? "IQD" : request.Currency,
+                    Title = finalTitle,
+                    Amount = finalAmount,
+                    Currency = "IQD",
                     Category = request.Category,
                     Notes = request.Notes,
                     ExpenseDate = (request.ExpenseDate ?? DateTime.UtcNow).ToUniversalTime(),
@@ -89,7 +96,7 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
                     Id = Guid.NewGuid(),
                     EntryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{count + 1:D5}",
                     EntryDate = DateTime.UtcNow,
-                    Description = $"قيد إثبات مصروف: {request.Title}",
+                    Description = $"قيد إثبات مصروف: {finalTitle}",
                     IsPosted = true,
                     BranchId = branchId,
                     ReferenceType = "Expense",
@@ -99,12 +106,12 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
                 entry.Lines.Add(new JournalLine
                 {
                     Id = Guid.NewGuid(), JournalEntryId = entry.Id, AccountId = expenseAccount.Id,
-                    Debit = request.Amount, Credit = 0, Description = $"مصروف: {request.Title}"
+                    Debit = finalAmount, Credit = 0, Description = $"مصروف: {finalTitle}"
                 });
                 entry.Lines.Add(new JournalLine
                 {
                     Id = Guid.NewGuid(), JournalEntryId = entry.Id, AccountId = paidFromAccount.Id,
-                    Debit = 0, Credit = request.Amount, Description = $"دفع مصروف: {request.Title}"
+                    Debit = 0, Credit = finalAmount, Description = $"دفع مصروف: {finalTitle}"
                 });
                 _context.JournalEntries.Add(entry);
                 await _context.SaveChangesAsync(cancellationToken);

@@ -37,6 +37,7 @@ export interface CreateVoucherPayload {
   credit_account_code: string
   amount: number
   currency: string
+  exchangeRate?: number
   description?: string
 }
 
@@ -106,6 +107,7 @@ export async function createVoucher(data: CreateVoucherPayload): Promise<Voucher
     CreditAccountCode: data.credit_account_code,
     Amount: data.amount,
     Currency: data.currency,
+    ExchangeRate: data.exchangeRate,
     Description: data.description,
   }
   const res = await post<any>('/Payments/voucher', body)

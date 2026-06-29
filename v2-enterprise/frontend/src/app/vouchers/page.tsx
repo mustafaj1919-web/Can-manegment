@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, X, RefreshCw,
@@ -16,6 +16,7 @@ import {
   type Voucher, type VoucherType, type CreateVoucherPayload,
 } from '@/lib/api/vouchers'
 import { getChartOfAccounts, type ChartAccountNode } from '@/lib/api/accounting'
+import { getExchangeRate } from '@/lib/api/exchange-rate'
 import { get, post } from '@/lib/api/client'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -63,6 +64,7 @@ export default function VouchersPage() {
   const [formCreditCode,   setFormCreditCode]    = useState('')
   const [formAmount,       setFormAmount]        = useState('')
   const [formCurrency,     setFormCurrency]      = useState('IQD')
+  const [formExchangeRate, setFormExchangeRate] = useState('')
   const [formDescription,  setFormDescription]   = useState('')
   const [formError,        setFormError]         = useState('')
 
@@ -190,6 +192,18 @@ export default function VouchersPage() {
     staleTime: 300_000,
   })
 
+  const { data: exRateData } = useQuery({
+    queryKey: ['exchange-rate-current'],
+    queryFn:  getExchangeRate,
+    staleTime: 60_000,
+  })
+
+  useEffect(() => {
+    if (exRateData?.rate && !formExchangeRate) {
+      setFormExchangeRate(String(exRateData.rate))
+    }
+  }, [exRateData, formExchangeRate])
+
   const allLeafAccounts = coaData ? flatLeafAccounts(coaData.items) : []
   const cashBankAccounts = allLeafAccounts.filter(a => CASH_BANK_PREFIXES.includes(a.code))
   const contraAccounts   = allLeafAccounts.filter(a => !CASH_BANK_PREFIXES.includes(a.code))
@@ -222,6 +236,7 @@ export default function VouchersPage() {
   function resetForm() {
     setFormDate(''); setFormDebitCode(''); setFormCreditCode('')
     setFormAmount(''); setFormCurrency('IQD'); setFormDescription(''); setFormError('')
+    setFormExchangeRate(exRateData?.rate ? String(exRateData.rate) : '')
     setAiPrompt('')
   }
 
@@ -241,6 +256,7 @@ export default function VouchersPage() {
       credit_account_code: formCreditCode,
       amount,
       currency:            formCurrency,
+      exchangeRate:        formCurrency === 'USD' ? (parseFloat(formExchangeRate) || 1500) : 1.0,
       description:         formDescription || undefined,
     })
   }
@@ -361,6 +377,19 @@ export default function VouchersPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {formCurrency === 'USD' && (
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">سعر الصرف (لكل 1 دولار) *</label>
+                <Input
+                  type="number"
+                  placeholder="مثال: 1550"
+                  value={formExchangeRate}
+                  onChange={e => setFormExchangeRate(e.target.value)}
+                  className="h-9 bg-secondary/30 border-border/50 text-sm font-numeric text-amber-400"
+                />
+              </div>
+            )}
 
             {/* Debit account */}
             <div>
