@@ -164,46 +164,53 @@ function SpotlightGallery({
           <span className="leading-none mt-0.5 text-[7px]">{engineStarted ? 'STOP' : 'START'}</span>
         </button>
 
-        {/* Futuristic Dashboard / HUD overlay if engine is started */}
-        {engineStarted && (
-          <div className="absolute bottom-4 inset-x-4 z-20 flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-4 py-2 backdrop-blur-md">
-            {/* Speedometer HUD */}
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black font-family-cairo">السرعة</span>
-              <div className="flex items-baseline gap-0.5">
-                <span className="text-xl font-black font-numeric text-white leading-none">{speed}</span>
-                <span className="text-[9px] text-muted-foreground font-family-cairo">كم/س</span>
-              </div>
-              <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className={cn("h-full transition-all duration-100", activeTheme.color)}
-                  style={{ width: `${speed}%` }}
-                />
-              </div>
+        {/* Futuristic Dashboard / HUD overlay */}
+        <div 
+          className={cn(
+            "absolute bottom-4 inset-x-4 z-20 flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-4 py-2 backdrop-blur-md transition-all duration-300",
+            engineStarted 
+              ? "opacity-100 scale-100 translate-y-0 pointer-events-auto" 
+              : "opacity-0 scale-95 translate-y-2 pointer-events-none"
+          )}
+        >
+          {/* Speedometer HUD */}
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black font-family-cairo">السرعة</span>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-xl font-black font-numeric text-white leading-none">{speed}</span>
+              <span className="text-[9px] text-muted-foreground font-family-cairo">كم/س</span>
             </div>
-
-            {/* Launch Control trigger */}
-            <div className="flex items-center gap-2">
-              {accTime && (
-                <span className="text-[9px] text-emerald-400 font-black bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-numeric">
-                  0-100: {accTime}ث
-                </span>
-              )}
-              <button 
-                onClick={handleLaunch}
-                disabled={launchActive}
-                className={cn(
-                  "px-3 py-1 rounded-lg text-[9px] font-black transition-all active:scale-95 cursor-pointer uppercase",
-                  launchActive 
-                    ? "bg-amber-600 text-white animate-pulse" 
-                    : "bg-white text-black hover:bg-white/90"
-                )}
-              >
-                {launchActive ? 'جاري الانطلاق...' : 'انطلاق LAUNCH'}
-              </button>
+            <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
+              <div 
+                className={cn("h-full transition-all duration-100", activeTheme.color)}
+                style={{ width: `${speed}%` }}
+              />
             </div>
           </div>
-        )}
+
+          {/* Launch Control trigger */}
+          <div className="flex items-center gap-2">
+            {accTime && (
+              <span className="text-[9px] text-emerald-400 font-black bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-numeric">
+                <span>0-100: </span>
+                <span>{accTime}</span>
+                <span>ث</span>
+              </span>
+            )}
+            <button 
+              onClick={handleLaunch}
+              disabled={launchActive}
+              className={cn(
+                "px-3 py-1 rounded-lg text-[9px] font-black transition-all active:scale-95 cursor-pointer uppercase",
+                launchActive 
+                  ? "bg-amber-600 text-white animate-pulse" 
+                  : "bg-white text-black hover:bg-white/90"
+              )}
+            >
+              <span>{launchActive ? 'جاري الانطلاق...' : 'انطلاق LAUNCH'}</span>
+            </button>
+          </div>
+        </div>
 
         {/* Car Active Photo */}
         <div className={cn("relative z-10 max-h-[85%] max-w-[85%] flex items-center justify-center transition-all duration-300", engineStarted && "animate-rumble")}>
