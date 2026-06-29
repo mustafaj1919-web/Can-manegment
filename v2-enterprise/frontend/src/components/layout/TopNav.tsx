@@ -67,10 +67,36 @@ function getBreadcrumbs(pathname: string) {
       'close': 'إقفال الصندوق',
     }
     
-    const label = PATH_MAP[seg] || subNameMap[seg] || seg
-    if (isNaN(Number(label))) {
-      crumbs.push({ label, href: isLast ? '' : currentPath })
+    let label = PATH_MAP[seg] || subNameMap[seg] || seg
+    
+    // Check if it's a GUID or a numeric database ID
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg)
+    const isNumericId = !isNaN(Number(seg))
+    
+    if (isGuid || isNumericId) {
+      const parentSeg = segments[i - 1]
+      if (parentSeg === 'inventory') {
+        label = 'تفاصيل السيارة'
+      } else if (parentSeg === 'sales') {
+        label = 'تفاصيل البيع'
+      } else if (parentSeg === 'purchases') {
+        label = 'تفاصيل الشراء'
+      } else if (parentSeg === 'customers') {
+        label = 'تفاصيل العميل'
+      } else if (parentSeg === 'installments') {
+        label = 'تفاصيل القسط'
+      } else if (parentSeg === 'vouchers') {
+        label = 'تفاصيل السند'
+      } else if (parentSeg === 'users') {
+        label = 'ملف المستخدم'
+      } else if (parentSeg === 'showroom') {
+        label = 'معرض السيارة'
+      } else {
+        label = 'تفاصيل'
+      }
     }
+    
+    crumbs.push({ label, href: isLast ? '' : currentPath })
   })
   
   return crumbs

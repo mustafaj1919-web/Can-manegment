@@ -584,7 +584,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
           </Link>
           <div>
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black font-family-cairo">العودة إلى المعرض</span>
-            <h1 className="text-lg font-black text-white font-family-cairo -mt-0.5 leading-none">تفاصيل المركبة</h1>
+            <h1 className="text-lg font-black text-foreground font-family-cairo -mt-0.5 leading-none">تفاصيل المركبة</h1>
           </div>
         </div>
         <div className="flex items-center gap-2">
