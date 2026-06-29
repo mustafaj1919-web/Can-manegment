@@ -298,7 +298,7 @@ function SpecTile({ icon: Icon, label, value, iconColor = 'text-red-500' }: {
       </div>
       <div className="min-w-0">
         <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold leading-none">{label}</p>
-        <p className="text-[15px] font-bold text-white mt-1.5 truncate leading-tight">{value}</p>
+        <p className="text-[15px] font-bold text-foreground mt-1.5 truncate leading-tight">{value}</p>
       </div>
     </div>
   )
@@ -338,7 +338,7 @@ function RelatedCarCard({ car }: { car: any }) {
         </span>
       </div>
       <div className="p-5 space-y-3">
-        <p className="text-base font-black text-white group-hover:text-red-500 transition-colors font-family-cairo line-clamp-1 leading-none">
+        <p className="text-base font-black text-foreground group-hover:text-red-500 transition-colors font-family-cairo line-clamp-1 leading-none">
           {car.brand} {car.model}
         </p>
         <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/20">

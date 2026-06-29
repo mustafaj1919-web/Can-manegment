@@ -882,7 +882,7 @@ export default function InventoryPage() {
                           <div className="p-4.5 flex-1 flex flex-col justify-between">
                             <div className="space-y-2.5">
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-white/40 font-semibold">
+                                <span className="text-[10px] text-muted-foreground/80 font-semibold">
                                   {car.condition ? (CONDITION_LABEL[car.condition] ?? car.condition) : '—'}
                                 </span>
                                 {diffDays <= 30 && (
@@ -892,31 +892,31 @@ export default function InventoryPage() {
                                 )}
                               </div>
                               
-                              <h4 className="text-sm font-bold text-white font-family-cairo leading-snug truncate">
+                              <h4 className="text-sm font-bold text-foreground font-family-cairo leading-snug truncate">
                                 {car.brand} {car.model}
                               </h4>
                               
                               {/* Chips for Year, Color, Mileage */}
                               <div className="flex flex-wrap gap-1 mt-1">
-                                <span className="font-numeric text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 text-white/75">{car.manufacturing_year}</span>
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white/5 text-white/75">{car.color}</span>
-                                <span className="font-numeric text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 text-white/75">
+                                <span className="font-numeric text-[10px] font-bold px-2 py-0.5 rounded bg-secondary/50 text-foreground/80">{car.manufacturing_year}</span>
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-secondary/50 text-foreground/80">{car.color}</span>
+                                <span className="font-numeric text-[10px] font-bold px-2 py-0.5 rounded bg-secondary/50 text-foreground/80">
                                   {car.mileage !== undefined && car.mileage !== null ? `${car.mileage.toLocaleString('ar-IQ')} كم` : '0 كم'}
                                 </span>
                               </div>
                             </div>
 
                             {/* Price and Margin */}
-                            <div className="mt-4 flex items-center justify-between rounded-xl bg-white/[0.02] border border-white/5 p-3">
+                            <div className="mt-4 flex items-center justify-between rounded-xl bg-secondary/20 border border-border/40 p-3">
                               <div className="flex flex-col">
-                                <span className="text-[8px] text-white/40 font-bold uppercase tracking-wider">السعر المعروض</span>
-                                <span className="font-numeric text-base font-black text-white mt-0.5">
+                                <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider">السعر المعروض</span>
+                                <span className="font-numeric text-base font-black text-foreground mt-0.5">
                                   {car.selling_price ? formatMoney(car.selling_price, car.currency) : 'اتصل للسعر'}
                                 </span>
                               </div>
                               {margin !== null && (
                                 <div className="flex flex-col items-end">
-                                  <span className="text-[8px] text-white/40 font-bold">الهامش المتوقع</span>
+                                  <span className="text-[8px] text-muted-foreground font-bold">الهامش المتوقع</span>
                                   <span className={cn(
                                     'shrink-0 rounded-full px-2 py-0.5 text-[9px] font-extrabold border mt-0.5',
                                     margin >= 0
@@ -930,13 +930,13 @@ export default function InventoryPage() {
                             </div>
 
                             {/* Bottom Actions */}
-                            <div className="flex gap-2 border-t border-white/5 pt-3.5 mt-auto">
-                              <Button asChild size="sm" className="flex-1 bg-white/[0.04] hover:bg-white/[0.08] text-white hover:text-white border border-white/5 h-8 rounded-lg text-xs">
+                            <div className="flex gap-2 border-t border-border/20 pt-3.5 mt-auto">
+                              <Button asChild size="sm" className="flex-1 bg-secondary hover:bg-secondary/80 text-foreground border border-border/40 h-8 rounded-lg text-xs">
                                 <Link href={`/inventory/${car.id}`}>
                                   عرض التفاصيل
                                 </Link>
                               </Button>
-                              <Button asChild variant="outline" size="sm" className="flex-1 h-8 rounded-lg text-xs border-white/5 bg-transparent hover:bg-white/[0.04] text-white/70 hover:text-white">
+                              <Button asChild variant="outline" size="sm" className="flex-1 h-8 rounded-lg text-xs border-border/40 bg-transparent hover:bg-secondary/40 text-muted-foreground hover:text-foreground">
                                 <Link href={`/inventory/${car.id}/edit`}>
                                   تعديل
                                 </Link>
