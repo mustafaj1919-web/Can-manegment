@@ -9,7 +9,7 @@ import {
   Edit, FileText, Plus, Trash2, ArrowUpRight,
   Fuel, Gauge, Settings, Calendar, MapPin, Palette,
   Shield, Tag, Hash, Layers, Armchair, Cylinder, Zap, Info,
-  Upload, X, Loader2, ImageOff
+  Upload, X, Loader2, ImageOff, Search, Check, Bookmark
 } from 'lucide-react'
 import { cn, formatMoney, formatNumber, getStatusVariant, photoUrl, translateStatus } from '@/lib/utils'
 import { getCarById, getVehicleCosts, addVehicleCost, deleteVehicleCost, getCars, uploadCarPhotos, deleteCarPhoto } from '@/lib/api/inventory'
@@ -48,139 +48,83 @@ function formatBytes(bytes: number): string {
 
 // ── Premium Cinematic Gallery ──────────────────────────────────────────────────
 
-function PremiumGallery({
-  photos, carBrand, carModel, carId, status, year
+function SpotlightGallery({
+  photos, carBrand, carModel, status, year
 }: {
-  photos: CarPhoto[]; carBrand: string; carModel: string; carId: string; status: string; year?: number
+  photos: CarPhoto[]; carBrand: string; carModel: string; status: string; year?: number
 }) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const activePhoto = photos[activeIdx]
   const activeKey = activePhoto ? String(activePhoto.id) : null
   const isActiveBroken = activeKey ? broken.has(activeKey) : false
-
-  function prev() { setActiveIdx(i => (i === 0 ? photos.length - 1 : i - 1)) }
-  function next() { setActiveIdx(i => (i === photos.length - 1 ? 0 : i + 1)) }
-  function markBroken(key: string) { setBroken(prev => new Set(prev).add(key)) }
-
   const showFallback = !activePhoto || isActiveBroken
 
+  function markBroken(key: string) { setBroken(prev => new Set(prev).add(key)) }
+
   return (
-    <div className="relative group/gallery">
-      {/* Main cinematic view - extra height and curved borders */}
-      <div className="relative h-[620px] w-full overflow-hidden rounded-[24px] border border-border/50 bg-card shadow-2xl glare-effect">
-        {!showFallback && activePhoto && (
+    <div className="relative flex flex-col items-center select-none w-full">
+      {/* Spotlight Ring Stage Container */}
+      <div className="relative h-[340px] w-full flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(0,212,170,0.1)_0%,transparent_65%)] overflow-hidden rounded-[24px] border border-border/10 bg-black/10">
+        {/* Spotlight Stage Oval Ring */}
+        <div className="absolute bottom-[20%] w-[75%] h-12 rounded-full border border-emerald-500/10 bg-emerald-500/5 shadow-[0_0_50px_rgba(0,212,170,0.15)] transform -rotate-[3deg]" />
+
+        {/* Floating badge */}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <span className={cn('rounded-full px-2.5 py-0.5 text-[9px] font-black border tracking-wider backdrop-blur-md bg-black/40', getStatusVariant(status))}>
+            {translateStatus(status)}
+          </span>
+          {year && (
+            <span className="rounded-full bg-secondary/40 border border-border/50 px-2.5 py-0.5 text-[9px] font-black text-white/95 backdrop-blur-md">
+              {year}
+            </span>
+          )}
+        </div>
+
+        {/* Car Active Photo */}
+        {!showFallback && activePhoto ? (
           <img
             key={activeIdx}
             src={photoUrl(activePhoto.filename, activePhoto.subfolder ?? 'vehicles')}
             alt={`${carBrand} ${carModel}`}
-            className="h-full w-full object-cover transition-transform duration-[1200ms] ease-out hover:scale-105"
+            className="z-10 max-h-[85%] max-w-[85%] object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.7)] transition-all duration-500"
             onError={() => markBroken(String(activePhoto.id))}
           />
-        )}
-
-        {/* Fallback — shown when no photos or active image is broken */}
-        {showFallback && (
-          <div className="absolute inset-0 flex h-full flex-col items-center justify-center gap-5 bg-[radial-gradient(circle_at_50%_120%,rgba(239,27,45,0.15),transparent_55%)]">
-            <img
-              src="/fallback_car.png"
-              alt={carBrand}
-              className="max-h-[55%] w-auto object-contain drop-shadow-[0_25px_60px_rgba(239,27,45,0.35)]"
-            />
-            <Link
-              href={`/inventory/${carId}/edit`}
-              className="rounded-xl border border-dashed border-border/50 px-8 py-3 text-xs font-semibold text-white/40 hover:border-red-500/40 hover:text-red-400 backdrop-blur-md bg-secondary/10 transition-all"
-            >
-              + إضافة معرض صور
-            </Link>
-          </div>
-        )}
-
-        {/* Ambient overlays */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/40 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 via-black/10 to-transparent" />
-
-        {/* Floating details overlay on hero */}
-        <div className="absolute bottom-8 start-8 z-10 space-y-2 max-w-lg">
-          <div className="flex items-center gap-3">
-            <span className={cn('rounded-full px-3.5 py-1 text-[11px] font-black border tracking-wider backdrop-blur-md bg-black/40', getStatusVariant(status))}>
-              {translateStatus(status)}
-            </span>
-            {year && (
-              <span className="rounded-full bg-secondary/40 border border-border/50 px-3.5 py-1 text-[11px] font-black text-white/95 backdrop-blur-md">
-                موديل {year}
-              </span>
-            )}
-          </div>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white font-family-cairo leading-tight drop-shadow-md">
-            {carBrand} <span className="text-white/80 font-medium">{carModel}</span>
-          </h2>
-        </div>
-
-        {/* Photo counter — only count non-broken photos */}
-        {photos.length > 0 && (
-          <div className="absolute top-6 end-6 rounded-full bg-black/70 px-4 py-2 text-[10px] font-black tracking-widest text-white/90 backdrop-blur-xl border border-border/50">
-            {activeIdx + 1} / {photos.length}
-          </div>
-        )}
-
-        {/* Nav arrows - premium style */}
-        {photos.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={prev}
-              aria-label="الصورة السابقة"
-              className="absolute start-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 border border-border/50 text-white backdrop-blur-xl transition-all duration-300 opacity-0 group-hover/gallery:opacity-100 hover:bg-red-600 hover:border-red-500 hover:scale-105"
-            >
-              <ChevronRight className="h-6 w-6" />
-            </button>
-            <button
-              type="button"
-              onClick={next}
-              aria-label="الصورة التالية"
-              className="absolute end-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 border border-border/50 text-white backdrop-blur-xl transition-all duration-300 opacity-0 group-hover/gallery:opacity-100 hover:bg-red-600 hover:border-red-500 hover:scale-105"
-            >
-              <ChevronLeft className="h-6 w-6" />
-            </button>
-          </>
+        ) : (
+          <img
+            src="/fallback_car.png"
+            alt={carBrand}
+            className="z-10 max-h-[75%] max-w-[75%] object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)]"
+          />
         )}
       </div>
 
-      {/* Thumbnail strip - elegant mini tiles */}
+      {/* Slider selector under the stage */}
       {photos.length > 1 && (
-        <div className="flex gap-2.5 overflow-x-auto py-2 justify-center" dir="ltr">
-          {photos.map((photo, idx) => {
-            const key = String(photo.id)
-            const isBroken = broken.has(key)
-            return (
-            <button
-              key={photo.id}
-              type="button"
-              onClick={() => setActiveIdx(idx)}
-              aria-label={`صورة ${idx + 1}`}
-              className={cn(
-                'relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border transition-all duration-300',
-                idx === activeIdx
-                  ? 'border-red-500 ring-2 ring-red-500/20 scale-102 opacity-100'
-                  : 'border-border/50 opacity-40 hover:opacity-80',
-              )}
-            >
-              {isBroken ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-secondary/30">
-                  <ImageOff className="h-5 w-5 text-muted-foreground/40" />
-                </div>
-              ) : (
-              <img
-                src={photoUrl(photo.filename, photo.subfolder ?? 'vehicles')}
-                alt=""
-                className="h-full w-full object-cover"
-                onError={() => markBroken(key)}
+        <div className="relative w-48 mx-auto mt-4 px-2 select-none">
+          <div className="h-0.5 w-full bg-border/40 rounded-full relative flex items-center">
+            {/* Active progress fill */}
+            <div 
+              className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+              style={{ width: `${(activeIdx / (photos.length - 1)) * 100}%` }}
+            />
+            {/* Knob */}
+            <div
+              className="absolute h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(0,212,170,0.8)] border border-white cursor-pointer transition-all duration-300"
+              style={{ left: `${(activeIdx / (photos.length - 1)) * 100}%`, transform: 'translateX(-50%)' }}
+            />
+          </div>
+          {/* Click zones */}
+          <div className="absolute inset-x-0 -top-2 -bottom-2 flex justify-between">
+            {photos.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveIdx(idx)}
+                className="h-full flex-1"
+                title={`صورة ${idx + 1}`}
               />
-              )}
-            </button>
-          )
-          })}
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -449,164 +393,206 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      {/* ── Premium Cinematic Hero Gallery ── */}
-      <PremiumGallery
-        photos={photos}
-        carBrand={car.brand}
-        carModel={car.model}
-        carId={id}
-        status={car.status}
-        year={car.manufacturing_year}
-      />
+      {/* ── Main Split Layout ── */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
 
-      {/* ── Quick Specs Bar (Tesla/Porsche styled Strip) ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-0.5 rounded-[20px] overflow-hidden border border-border/40 bg-secondary/10 p-1.5 backdrop-blur-md">
-        {[
-          { label: 'السرعة / المحرك', value: car.engine_size ? `${car.engine_size} لتر` : '—', icon: Zap, color: 'text-amber-400' },
-          { label: 'ناقل الحركة', value: car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : '—', icon: Settings, color: 'text-red-400' },
-          { label: 'المسافة المقطوعة', value: car.mileage != null ? `${formatNumber(car.mileage)} كم` : '—', icon: Gauge, color: 'text-emerald-400' },
-          { label: 'نوع الوقود', value: car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : '—', icon: Fuel, color: 'text-indigo-400' },
-          { label: 'اللون الخارجي', value: car.color ?? '—', icon: Palette, color: 'text-pink-400' },
-          { label: 'المصدر', value: car.import_country ?? '—', icon: MapPin, color: 'text-cyan-400' },
-        ].map(item => (
-          <div key={item.label} className="flex flex-col items-center justify-center py-4 bg-card/50 text-center gap-1.5 border border-border/20">
-            <item.icon className={cn('h-5 w-5', item.color)} />
-            <div className="space-y-0.5">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black leading-none">{item.label}</p>
-              <p className="text-[13px] font-black text-white mt-1 leading-tight">{item.value}</p>
+        {/* LEFT COLUMN: Title, Gallery, Configurations (col-span-7) */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black tracking-tight text-white uppercase font-family-cairo">
+                {car.brand} <span className="text-white/60 font-medium">{car.model}</span>
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {car.condition ? CONDITION_LABEL[car.condition] ?? car.condition : 'مركبة'} • {car.manufacturing_year} • {car.color ?? '—'}
+              </p>
             </div>
+            <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-secondary/15 text-muted-foreground hover:text-white transition-colors">
+              <Bookmark className="h-4 w-4" />
+            </button>
           </div>
-        ))}
-      </div>
 
-      {/* ── Main content grid: Specs vs Floating Price Card ── */}
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+          {/* Spotlight Oval Stage Gallery */}
+          <div className="glass rounded-[24px] border border-border/40 p-5 bg-card/45">
+            <SpotlightGallery
+              photos={photos}
+              carBrand={car.brand}
+              carModel={car.model}
+              status={car.status}
+              year={car.manufacturing_year}
+            />
+          </div>
 
-        {/* Left column: Specifications & Details */}
-        <div className="space-y-8 lg:col-span-8">
-
-          {/* Technical Specs Panel */}
+          {/* Configurations Layout */}
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-[3px] rounded-full bg-red-600 shadow-[0_0_12px_rgba(239,27,45,0.7)]" />
-              <h3 className="text-[15px] font-black tracking-wide text-white font-family-cairo">المواصفات الفنية والأداء</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-              <SpecTile icon={Fuel}     label="نظام المحرك والوقود"  value={car.fuel_type ? FUEL_LABEL[car.fuel_type] ?? car.fuel_type : null} />
-              <SpecTile icon={Settings} label="علبة التروس والتحكم"  value={car.transmission ? TRANS_LABEL[car.transmission] ?? car.transmission : null} />
-              <SpecTile icon={Gauge}    label="المسافة المقطوعة"    value={car.mileage ? `${formatNumber(car.mileage)} كم` : null} />
-              <SpecTile icon={Cylinder} label="سعة المحرك (لتر)"    value={car.engine_size}        iconColor="text-amber-400" />
-              <SpecTile icon={Layers}   label="عدد أسطوانات المحرك"   value={car.cylinders}          iconColor="text-amber-400" />
-              <SpecTile icon={Armchair} label="السعة والمقاعد"      value={car.seat_count ? `${car.seat_count} مقاعد` : null} iconColor="text-blue-400" />
-              <SpecTile icon={Palette}  label="اللون والهيكل"        value={car.color}              iconColor="text-pink-400" />
-              <SpecTile icon={Shield}   label="حالة الاستخدام"      value={car.condition ? CONDITION_LABEL[car.condition] ?? car.condition : null} iconColor="text-emerald-400" />
-              <SpecTile icon={MapPin}   label="منشأ الاستيراد"      value={car.import_country}     iconColor="text-cyan-400" />
+            <h3 className="text-sm font-black text-white font-family-cairo">تجهيزات الفئات والخيارات</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              {/* Active Card */}
+              <div className="glass rounded-2xl border border-border/40 bg-secondary/10 p-5 flex flex-col justify-between hover:border-emerald-500/20 transition-all">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black text-white font-family-cairo">الفئة الأساسية (Active)</span>
+                    <span className="rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-2 py-0.5">مستحسن</span>
+                  </div>
+                  <ul className="space-y-2 text-[11px] text-muted-foreground">
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> ناقل الحركة {car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : '—'}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> المحرك {car.engine_size ? `${car.engine_size} لتر` : '—'}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> لوحة رقم {car.plate_number ?? 'بدون لوحة'}</li>
+                  </ul>
+                </div>
+                <Button variant="ghost" size="sm" className="mt-4 text-[10px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 w-full h-8">المزيد من التفاصيل</Button>
+              </div>
+
+              {/* Premium / Style Card */}
+              <div className="glass rounded-2xl border border-border/40 bg-secondary/10 p-5 flex flex-col justify-between hover:border-emerald-500/20 transition-all">
+                <div className="space-y-3">
+                  <span className="text-xs font-black text-white font-family-cairo">المواصفات والجمالية (Style)</span>
+                  <ul className="space-y-2 text-[11px] text-muted-foreground">
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> اللون الخارجي {car.color ?? '—'}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> سنة الإصدار {car.manufacturing_year ?? '—'}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> نوع الوقود {car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : '—'}</li>
+                  </ul>
+                </div>
+                <Button variant="ghost" size="sm" className="mt-4 text-[10px] bg-secondary/30 text-muted-foreground hover:bg-secondary/40 w-full h-8">تصفح الفئات</Button>
+              </div>
+
             </div>
           </div>
-
-          {/* Identity & Legal Docs */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-[3px] rounded-full bg-neutral-600 shadow-[0_0_10px_rgba(255,255,255,0.15)]" />
-              <h3 className="text-[15px] font-black tracking-wide text-white font-family-cairo">معلومات الهوية والتوثيق</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <SpecTile icon={Hash}     label="رقم الهيكل التسلسلي (VIN)" value={car.vin}              iconColor="text-muted-foreground" />
-              <SpecTile icon={FileText} label="رقم لوحة السيارة"          value={car.plate_number}     iconColor="text-muted-foreground" />
-              <SpecTile icon={Calendar} label="سنة الصنع والإصدار"        value={car.manufacturing_year} iconColor="text-muted-foreground" />
-              <SpecTile icon={Shield}   label="ترخيص ولوحات المرور"        value={car.plate_status ? PLATE_LABEL[car.plate_status] ?? car.plate_status : null} iconColor="text-muted-foreground" />
-            </div>
-          </div>
-
         </div>
 
-        {/* Right column: Floating Price & Sales Control Card */}
-        <div className="lg:col-span-4 lg:sticky lg:top-[90px] space-y-6">
+        {/* RIGHT COLUMN: Quick Specs Grid, Custom Coral Price Card & Actions (col-span-5) */}
+        <div className="lg:col-span-5 space-y-6">
 
-          {/* Premium Glassmorphic Price Card */}
-          <div className="relative overflow-hidden rounded-[24px] border border-border/50 bg-black/40 backdrop-blur-2xl shadow-2xl p-7 flex flex-col justify-between">
-            {/* Top red glowing design line */}
-            <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-red-600 to-transparent" />
+          {/* Quick Specs Grid (Performance Specs) */}
+          <div className="glass rounded-[24px] border border-border/40 bg-secondary/10 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-white font-family-cairo">الخصائص الفنية</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground">هايبرد (Hybrid)</span>
+                <button 
+                  onClick={() => {}}
+                  disabled
+                  className={cn(
+                    "w-8 h-4 rounded-full relative transition-colors duration-300",
+                    car.fuel_type === 'Hybrid' ? "bg-emerald-500" : "bg-neutral-800"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all duration-300",
+                    car.fuel_type === 'Hybrid' ? "right-4" : "right-0.5"
+                  )} />
+                </button>
+              </div>
+            </div>
 
-            <div className="space-y-6">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground font-family-cairo">القيمة المطلوبة</p>
-                <p className="mt-2.5 font-numeric text-[2.75rem] font-black tracking-tight leading-none text-red-500">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground font-family-cairo">سعة المحرك</p>
+                <p className="text-lg font-black text-white">{car.engine_size ? `${car.engine_size} لتر` : '—'}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground font-family-cairo">نوع الوقود</p>
+                <p className="text-lg font-black text-white">{car.fuel_type ? (FUEL_LABEL[car.fuel_type] ?? car.fuel_type) : '—'}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground font-family-cairo">المسافة المقطوعة</p>
+                <p className="text-lg font-black text-white">{car.mileage != null ? `${formatNumber(car.mileage)} كم` : '—'}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground font-family-cairo">علبة التروس</p>
+                <p className="text-lg font-black text-white">{car.transmission ? (TRANS_LABEL[car.transmission] ?? car.transmission) : '—'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Custom Coral Price Card & expenses trend line */}
+          <div className="relative overflow-hidden rounded-[24px] border border-red-500/20 bg-gradient-to-br from-rose-500 to-red-600 p-6 text-white shadow-xl shadow-red-500/10">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-white/70 font-family-cairo">السعر الفعلي المطلوب</p>
+                <p className="text-3xl font-black tracking-tight font-numeric mt-2">
                   {car.selling_price ? formatMoney(car.selling_price, car.currency) : '—'}
                 </p>
               </div>
+              <button className="text-white/60 hover:text-white">
+                <Info className="h-4 w-4" />
+              </button>
+            </div>
 
-              {/* Purchase comparison box */}
-              {canShowInternalInfo && (
-                <div className="flex items-center justify-between rounded-2xl bg-secondary/10 border border-border/40 p-4">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black leading-none">تكلفة الشراء</p>
-                    <p className="font-numeric text-base font-bold text-white/85 mt-2">
-                      {formatMoney(car.purchase_price, car.currency)}
-                    </p>
+            {/* Custom SVG Mini cost bar chart */}
+            <div className="mt-8 flex flex-col justify-end h-24 relative select-none">
+              <div className="flex items-end justify-between px-2 h-16">
+                {[12, 18, 10, 16, 24, 20].map((h, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5 w-1.5 relative">
+                    <div 
+                      className={cn(
+                        "w-1 rounded-full transition-all duration-500",
+                        i === 4 ? "bg-white h-14 shadow-[0_0_12px_white]" : "bg-white/40 h-8"
+                      )}
+                      style={{ height: `${h * 2.5}px` }}
+                    />
+                    {i === 4 && (
+                      <div className="absolute -top-6 bg-white text-rose-600 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-lg select-none">
+                        -5%
+                      </div>
+                    )}
                   </div>
-                  {margin !== null && (
-                    <span className={cn(
-                      'rounded-xl px-3 py-1.5 text-xs font-black tracking-wide',
-                      margin >= 0
-                        ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20',
-                    )}>
-                      {margin >= 0 ? '+' : ''}{margin}% الهامش
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Primary Sales Action */}
-              <div className="space-y-3 pt-2">
-                {car.status === 'Available' ? (
-                  <Button asChild className="w-full h-13 gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-xl shadow-2xl shadow-red-600/30 transition-all duration-300 transform active:scale-98">
-                    <Link href={`/sales/new?car_id=${car.id}`}>
-                      <Tag className="h-4 w-4" />
-                      تسجيل بيع المركبة
-                    </Link>
-                  </Button>
-                ) : (
-                  <div className={cn(
-                    'w-full h-13 flex items-center justify-center rounded-xl text-sm font-black border backdrop-blur-md bg-secondary/10',
-                    car.status === 'Sold'
-                      ? 'border-neutral-800 text-muted-foreground bg-neutral-900/10'
-                      : 'border-amber-500/20 text-amber-400 bg-amber-500/5',
-                  )}>
-                    {translateStatus(car.status)}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Button asChild variant="outline" size="sm" className="gap-2 text-xs h-11 border-border/50 hover:border-border/60 bg-secondary/10 hover:bg-secondary/20 rounded-xl font-bold font-family-cairo">
-                    <Link href={`/inventory/${car.id}/edit`}>
-                      <Edit className="h-3.5 w-3.5" /> تعديل البيانات
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="sm" className="gap-2 text-xs h-11 border-border/50 hover:border-border/60 bg-secondary/10 hover:bg-secondary/20 rounded-xl font-bold text-foreground/70 font-family-cairo">
-                    <Link href={`/inventory/${car.id}/specification`}>
-                      <FileText className="h-3.5 w-3.5" /> المواصفات الرسمية
-                    </Link>
-                  </Button>
-                </div>
+                ))}
+              </div>
+              <div className="h-[1px] w-full bg-white/20 mt-2" />
+              <div className="flex justify-between text-[8px] text-white/50 mt-1 font-numeric">
+                <span>0</span>
+                <span>500</span>
+                <span>700</span>
+                <span>900</span>
               </div>
             </div>
           </div>
 
-          {/* AI Price Insight */}
+          {/* Action buttons */}
+          <div className="space-y-3 pt-2">
+            {car.status === 'Available' ? (
+              <Button asChild className="w-full h-12 gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shadow-xl transition-all">
+                <Link href={`/sales/new?car_id=${car.id}`}>
+                  <Tag className="h-4 w-4" />
+                  تسجيل مبيعات وعقد السيارة
+                </Link>
+              </Button>
+            ) : (
+              <div className="w-full h-12 flex items-center justify-center rounded-xl text-sm font-black border border-border bg-secondary/15 text-muted-foreground">
+                {translateStatus(car.status)}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button asChild variant="outline" size="sm" className="gap-2 text-xs h-10 border-border/50 hover:border-border/60 bg-secondary/10 hover:bg-secondary/20 rounded-xl font-bold font-family-cairo">
+                <Link href={`/inventory/${car.id}/edit`}>
+                  <Edit className="h-3.5 w-3.5" /> تعديل البيانات
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-2 text-xs h-10 border-border/50 hover:border-border/60 bg-secondary/10 hover:bg-secondary/20 rounded-xl font-bold text-foreground/70 font-family-cairo">
+                <Link href={`/inventory/${car.id}/specification`}>
+                  <FileText className="h-3.5 w-3.5" /> المواصفات الرسمية
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* AI insights widget */}
           {car.status === 'Available' && <AiPriceInsight car={car} />}
 
-          {/* Notes display */}
-          {canShowInternalInfo && car.notes && (
-            <div className="rounded-[20px] border border-border/40 bg-card/80 p-5 space-y-2">
+          {/* Legal / Note panel */}
+          {car.notes && (
+            <div className="rounded-[20px] border border-border/40 bg-card/45 p-5 space-y-2">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Info className="h-3.5 w-3.5" />
-                <p className="text-[10px] font-black uppercase tracking-widest font-family-cairo">ملاحظات المعرض</p>
+                <p className="text-[9px] font-black uppercase tracking-widest font-family-cairo">ملاحظات المعرض</p>
               </div>
-              <p className="text-xs leading-relaxed text-white/65 font-family-cairo">{car.notes}</p>
+              <p className="text-xs leading-relaxed text-white/60 font-family-cairo">{car.notes}</p>
             </div>
           )}
+
         </div>
       </div>
 
