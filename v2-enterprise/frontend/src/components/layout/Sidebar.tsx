@@ -183,7 +183,7 @@ export function Sidebar() {
         damping: 30,
       }}
       className={cn(
-        "showroom-sidebar relative hidden h-[calc(100vh-2rem)] my-4 ms-4 shrink-0 flex-col rounded-2xl border border-border bg-[var(--sidebar-bg)] shadow-md lg:flex overflow-hidden"
+        "showroom-sidebar relative hidden h-[calc(100vh-2rem)] my-4 ms-4 shrink-0 flex-col rounded-2xl border border-border bg-[var(--sidebar-bg)] shadow-md lg:hidden overflow-hidden"
       )}
     >
       {/* Top ambient glow — kept extremely soft */}

@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Menu } from 'lucide-react'
+import { ChevronLeft, Menu, ChevronDown } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { BranchSelector } from './BranchSelector'
 import { GlobalSearch } from './GlobalSearch'
@@ -75,12 +76,59 @@ function getBreadcrumbs(pathname: string) {
   return crumbs
 }
 
+const NAV_MENU = [
+  {
+    label: 'المخزون والسيارات',
+    subLinks: [
+      { label: 'عرض المخزون', href: '/inventory' },
+      { label: 'إضافة سيارة جديدة', href: '/inventory/new' },
+    ]
+  },
+  {
+    label: 'العمليات والمبيعات',
+    subLinks: [
+      { label: 'الكاشير والمبيعات (POS)', href: '/cashier' },
+      { label: 'سجل المبيعات والعملاء', href: '/sales' },
+      { label: 'سجل فواتير المشتريات', href: '/purchases' },
+      { label: 'إدارة الأقساط وجدولتها', href: '/installments' },
+    ]
+  },
+  {
+    label: 'المالية والـ CRM',
+    subLinks: [
+      { label: 'السندات والوصولات المالية', href: '/vouchers' },
+      { label: 'المصاريف التشغيلية', href: '/expenses' },
+      { label: 'حساب وإقفال الصندوق', href: '/cashbox' },
+      { label: 'سجل تفاعلات CRM', href: '/crm' },
+    ]
+  },
+  {
+    label: 'المحاسبة والتقارير',
+    subLinks: [
+      { label: 'دليل الحسابات وشجرة الحسابات', href: '/chart-of-accounts' },
+      { label: 'القيود والعمليات اليومية', href: '/journal-entries' },
+      { label: 'ميزان المراجعة المحاسبي', href: '/trial-balance' },
+      { label: 'مركز التقارير والتحليلات', href: '/reports' },
+    ]
+  },
+  {
+    label: 'إدارة النظام',
+    subLinks: [
+      { label: 'إدارة الموظفين والرواتب', href: '/employees' },
+      { label: 'المستخدمين والصلاحيات', href: '/users' },
+      { label: 'النسخ الاحتياطي للنظام', href: '/backup' },
+      { label: 'الإعدادات العامة للمعرض', href: '/settings' },
+    ]
+  }
+]
+
 export function TopNav({ collapsed, onToggleSidebar, onToggleMobile }: {
   collapsed: boolean
   onToggleSidebar: () => void
   onToggleMobile: () => void
 }) {
   const pathname = usePathname()
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null)
   const activeBranch = useBranchStore((s) => s.activeBranch)
   const crumbs = useMemo(() => getBreadcrumbs(pathname), [pathname])
 
@@ -190,13 +238,50 @@ export function TopNav({ collapsed, onToggleSidebar, onToggleMobile }: {
         </nav>
       </div>
 
-      {/* ── Center: Centered Global search (Ctrl+K) ── */}
-      <div className="flex-1 max-w-[280px] sm:max-w-xs mx-auto">
-        <GlobalSearch />
+      {/* ── Center: Top-Center Dropdown Capsule Nav Menu ── */}
+      <div className="hidden lg:flex items-center gap-1 bg-secondary/20 border border-border/40 rounded-full px-3 py-1 relative">
+        {NAV_MENU.map((item, idx) => (
+          <div
+            key={item.label}
+            className="relative"
+            onMouseEnter={() => setActiveDropdown(idx)}
+            onMouseLeave={() => setActiveDropdown(null)}
+          >
+            <button className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-full hover:bg-secondary/40">
+              <span>{item.label}</span>
+              <ChevronDown className="h-3 w-3 opacity-60 transition-transform duration-200" />
+            </button>
+            <AnimatePresence>
+              {activeDropdown === idx && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="absolute top-9 start-0 z-50 w-56 rounded-2xl border border-border/50 bg-popover/95 p-1 shadow-2xl backdrop-blur-md"
+                >
+                  {item.subLinks.map(sub => (
+                    <Link
+                      key={sub.href}
+                      href={sub.href}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary/60 shrink-0" />
+                      <span>{sub.label}</span>
+                    </Link>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ))}
       </div>
 
       {/* ── Left: Utilities ── */}
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="hidden lg:block w-44">
+          <GlobalSearch />
+        </div>
         <ThemeToggle />
         <NotificationCenter />
         <BranchSelector />
