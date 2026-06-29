@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, CheckCircle2, Scale, TrendingDown, TrendingUp, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Scale, TrendingDown, TrendingUp, XCircle, Download, RefreshCw } from 'lucide-react'
 import { getBalanceSheet } from '@/lib/api/accounting'
 import { cn, formatMoney } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { exportXlsx } from '@/lib/export'
 
 /* ─── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -78,12 +79,59 @@ function SectionGroup({ group, isLocalLight }: { group: SectionItem; isLocalLigh
 export default function BalanceSheetPage() {
   const [isLocalLight, setIsLocalLight] = useState(false)
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['balance-sheet'],
     queryFn: getBalanceSheet,
     staleTime: 60_000,
     retry: 1,
   })
+
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async () => {
+    if (!data) return
+    setExporting(true)
+    try {
+      const headers = ['التصنيف الرئيسي', 'التصنيف الفرعي', 'رمز الحساب', 'اسم الحساب', 'المبلغ (د.ع)']
+      const rows: (string | number)[][] = []
+
+      // Helper to push section groups
+      const pushSection = (sectionName: string, groups: any[]) => {
+        groups.forEach(g => {
+          // Push group header row
+          rows.push([sectionName, g.name, g.code, 'حساب رئيسي', g.balance])
+          // Push children accounts
+          g.children.forEach((c: any) => {
+            rows.push([sectionName, g.name, c.code, c.name, c.balance])
+          })
+        })
+      }
+
+      // Add Assets
+      pushSection('الموجودات (الأصول)', data.assets)
+      rows.push(['إجمالي الموجودات (الأصول)', '', '', '', data.total_assets])
+      rows.push(['', '', '', '', ''])
+
+      // Add Liabilities
+      pushSection('المطلوبات (الخصوم)', data.liabilities)
+      rows.push(['إجمالي المطلوبات (الخصوم)', '', '', '', data.total_liabilities])
+      rows.push(['', '', '', '', ''])
+
+      // Add Equity
+      pushSection('حقوق الملكية', data.equity)
+      rows.push(['إجمالي حقوق الملكية', '', '', '', data.total_equity])
+      rows.push(['', '', '', '', ''])
+
+      // Add Summary Balance Check
+      rows.push(['حالة الميزانية', data.is_balanced ? 'متوازنة' : 'غير متوازنة', 'الفرق', '', data.difference])
+
+      await exportXlsx(`الميزانية_العمومية`, headers, rows)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -103,10 +151,29 @@ export default function BalanceSheetPage() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => refetch()}
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            تحديث
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setIsLocalLight(p => !p)}
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border/40 bg-secondary/10"
           >
             {isLocalLight ? 'عرض الجداول داكنة' : 'عرض الجداول فاتحة'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting || isLoading || !data}
+            className="h-8 gap-2 border-border/50 bg-secondary/30 text-xs hover:bg-secondary/40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? 'جاري التصدير...' : 'تصدير Excel'}
           </Button>
         </div>
       </div>

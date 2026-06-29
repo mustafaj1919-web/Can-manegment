@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, TrendingUp, TrendingDown, Scale, RefreshCw } from 'lucide-react'
+import { AlertCircle, TrendingUp, TrendingDown, Scale, RefreshCw, Download } from 'lucide-react'
 import { cn, formatDate, formatMoney } from '@/lib/utils'
 import { getProfitAndLoss } from '@/lib/api/accounting'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { exportXlsx } from '@/lib/export'
 
 export default function ProfitLossPage() {
   const today = new Date()
@@ -26,8 +27,46 @@ export default function ProfitLossPage() {
     queryFn: () => getProfitAndLoss(applied.from, applied.to),
   })
 
+  const [exporting, setExporting] = useState(false)
+
   const netProfit = data?.netProfitOrLoss ?? 0
   const isProfitable = netProfit >= 0
+
+  const handleExport = async () => {
+    if (!data) return
+    setExporting(true)
+    try {
+      const headers = ['نوع البند', 'رمز الحساب', 'اسم الحساب', 'المبلغ (د.ع)']
+      const rows: (string | number)[][] = []
+      
+      // Add Revenues
+      data.revenues.forEach(r => {
+        rows.push(['إيراد', r.accountCode, r.accountName, r.amount])
+      })
+      rows.push(['إجمالي الإيرادات', '', '', data.totalRevenues])
+      
+      // Empty separator row
+      rows.push(['', '', '', ''])
+
+      // Add Expenses
+      data.expenses.forEach(e => {
+        rows.push(['مصروف', e.accountCode, e.accountName, e.amount])
+      })
+      rows.push(['إجمالي المصروفات', '', '', data.totalExpenses])
+      
+      // Empty separator row
+      rows.push(['', '', '', ''])
+
+      // Add Net Profit
+      rows.push([netProfit >= 0 ? 'صافي الربح' : 'صافي الخسارة', '', '', netProfit])
+
+      await exportXlsx(`قائمة_الأرباح_والخسائر_${applied.from}_إلى_${applied.to}`, headers, rows)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-5 mx-auto max-w-5xl" dir="rtl">
@@ -42,10 +81,20 @@ export default function ProfitLossPage() {
           <h1 className="text-lg font-bold text-foreground">قائمة الأرباح والخسائر</h1>
           <p className="text-xs text-muted-foreground">إيرادات ومصروفات الفترة المالية</p>
         </div>
-        <div className="mr-auto">
-          <Button variant="ghost" size="sm" onClick={() => refetch()} className="gap-1.5">
+        <div className="mr-auto flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => refetch()} className="gap-1.5 h-9 text-xs">
             <RefreshCw className="h-3.5 w-3.5" />
             تحديث
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting || isLoading || !data}
+            className="h-9 gap-2 border-border/50 bg-secondary/30 text-xs hover:bg-secondary/40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? 'جاري التصدير...' : 'تصدير Excel'}
           </Button>
         </div>
       </div>
