@@ -107,6 +107,7 @@ export const CLASSIFICATION_TYPE: Record<AccountClassification, string> = {
 
 export interface ChartAccountNode {
   id: number
+  accountId?: string
   code: string
   name: string
   type: 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Expense'
@@ -166,6 +167,7 @@ export interface ChartOfAccountsResponse {
 }
 
 export interface TrialBalanceAccount {
+  id: string
   code: string
   name: string
   type: 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Expense'
@@ -226,7 +228,7 @@ export async function getCashbox(params: ExpensesParams = {}): Promise<CashboxRe
 export async function getChartOfAccounts(): Promise<ChartOfAccountsResponse> {
   const tb = await getTrialBalance()
   const items: ChartAccountNode[] = tb.accounts.map((a, i) => ({
-    id: i + 1, code: a.code, name: a.name, type: a.type,
+    id: i + 1, accountId: a.id, code: a.code, name: a.name, type: a.type,
     type_label: a.type, classification: 'detail' as AccountClassification,
     classification_label: 'تفصيلي', is_active: true,
     level: 'تفصيلي' as const, depth: 1,
@@ -257,6 +259,7 @@ export async function getTrialBalance(): Promise<TrialBalanceResponse> {
   }> }>('/Accounting/trial-balance')
 
   const accounts: TrialBalanceAccount[] = (raw.data ?? []).map(a => ({
+    id:      a.accountId,
     code:    a.accountCode,
     name:    a.accountName,
     type:    a.accountType as TrialBalanceAccount['type'],
@@ -433,6 +436,33 @@ export async function reverseJournalEntry(id: number | string): Promise<{ id: st
 export async function postJournalEntry(id: number | string): Promise<{ id: string; status: string }> {
   const res = await post<any>(`/Accounting/journal-entries/${id}/post`, {})
   return { id: res.id, status: res.status }
+}
+
+export interface CreateJournalLinePayload {
+  accountId: string
+  debit: number
+  credit: number
+  description?: string
+}
+
+export interface CreateJournalEntryPayload {
+  entryDate: string
+  description: string
+  lines: CreateJournalLinePayload[]
+}
+
+export async function createJournalEntry(payload: CreateJournalEntryPayload): Promise<any> {
+  const body = {
+    EntryDate: payload.entryDate,
+    Description: payload.description,
+    Lines: payload.lines.map(l => ({
+      AccountId: l.accountId,
+      Debit: l.debit,
+      Credit: l.credit,
+      Description: l.description,
+    })),
+  }
+  return post<any>('/Accounting/journal-entry', body)
 }
 
 export interface AccountingRulesCheckResult {
