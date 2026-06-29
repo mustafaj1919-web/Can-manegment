@@ -127,8 +127,8 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
   const [code, setCode]         = useState(initial?.code ?? '')
   const [name, setName]         = useState(initial?.name ?? '')
   const [type, setType]         = useState<string>(initial?.type ?? '')
-  const [clf, setClf]           = useState<string>(initial?.classification ?? '')
-  const [parentCode, setParentCode] = useState<string>(initial?.parent_code ?? '')
+  const [clf, setClf]           = useState<string>(initial?.classification || 'none')
+  const [parentCode, setParentCode] = useState<string>(initial?.parent_code || 'none')
 
   const createMut = useMutation({ mutationFn: createAccount, onSuccess: () => { toast.success('تم إضافة الحساب بنجاح'); onSuccess() }, onError: (e) => toast.error(extractApiError(e)) })
   const updateMut = useMutation({ mutationFn: ({ code, ...p }: AccountPayload) => updateAccount(code, p), onSuccess: () => { toast.success('تم تعديل الحساب بنجاح'); onSuccess() }, onError: (e) => toast.error(extractApiError(e)) })
@@ -141,8 +141,8 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
       code: code.trim(),
       name: name.trim(),
       type: type as AccountPayload['type'],
-      classification: (clf as AccountClassification) || undefined,
-      parent_code: parentCode || null,
+      classification: (clf && clf !== 'none' ? clf as AccountClassification : undefined),
+      parent_code: (parentCode && parentCode !== 'none' ? parentCode : null),
     }
     if (mode === 'add') {
       createMut.mutate(payload)
@@ -181,7 +181,7 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
             <Select value={parentCode} onValueChange={setParentCode}>
               <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="بدون أب (حساب رئيسي)" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">بدون أب (حساب رئيسي)</SelectItem>
+                <SelectItem value="none">بدون أب (حساب رئيسي)</SelectItem>
                 {allAccounts.map(a => (
                   <SelectItem key={a.id} value={a.code}>{a.code} — {a.name}</SelectItem>
                 ))}
@@ -193,7 +193,7 @@ function AccountFormDialog({ mode, initial, allAccounts, onClose, onSuccess }: A
             <Select value={clf} onValueChange={setClf}>
               <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">بدون تصنيف</SelectItem>
+                <SelectItem value="none">بدون تصنيف</SelectItem>
                 {CLF_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>

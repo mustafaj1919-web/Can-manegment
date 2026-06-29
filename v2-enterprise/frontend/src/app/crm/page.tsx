@@ -118,10 +118,10 @@ function AddInteractionForm({ onClose, onSuccess }: { onClose: () => void; onSuc
   const [customerId,       setCustomerId]       = useState('')
   const [type,             setType]             = useState<InteractionType>('call')
   const [notes,            setNotes]            = useState('')
-  const [outcome,          setOutcome]          = useState<OutcomeType | ''>('')
+  const [outcome,          setOutcome]          = useState<OutcomeType | 'none'>('none')
   const [followUpDate,     setFollowUpDate]     = useState('')
   const [interactionDate,  setInteractionDate]  = useState(new Date().toISOString().slice(0, 10))
-  const [employeeId,       setEmployeeId]       = useState('')
+  const [employeeId,       setEmployeeId]       = useState('none')
 
   const { data: customers } = useQuery({ queryKey: ['customers-list'], queryFn: () => getCustomers({ per_page: 200 }), staleTime: 60_000 })
   const { data: employeesData } = useQuery({ queryKey: ['employees-list'], queryFn: () => getEmployees({ per_page: 200 }), staleTime: 60_000 })
@@ -140,10 +140,10 @@ function AddInteractionForm({ onClose, onSuccess }: { onClose: () => void; onSuc
       customer_id:      customerId,
       interaction_type: type,
       notes:            notes || undefined,
-      outcome:          (outcome as OutcomeType) || undefined,
+      outcome:          (outcome && outcome !== 'none' ? outcome : undefined),
       follow_up_date:   followUpDate || undefined,
       interaction_date: interactionDate,
-      employee_id:      employeeId || undefined,
+      employee_id:      (employeeId && employeeId !== 'none' ? employeeId : undefined),
     })
   }
 
@@ -179,7 +179,7 @@ function AddInteractionForm({ onClose, onSuccess }: { onClose: () => void; onSuc
               <Select value={outcome} onValueChange={v => setOutcome(v as OutcomeType)}>
                 <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="اختياري" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="none">—</SelectItem>
                   {OUTCOME_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -204,7 +204,7 @@ function AddInteractionForm({ onClose, onSuccess }: { onClose: () => void; onSuc
             <Select value={employeeId} onValueChange={setEmployeeId}>
               <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="اختياري" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">—</SelectItem>
+                  <SelectItem value="none">—</SelectItem>
                 {employees.map((emp) => <SelectItem key={emp.id} value={String(emp.id)}>{emp.full_name}</SelectItem>)}
               </SelectContent>
             </Select>

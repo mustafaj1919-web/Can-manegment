@@ -106,8 +106,8 @@ function DealCard({ deal, onMove, onDelete }: {
 
 function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [customerId,     setCustomerId]     = useState('')
-  const [carId,          setCarId]          = useState('')
-  const [assignedId,     setAssignedId]     = useState('')
+  const [carId,          setCarId]          = useState('none')
+  const [assignedId,     setAssignedId]     = useState('none')
   const [expectedPrice,  setExpectedPrice]  = useState('')
   const [currency,       setCurrency]       = useState('USD')
   const [notes,          setNotes]          = useState('')
@@ -129,8 +129,8 @@ function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     if (!customerId) { toast.error('اختر العميل'); return }
     mutation.mutate({
       customer_id:     customerId,
-      car_id:          carId || undefined,
-      assigned_to_id:  assignedId || undefined,
+      car_id:          (carId && carId !== 'none') ? carId : undefined,
+      assigned_to_id:  (assignedId && assignedId !== 'none') ? assignedId : undefined,
       expected_price:  expectedPrice ? parseFloat(expectedPrice) : undefined,
       currency,
       notes:           notes || undefined,
@@ -165,7 +165,7 @@ function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             <Select value={carId} onValueChange={setCarId}>
               <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="اختياري" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">—</SelectItem>
+                <SelectItem value="none">—</SelectItem>
                 {(cars ?? []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.brand} {c.model} {c.manufacturing_year}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -188,7 +188,7 @@ function AddDealForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             <Select value={assignedId} onValueChange={setAssignedId}>
               <SelectTrigger className="h-9 border-border/50 bg-secondary/30"><SelectValue placeholder="اختياري" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">—</SelectItem>
+                <SelectItem value="none">—</SelectItem>
                 {employees.map(emp => <SelectItem key={emp.id} value={String(emp.id)}>{emp.full_name}</SelectItem>)}
               </SelectContent>
             </Select>
