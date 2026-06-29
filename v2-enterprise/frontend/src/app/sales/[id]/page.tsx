@@ -4,7 +4,7 @@ import { use } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import {
-  CheckCircle2, Clock, AlertTriangle, AlertCircle, FileText,
+  CheckCircle2, Clock, AlertTriangle, AlertCircle, FileText, ArrowUpRight,
 } from 'lucide-react'
 import { cn, formatMoney, formatDate, formatDateArabic, translateStatus, getStatusVariant } from '@/lib/utils'
 import { getSaleById } from '@/lib/api/sales'
@@ -151,8 +151,14 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
         <SectionCard title="المشتري" contentClassName="px-5 py-2">
           {sale.buyer ? (
             <>
-              <div className="py-2.5 border-b border-border/30">
-                <p className="text-sm font-bold text-foreground">{sale.buyer.name}</p>
+              <div className="py-2.5 border-b border-border/30 flex items-center justify-between">
+                <Link
+                  href={`/customers/${sale.buyer.id}`}
+                  className="text-sm font-bold text-sky-400 hover:text-sky-300 hover:underline flex items-center gap-1"
+                >
+                  <span>{sale.buyer.name}</span>
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 py-2.5 text-xs">
                 <span className="text-muted-foreground">الهاتف</span><span>{sale.buyer.phone}</span>
