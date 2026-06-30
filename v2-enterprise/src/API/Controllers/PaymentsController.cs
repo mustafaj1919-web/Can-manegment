@@ -40,8 +40,10 @@ namespace CarShowroomManagementV2.API.Controllers
 
             var isReceipt = string.Equals(type, "receipt", StringComparison.OrdinalIgnoreCase);
             var isPayment = string.Equals(type, "payment", StringComparison.OrdinalIgnoreCase);
-            if (type != null && !isReceipt && !isPayment)
-                return BadRequest(new { success = false, message = "نوع السند غير صالح. القيم المسموحة: receipt, payment." });
+            var isTransfer = string.Equals(type, "transfer", StringComparison.OrdinalIgnoreCase);
+
+            if (type != null && !isReceipt && !isPayment && !isTransfer)
+                return BadRequest(new { success = false, message = "نوع السند غير صالح. القيم المسموحة: receipt, payment, transfer." });
 
             var query = _context.Payments
                 .Include(p => p.Account)
@@ -49,9 +51,28 @@ namespace CarShowroomManagementV2.API.Controllers
                 .AsQueryable();
 
             if (isReceipt)
-                query = query.Where(p => p.Type == PaymentType.Receipt);
+            {
+                query = query.Where(p => p.Type == PaymentType.Receipt &&
+                    !(
+                        (p.Account != null && (p.Account.AccountCode.StartsWith("111") || p.Account.AccountCode.StartsWith("112"))) &&
+                        (p.ContraAccount != null && (p.ContraAccount.AccountCode.StartsWith("111") || p.ContraAccount.AccountCode.StartsWith("112")))
+                    ));
+            }
             else if (isPayment)
-                query = query.Where(p => p.Type == PaymentType.Payment);
+            {
+                query = query.Where(p => p.Type == PaymentType.Payment &&
+                    !(
+                        (p.Account != null && (p.Account.AccountCode.StartsWith("111") || p.Account.AccountCode.StartsWith("112"))) &&
+                        (p.ContraAccount != null && (p.ContraAccount.AccountCode.StartsWith("111") || p.ContraAccount.AccountCode.StartsWith("112")))
+                    ));
+            }
+            else if (isTransfer)
+            {
+                query = query.Where(p =>
+                    p.Account != null && (p.Account.AccountCode.StartsWith("111") || p.Account.AccountCode.StartsWith("112")) &&
+                    p.ContraAccount != null && (p.ContraAccount.AccountCode.StartsWith("111") || p.ContraAccount.AccountCode.StartsWith("112"))
+                );
+            }
 
             var rows = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
             var items = rows.Select(MapVoucher).ToList();
@@ -142,10 +163,15 @@ namespace CarShowroomManagementV2.API.Controllers
             // في القبض: مدين = الصندوق (Account)، دائن = المقابل. في الصرف: العكس.
             var debitAcc = isReceipt ? p.Account : p.ContraAccount;
             var creditAcc = isReceipt ? p.ContraAccount : p.Account;
+
+            var isTransfer = debitAcc != null && creditAcc != null &&
+                (debitAcc.AccountCode.StartsWith("111") || debitAcc.AccountCode.StartsWith("112")) &&
+                (creditAcc.AccountCode.StartsWith("111") || creditAcc.AccountCode.StartsWith("112"));
+
             return new
             {
                 id = p.Id,
-                voucher_type = isReceipt ? "receipt" : "payment",
+                voucher_type = isTransfer ? "transfer" : (isReceipt ? "receipt" : "payment"),
                 voucher_number = p.ReferenceNumber,
                 voucher_date = p.CreatedAt,
                 debit_account_code = debitAcc?.AccountCode,
