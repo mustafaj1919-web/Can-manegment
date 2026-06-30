@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base API URL linked to the production server.
-export const BASE_URL = 'http://100.75.153.105/api';
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://100.75.153.105/api';
 
 interface RequestOptions extends RequestInit {
   token?: string;
