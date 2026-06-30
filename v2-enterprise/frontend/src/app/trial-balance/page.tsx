@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { exportXlsx } from '@/lib/export'
+import { exportCsv } from '@/lib/export'
 
 const TYPE_OPTS = [
   { value: 'all',       label: 'كل الأنواع' },
@@ -63,7 +63,7 @@ export default function TrialBalancePage() {
 
   function resetFilters() { setSearch(''); setTypeFilter('all') }
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(() => {
     setExporting(true)
     try {
       const headers = ['رمز الحساب', 'اسم الحساب', 'النوع', 'مدين', 'دائن', 'الرصيد']
@@ -77,7 +77,7 @@ export default function TrialBalancePage() {
       ])
       // Add totals row
       rows.push(['', 'الإجمالي', '', data?.total_debit ?? 0, data?.total_credit ?? 0, ''])
-      await exportXlsx('ميزان-المراجعة', headers, rows)
+      exportCsv(`ميزان_المراجعة_${new Date().toISOString().split('T')[0]}`, headers, rows)
     } finally {
       setExporting(false)
     }

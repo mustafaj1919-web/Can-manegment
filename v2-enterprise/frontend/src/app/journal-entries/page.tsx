@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,6 +12,7 @@ import {
   getJournalEntries, reverseJournalEntry, getChartOfAccounts, createJournalEntry,
   type JournalEntryItem, type ChartAccountNode, type AccountClassification
 } from '@/lib/api/accounting'
+import { getExchangeRate } from '@/lib/api/exchange-rate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -405,10 +406,24 @@ function flatLeafAccounts(nodes: ChartAccountNode[]): ChartAccountNode[] {
 function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
+  const [currency, setCurrency] = useState('IQD')
+  const [exchangeRate, setExchangeRate] = useState('1500')
   const [lines, setLines] = useState<JournalLineInput[]>([
     { accountId: '', debit: '', credit: '', description: '' },
     { accountId: '', debit: '', credit: '', description: '' },
   ])
+
+  const { data: rateData } = useQuery({
+    queryKey: ['exchange-rate-je'],
+    queryFn: getExchangeRate,
+    staleTime: 60_000,
+  })
+
+  useEffect(() => {
+    if (rateData?.rate) {
+      setExchangeRate(String(rateData.rate))
+    }
+  }, [rateData])
 
   const { data: coaData } = useQuery({
     queryKey: ['chart-of-accounts-flat'],
@@ -471,15 +486,24 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
       return
     }
 
+    const rateVal = currency === 'USD' ? (parseFloat(exchangeRate) || 1500) : 1.0
+    const finalDescription = currency === 'USD'
+      ? `[$${totalDebit.toLocaleString('en-US')} @ ${rateVal.toLocaleString('en-US')}] ${description}`
+      : description
+
     mutation.mutate({
       entryDate,
-      description,
-      lines: lines.map(l => ({
-        accountId: l.accountId,
-        debit: parseFloat(l.debit) || 0,
-        credit: parseFloat(l.credit) || 0,
-        description: l.description || undefined
-      }))
+      description: finalDescription,
+      lines: lines.map(l => {
+        const lineDebit = parseFloat(l.debit) || 0
+        const lineCredit = parseFloat(l.credit) || 0
+        return {
+          accountId: l.accountId,
+          debit: currency === 'USD' ? Math.round(lineDebit * rateVal) : lineDebit,
+          credit: currency === 'USD' ? Math.round(lineCredit * rateVal) : lineCredit,
+          description: l.description || undefined
+        }
+      })
     })
   }
 
@@ -492,7 +516,7 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 pr-1" dir="rtl">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="md:col-span-2">
               <label className="mb-1 block text-xs text-muted-foreground">البيان الإجمالي للقيد *</label>
               <Input
@@ -513,7 +537,39 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                 className="h-9 bg-secondary/30 border-border/50 text-sm"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">العملة *</label>
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-xs">
+                  <SelectValue placeholder="اختر العملة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="IQD">دينار عراقي (IQD)</SelectItem>
+                  <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {currency === 'USD' && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5 items-center">
+              <div className="md:col-span-2 flex items-center text-[11px] text-indigo-400 gap-1.5">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>سيتم إدخال المبالغ بالدولار، ويقوم النظام تلقائياً بالتحويل للدينار.</span>
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs text-muted-foreground">سعر الصرف (دينار لكل دولار) *</label>
+                <Input
+                  type="number"
+                  placeholder="1500"
+                  value={exchangeRate}
+                  onChange={e => setExchangeRate(e.target.value)}
+                  required
+                  className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric"
+                />
+              </div>
+            </motion.div>
+          )}
 
           <div className="space-y-2">
             <div className="flex justify-between items-center pb-1 border-b border-border/30">
@@ -526,7 +582,7 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
 
             <div className="space-y-2.5">
               {lines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_2fr_auto] gap-2 items-center bg-secondary/10 p-2.5 rounded-lg border border-border/20">
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-[2fr_1.2fr_1.2fr_2fr_auto] gap-2.5 items-start bg-secondary/10 p-2.5 rounded-lg border border-border/20">
                   <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">الحساب</label>
                     <Select value={line.accountId} onValueChange={v => updateLine(idx, 'accountId', v)}>
@@ -547,6 +603,11 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                       onChange={e => updateLine(idx, 'debit', e.target.value)}
                       className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-emerald-400"
                     />
+                    {currency === 'USD' && line.debit && (
+                      <span className="text-[10px] text-emerald-400/80 block mt-0.5 font-numeric text-left">
+                        ≈ {Math.round(parseFloat(line.debit) * (parseFloat(exchangeRate) || 1500)).toLocaleString()} د.ع
+                      </span>
+                    )}
                   </div>
                   <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">دائن</label>
@@ -557,6 +618,11 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                       onChange={e => updateLine(idx, 'credit', e.target.value)}
                       className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-rose-400"
                     />
+                    {currency === 'USD' && line.credit && (
+                      <span className="text-[10px] text-rose-400/80 block mt-0.5 font-numeric text-left">
+                        ≈ {Math.round(parseFloat(line.credit) * (parseFloat(exchangeRate) || 1500)).toLocaleString()} د.ع
+                      </span>
+                    )}
                   </div>
                   <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">البيان الخاص للسطر (اختياري)</label>
@@ -567,7 +633,7 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                       className="h-9 bg-secondary/30 border-border/50 text-xs"
                     />
                   </div>
-                  <div>
+                  <div className="pt-0.5">
                     <Button
                       type="button"
                       variant="ghost"
@@ -588,18 +654,18 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
             <div className="flex gap-4 text-xs font-semibold">
               <div>
                 <span className="text-muted-foreground">إجمالي المدين: </span>
-                <span className="font-numeric text-emerald-400">{formatMoney(totalDebit, 'IQD')}</span>
+                <span className="font-numeric text-emerald-400">{formatMoney(totalDebit, currency as any)}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">إجمالي الدائن: </span>
-                <span className="font-numeric text-rose-400">{formatMoney(totalCredit, 'IQD')}</span>
+                <span className="font-numeric text-rose-400">{formatMoney(totalCredit, currency as any)}</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 text-xs font-bold font-numeric">
               {isBalanced ? (
                 <span className="text-emerald-400 flex items-center gap-1"><Check className="h-4 w-4" /> القيد متوازن</span>
               ) : (
-                <span className="text-amber-400 flex items-center gap-1"><AlertCircle className="h-4 w-4" /> القيد غير متوازن ({formatMoney(Math.abs(totalDebit - totalCredit), 'IQD')})</span>
+                <span className="text-amber-400 flex items-center gap-1"><AlertCircle className="h-4 w-4" /> القيد غير متوازن ({formatMoney(Math.abs(totalDebit - totalCredit), currency as any)})</span>
               )}
             </div>
           </div>
