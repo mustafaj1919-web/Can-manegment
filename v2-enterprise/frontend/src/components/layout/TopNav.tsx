@@ -227,12 +227,12 @@ export function TopNav({ collapsed, onToggleSidebar, onToggleMobile }: {
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </span>
           <span className="font-numeric">{timeStr}</span>
-          {activeBranch && (
+          {/* {activeBranch && (
             <>
               <span className="text-border/60">·</span>
               <span className="truncate">{activeBranch.name}</span>
             </>
-          )}
+          )} */}
         </div>
 
         <div className="hidden md:block h-3.5 w-px bg-border-subtle shrink-0" />
@@ -310,7 +310,7 @@ export function TopNav({ collapsed, onToggleSidebar, onToggleMobile }: {
         </div>
         <ThemeToggle />
         <NotificationCenter />
-        <BranchSelector />
+        {/* <BranchSelector /> */}
         <UserMenu />
       </div>
     </header>

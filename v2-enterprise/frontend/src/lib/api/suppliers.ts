@@ -49,6 +49,7 @@ export interface BulkVehicleOverride {
 
 export interface BulkPurchasePayload {
   supplierId: string
+  branchId?: string
   brand?: string
   model: string
   year: number
@@ -126,6 +127,7 @@ export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<
     TargetSellingPrice: payload.targetSellingPrice,
     ChassisNumbers: payload.chassisNumbers,
     PaidAmount: payload.paidAmount,
+    BranchId: payload.branchId,
     VehicleOverrides: payload.vehicleOverrides
       ? Object.fromEntries(
           Object.entries(payload.vehicleOverrides).map(([vin, o]) => [

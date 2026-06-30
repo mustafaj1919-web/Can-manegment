@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BrandModelSelect, type TrimSpec } from '@/components/forms/BrandModelSelect'
 import { useVinDecoder } from '@/lib/useVinDecoder'
+import { useBranchStore } from '@/lib/stores/branch-store'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { QuickSupplierDialog } from '@/components/purchases/QuickSupplierDialog'
@@ -237,6 +238,17 @@ function VehicleDetailRow({
 
 function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
   const router = useRouter()
+  const { branches, activeBranch } = useBranchStore()
+  const [selectedBranchId, setSelectedBranchId] = useState('')
+
+  useEffect(() => {
+    if (activeBranch && !selectedBranchId) {
+      setSelectedBranchId(String(activeBranch.id))
+    } else if (branches.length > 0 && !selectedBranchId) {
+      setSelectedBranchId(String(branches[0].id))
+    }
+  }, [activeBranch, branches, selectedBranchId])
+
   const [sellerId, setSellerId] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
@@ -325,6 +337,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
         paymentMethod: paymentMethod as any,
         chassisNumbers: uniqueVins,
         vehicleOverrides: Object.keys(vehicleOverrides).length > 0 ? vehicleOverrides : undefined,
+        branchId: selectedBranchId || undefined,
       })
     } catch {
       return
@@ -364,30 +377,49 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
 
   return (
     <div className="space-y-5">
-      {/* Supplier */}
-      <SectionCard title="المورد">
-        <div className="mb-3 flex justify-end">
-          <QuickSupplierDialog onSuccess={(id) => { setSellerId(id); setErrors(e => ({ ...e, sellerId: '' })) }} />
-        </div>
-        {sellersLoading ? (
-          <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
-        ) : (
+      {/* Supplier & Branch */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SectionCard title="المورد">
+          <div className="mb-3 flex justify-end">
+            <QuickSupplierDialog onSuccess={(id) => { setSellerId(id); setErrors(e => ({ ...e, sellerId: '' })) }} />
+          </div>
+          {sellersLoading ? (
+            <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
+          ) : (
+            <div>
+              <Label className="mb-1.5 block text-xs text-muted-foreground">اختر المورد *</Label>
+              <Select value={sellerId} onValueChange={setSellerId}>
+                <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
+                  <SelectValue placeholder="اختر المورد" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {sellers.map(s => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.full_name || s.name} — {s.phone || '-'}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldError msg={errors.sellerId} />
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="فرع الشراء والتسجيل">
+          <div className="mb-3 flex h-[28px] justify-end" />
           <div>
-            <Label className="mb-1.5 block text-xs text-muted-foreground">اختر المورد *</Label>
-            <Select value={sellerId} onValueChange={setSellerId}>
-              <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
-                <SelectValue placeholder="اختر المورد" />
+            <Label className="mb-1.5 block text-xs text-muted-foreground">اختر الفرع المستهدف للشراء *</Label>
+            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+              <SelectTrigger className="bg-secondary/30 border-border/60">
+                <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
               <SelectContent className="max-h-64">
-                {sellers.map(s => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.full_name || s.name} — {s.phone || '-'}</SelectItem>
+                {branches.map(b => (
+                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FieldError msg={errors.sellerId} />
           </div>
-        )}
-      </SectionCard>
+        </SectionCard>
+      </div>
 
       {/* Shared car details */}
       <SectionCard title="بيانات السيارة (مشتركة)" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">

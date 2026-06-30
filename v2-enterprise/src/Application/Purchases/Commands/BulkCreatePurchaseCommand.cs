@@ -15,6 +15,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
     public class BulkCreatePurchaseCommand : IRequest<BulkCreatePurchaseResult>
     {
         public Guid SupplierId { get; set; }
+        public Guid? BranchId { get; set; } // target branch for purchase
         public decimal PurchaseCost { get; set; }
         public decimal? PaidAmount { get; set; } // null or 0 = full credit; > 0 = partial/full immediate payment
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // used only when PaidAmount > 0
@@ -73,7 +74,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
         public async Task<BulkCreatePurchaseResult> Handle(BulkCreatePurchaseCommand request, CancellationToken cancellationToken)
         {
-            var branchId = _currentUserService.BranchId;
+            var branchId = request.BranchId ?? _currentUserService.BranchId;
             var result = new BulkCreatePurchaseResult();
 
             var supplier = await _context.Suppliers
