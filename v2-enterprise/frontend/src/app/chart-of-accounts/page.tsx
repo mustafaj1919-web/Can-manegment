@@ -443,6 +443,50 @@ export default function ChartOfAccountsPage() {
     qc.invalidateQueries({ queryKey: ['trial-balance'] })
   }
 
+  function handleExportExcel() {
+    if (!data?.flat || data.flat.length === 0) {
+      toast.error('لا توجد بيانات لتصديرها')
+      return
+    }
+
+    // Header row
+    const headers = ['رمز الحساب', 'اسم الحساب', 'المستوى', 'النوع', 'التصنيف', 'المدين', 'الدائن', 'الرصيد', 'الحالة']
+    
+    const rows = data.flat.map(node => {
+      // Indent name by depth to represent hierarchy visually in Excel
+      const indent = '  '.repeat(Math.max(0, node.depth))
+      const displayName = node.depth > 0 ? `${indent}└ ${node.name}` : node.name
+      
+      const debit = node.subtree_debit ?? node.debit ?? 0
+      const credit = node.subtree_credit ?? node.credit ?? 0
+      const balance = node.subtree_balance ?? node.balance ?? 0
+      const status = node.is_active ? 'نشط' : 'مؤرشف'
+
+      return [
+        node.code,
+        `"${displayName.replace(/"/g, '""')}"`,
+        node.level, // node.level is 'رئيسي' | 'فرعي' | 'تفصيلي'
+        node.type_label || node.type,
+        node.classification_label || node.classification || '—',
+        debit,
+        credit,
+        balance,
+        status
+      ]
+    })
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `دليل_الحسابات_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success('تم تصدير دليل الحسابات بنجاح!')
+  }
+
   return (
     <div className="space-y-5" dir="rtl">
       {/* Header */}
@@ -457,6 +501,10 @@ export default function ChartOfAccountsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleExportExcel} className="gap-2 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 text-xs">
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            تصدير إكسل
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => recomputeMut.mutate()} disabled={recomputeMut.isPending} className="gap-2 border border-border/50 text-xs">
             <RefreshCw className={`h-3.5 w-3.5 ${recomputeMut.isPending ? 'animate-spin' : ''}`} />
             إعادة حساب الأرصدة
