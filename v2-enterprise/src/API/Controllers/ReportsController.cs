@@ -325,6 +325,71 @@ namespace CarShowroomManagementV2.API.Controllers
             return File(bytes, "text/csv; charset=utf-8", $"installment-aging-{DateTime.UtcNow:yyyyMMdd}.csv");
         }
 
+        // GET /api/reports/vehicle-profitability
+        [HttpGet("vehicle-profitability")]
+        public async Task<IActionResult> GetVehicleProfitability()
+        {
+            var branchId = _currentUserService.BranchId;
+
+            // Get vehicles
+            var vehicles = await _context.Vehicles
+                .Where(v => _currentUserService.CanSeeAllBranches || v.BranchId == branchId)
+                .Select(v => new { v.Id, v.ChassisNumber, v.Model, v.PlateNumber, v.Status })
+                .ToListAsync();
+
+            // Fetch all journal lines grouped by VehicleId for our branch
+            var lines = await _context.JournalLines
+                .Include(l => l.Account)
+                .Where(l => l.VehicleId != null && (_currentUserService.CanSeeAllBranches || l.JournalEntry!.BranchId == branchId))
+                .Select(l => new {
+                    l.VehicleId,
+                    l.Debit,
+                    l.Credit,
+                    AccountCode = l.Account != null ? l.Account.AccountCode : ""
+                })
+                .ToListAsync();
+
+            var result = new List<object>();
+
+            foreach (var vehicle in vehicles)
+            {
+                var vehicleLines = lines.Where(l => l.VehicleId == vehicle.Id).ToList();
+
+                // Revenue: sum of credits for accounts starting with '4' (e.g. Sales Revenue) minus debits
+                var revenue = vehicleLines
+                    .Where(l => l.AccountCode.StartsWith("4"))
+                    .Sum(l => l.Credit - l.Debit);
+
+                // Cost of Goods Sold / Purchase Cost: accounts starting with '5' (e.g. COGS)
+                var cogs = vehicleLines
+                    .Where(l => l.AccountCode.StartsWith("5"))
+                    .Sum(l => l.Debit - l.Credit);
+
+                // Expenses / Maintenance: accounts starting with '3' (Expenses)
+                var expenses = vehicleLines
+                    .Where(l => l.AccountCode.StartsWith("3"))
+                    .Sum(l => l.Debit - l.Credit);
+
+                // Net Profit
+                var profit = revenue - (cogs + expenses);
+
+                result.Add(new
+                {
+                    vehicle_id = vehicle.Id,
+                    model = vehicle.Model,
+                    chassis_number = vehicle.ChassisNumber,
+                    plate_number = vehicle.PlateNumber,
+                    status = vehicle.Status,
+                    revenue,
+                    cogs,
+                    expenses,
+                    profit
+                });
+            }
+
+            return Ok(result);
+        }
+
         private static string GetArabicMonthLabel(DateTime date)
         {
             string[] arabicMonths =

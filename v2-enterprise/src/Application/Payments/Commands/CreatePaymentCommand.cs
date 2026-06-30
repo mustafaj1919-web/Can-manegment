@@ -122,51 +122,154 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
                     CreatedBy = _currentUserService.UserId
                 };
 
-                // تحديد حساب المدين والدائن بناء على نوع السند
-                Guid debitAccountId;
-                Guid creditAccountId;
-                string debitLineDesc;
-                string creditLineDesc;
-
-                if (request.Type == PaymentType.Receipt)
+                // تحديد حساب المدين والدائن بناء على نوع السند وفروقات أسعار الصرف
+                if (!isUsd || rate == 1450.00m)
                 {
-                    // سند قبض: نقدية مدين (زيادة أصول)، عميل دائن (نقص أصول ذمم مدينة)
-                    debitAccountId = request.AccountId;
-                    creditAccountId = request.ContraAccountId;
-                    debitLineDesc = $"مقبوضات نقدية/بنكية بموجب سند قبض رقم {request.ReferenceNumber}";
-                    creditLineDesc = $"تسديد/دفعة لحساب {contraAccount.Name} بموجب سند قبض رقم {request.ReferenceNumber}";
+                    Guid debitAccountId = request.Type == PaymentType.Receipt ? request.AccountId : request.ContraAccountId;
+                    Guid creditAccountId = request.Type == PaymentType.Receipt ? request.ContraAccountId : request.AccountId;
+                    string debitLineDesc = request.Type == PaymentType.Receipt 
+                        ? $"مقبوضات نقدية/بنكية بموجب سند قبض رقم {request.ReferenceNumber}"
+                        : $"صرف مبالغ لحساب {contraAccount.Name} بموجب سند صرف رقم {request.ReferenceNumber}";
+                    string creditLineDesc = request.Type == PaymentType.Receipt
+                        ? $"تسديد/دفعة لحساب {contraAccount.Name} بموجب سند قبض رقم {request.ReferenceNumber}"
+                        : $"مدفوعات نقدية/بنكية بموجب سند صرف رقم {request.ReferenceNumber}";
+
+                    journalEntry.Lines.Add(new JournalLine
+                    {
+                        Id = Guid.NewGuid(),
+                        JournalEntryId = journalEntry.Id,
+                        AccountId = debitAccountId,
+                        Debit = finalAmount,
+                        Credit = 0,
+                        Description = debitLineDesc
+                    });
+
+                    journalEntry.Lines.Add(new JournalLine
+                    {
+                        Id = Guid.NewGuid(),
+                        JournalEntryId = journalEntry.Id,
+                        AccountId = creditAccountId,
+                        Debit = 0,
+                        Credit = finalAmount,
+                        Description = creditLineDesc
+                    });
                 }
                 else
                 {
-                    // سند صرف: مورد مدين (نقص التزامات)، نقدية دائن (نقص أصول)
-                    debitAccountId = request.ContraAccountId;
-                    creditAccountId = request.AccountId;
-                    debitLineDesc = $"صرف مبالغ لحساب {contraAccount.Name} بموجب سند صرف رقم {request.ReferenceNumber}";
-                    creditLineDesc = $"مدفوعات نقدية/بنكية بموجب سند صرف رقم {request.ReferenceNumber}";
+                    // حساب فروقات سعر الصرف
+                    var baseRate = 1450.00m;
+                    var counterpartAmount = request.Amount * baseRate;
+                    var fxDifference = finalAmount - counterpartAmount;
+
+                    var fxGainAccount = await _context.Accounts
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(a => a.AccountCode == "421001" && a.BranchId == branchId, cancellationToken);
+                    var fxLossAccount = await _context.Accounts
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(a => a.AccountCode == "521007" && a.BranchId == branchId, cancellationToken);
+
+                    if (fxGainAccount == null || fxLossAccount == null)
+                    {
+                        throw new InvalidOperationException("حسابات فروقات العملة (421001) أو (521007) غير متوفرة بالفرع.");
+                    }
+
+                    if (request.Type == PaymentType.Receipt)
+                    {
+                        // سند قبض
+                        journalEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(),
+                            JournalEntryId = journalEntry.Id,
+                            AccountId = request.AccountId,
+                            Debit = finalAmount,
+                            Credit = 0,
+                            Description = $"مقبوضات نقدية بالدولار بسعر صرف {rate:N0}"
+                        });
+
+                        journalEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(),
+                            JournalEntryId = journalEntry.Id,
+                            AccountId = request.ContraAccountId,
+                            Debit = 0,
+                            Credit = counterpartAmount,
+                            Description = $"تسديد من العميل {contraAccount.Name} بسعر الصرف القياسي {baseRate:N0}"
+                        });
+
+                        if (fxDifference > 0)
+                        {
+                            journalEntry.Lines.Add(new JournalLine
+                            {
+                                Id = Guid.NewGuid(),
+                                JournalEntryId = journalEntry.Id,
+                                AccountId = fxGainAccount.Id,
+                                Debit = 0,
+                                Credit = fxDifference,
+                                Description = $"أرباح فروقات أسعار صرف بموجب سند قبض رقم {request.ReferenceNumber}"
+                            });
+                        }
+                        else
+                        {
+                            journalEntry.Lines.Add(new JournalLine
+                            {
+                                Id = Guid.NewGuid(),
+                                JournalEntryId = journalEntry.Id,
+                                AccountId = fxLossAccount.Id,
+                                Debit = Math.Abs(fxDifference),
+                                Credit = 0,
+                                Description = $"خسائر فروقات أسعار صرف بموجب سند قبض رقم {request.ReferenceNumber}"
+                            });
+                        }
+                    }
+                    else
+                    {
+                        // سند صرف
+                        journalEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(),
+                            JournalEntryId = journalEntry.Id,
+                            AccountId = request.ContraAccountId,
+                            Debit = counterpartAmount,
+                            Credit = 0,
+                            Description = $"تخفيض حساب المورد {contraAccount.Name} بسعر الصرف القياسي {baseRate:N0}"
+                        });
+
+                        journalEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(),
+                            JournalEntryId = journalEntry.Id,
+                            AccountId = request.AccountId,
+                            Debit = 0,
+                            Credit = finalAmount,
+                            Description = $"مدفوعات نقدية بالدولار بسعر صرف {rate:N0}"
+                        });
+
+                        if (fxDifference > 0)
+                        {
+                            journalEntry.Lines.Add(new JournalLine
+                            {
+                                Id = Guid.NewGuid(),
+                                JournalEntryId = journalEntry.Id,
+                                AccountId = fxLossAccount.Id,
+                                Debit = fxDifference,
+                                Credit = 0,
+                                Description = $"خسائر فروقات أسعار صرف بموجب سند صرف رقم {request.ReferenceNumber}"
+                            });
+                        }
+                        else
+                        {
+                            journalEntry.Lines.Add(new JournalLine
+                            {
+                                Id = Guid.NewGuid(),
+                                JournalEntryId = journalEntry.Id,
+                                AccountId = fxGainAccount.Id,
+                                Debit = 0,
+                                Credit = Math.Abs(fxDifference),
+                                Description = $"أرباح فروقات أسعار صرف بموجب سند صرف رقم {request.ReferenceNumber}"
+                            });
+                        }
+                    }
                 }
-
-                var debitLine = new JournalLine
-                {
-                    Id = Guid.NewGuid(),
-                    JournalEntryId = journalEntry.Id,
-                    AccountId = debitAccountId,
-                    Debit = finalAmount,
-                    Credit = 0,
-                    Description = debitLineDesc
-                };
-
-                var creditLine = new JournalLine
-                {
-                    Id = Guid.NewGuid(),
-                    JournalEntryId = journalEntry.Id,
-                    AccountId = creditAccountId,
-                    Debit = 0,
-                    Credit = finalAmount,
-                    Description = creditLineDesc
-                };
-
-                journalEntry.Lines.Add(debitLine);
-                journalEntry.Lines.Add(creditLine);
 
                 _context.JournalEntries.Add(journalEntry);
                 await _context.SaveChangesAsync(cancellationToken);

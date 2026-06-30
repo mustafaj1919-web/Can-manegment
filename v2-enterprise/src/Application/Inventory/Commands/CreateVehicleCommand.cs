@@ -178,7 +178,8 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
                     AccountId = debitAccount.Id,
                     Debit = request.PurchaseCost,
                     Credit = 0,
-                    Description = $"زيادة قيمة المخزون بشراء سيارة {request.Model}"
+                    Description = $"زيادة قيمة المخزون بشراء سيارة {request.Model}",
+                    VehicleId = vehicle.Id
                 };
 
                 // سطر الدائن (المورد أو الصندوق/البنك)
@@ -189,7 +190,8 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
                     AccountId = creditAccount.Id,
                     Debit = 0,
                     Credit = request.PurchaseCost,
-                    Description = $"استحقاق/دفع قيمة السيارة {request.Model}"
+                    Description = $"استحقاق/دفع قيمة السيارة {request.Model}",
+                    VehicleId = vehicle.Id
                 };
 
                 journalEntry.Lines.Add(debitLine);

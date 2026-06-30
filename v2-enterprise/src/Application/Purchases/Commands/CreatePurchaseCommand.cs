@@ -211,7 +211,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     AccountId = inventoryAccount.Id,
                     Debit = purchaseCost,
                     Credit = 0,
-                    Description = $"زيادة قيمة المخزون بشراء سيارة {vehicle.Model} - شاصي: {vehicle.ChassisNumber}"
+                    Description = $"زيادة قيمة المخزون بشراء سيارة {vehicle.Model} - شاصي: {vehicle.ChassisNumber}",
+                    VehicleId = vehicle.Id
                 });
                 journalEntry.Lines.Add(new JournalLine
                 {
@@ -220,7 +221,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     AccountId = mainCreditAccountId,
                     Debit = 0,
                     Credit = purchaseCost,
-                    Description = mainCreditDesc
+                    Description = mainCreditDesc,
+                    VehicleId = vehicle.Id
                 });
 
                 if (!journalEntry.IsBalanced)
@@ -279,7 +281,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         AccountId = supplier.AccountId,
                         Debit = paidAmount,
                         Credit = 0,
-                        Description = $"تخفيض ذمة المورد {supplier.Name} بالدفعة الأولى"
+                        Description = $"تخفيض ذمة المورد {supplier.Name} بالدفعة الأولى",
+                        VehicleId = vehicle.Id
                     });
                     payJournal.Lines.Add(new JournalLine
                     {
@@ -288,7 +291,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         AccountId = cashOrBankAccountId.Value,
                         Debit = 0,
                         Credit = paidAmount,
-                        Description = $"خروج النقدية لصالح المورد {supplier.Name}"
+                        Description = $"خروج النقدية لصالح المورد {supplier.Name}",
+                        VehicleId = vehicle.Id
                     });
 
                     if (!payJournal.IsBalanced)

@@ -44,6 +44,9 @@ namespace CarShowroomManagementV2.Infrastructure
             // تسجيل خدمة الإشعارات التلقائية والرسائل
             services.AddScoped<IMessageNotificationService, MessageNotificationService>();
 
+            // تسجيل عامل معالجة أرباح التقسيط المجدول في الخلفية
+            services.AddHostedService<InstallmentProfitBackgroundWorker>();
+
             return services;
         }
     }

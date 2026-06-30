@@ -179,7 +179,7 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
 
                 // 6. أرباح التقسيط (أقساط بيع فقط)
                 decimal recognizedProfit = 0;
-                if (!isPurchasePlan && plan.TotalPlanAmount > 0 && plan.TotalProfit > 0)
+                if (!isPurchasePlan && !installment.IsProfitRecognized && plan.TotalPlanAmount > 0 && plan.TotalProfit > 0)
                 {
                     recognizedProfit = AccountingAmount.RoundMoney(amount * (plan.TotalProfit / plan.TotalPlanAmount));
                     if (recognizedProfit > 0 && (deferredProfitAccount == null || recognizedProfitAccount == null))
@@ -212,6 +212,8 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                 var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
                 var entryNumber       = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
 
+                var vehicleId = isPurchasePlan ? purchase?.VehicleId : contract?.VehicleId;
+
                 var journalEntry = new JournalEntry
                 {
                     Id            = Guid.NewGuid(),
@@ -234,13 +236,15 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                     {
                         Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
                         AccountId = counterpartAccountId, Debit = amount, Credit = 0,
-                        Description = $"تخفيض المستحق للمورد {counterpartName} بسداد قسط"
+                        Description = $"تخفيض المستحق للمورد {counterpartName} بسداد قسط",
+                        VehicleId = vehicleId
                     });
                     journalEntry.Lines.Add(new JournalLine
                     {
                         Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
                         AccountId = cashBankAccount.Id, Debit = 0, Credit = amount,
-                        Description = $"صرف دفعة قسط للمورد {counterpartName} من الصندوق/البنك"
+                        Description = $"صرف دفعة قسط للمورد {counterpartName} من الصندوق/البنك",
+                        VehicleId = vehicleId
                     });
                 }
                 else
@@ -250,13 +254,15 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                     {
                         Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
                         AccountId = cashBankAccount.Id, Debit = amount, Credit = 0,
-                        Description = $"استلام مبالغ سداد قسط من العميل {counterpartName}"
+                        Description = $"استلام مبالغ سداد قسط من العميل {counterpartName}",
+                        VehicleId = vehicleId
                     });
                     journalEntry.Lines.Add(new JournalLine
                     {
                         Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
                         AccountId = counterpartAccountId, Debit = 0, Credit = amount,
-                        Description = $"تخفيض مديونية العميل {counterpartName} بسداد قسط مالي"
+                        Description = $"تخفيض مديونية العميل {counterpartName} بسداد قسط مالي",
+                        VehicleId = vehicleId
                     });
 
                     if (recognizedProfit > 0)
@@ -265,14 +271,19 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                         {
                             Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
                             AccountId = deferredProfitAccount!.Id, Debit = recognizedProfit, Credit = 0,
-                            Description = $"تخفيض أرباح التقسيط المؤجلة لسداد العميل {counterpartName}"
+                            Description = $"تخفيض أرباح التقسيط المؤجلة لسداد العميل {counterpartName}",
+                            VehicleId = vehicleId
                         });
                         journalEntry.Lines.Add(new JournalLine
                         {
                             Id = Guid.NewGuid(), JournalEntryId = journalEntry.Id,
                             AccountId = recognizedProfitAccount!.Id, Debit = 0, Credit = recognizedProfit,
-                            Description = $"الاعتراف بأرباح التقسيط المحققة بنسبة السداد للعميل {counterpartName}"
+                            Description = $"الاعتراف بأرباح التقسيط المحققة بنسبة السداد للعميل {counterpartName}",
+                            VehicleId = vehicleId
                         });
+
+                        installment.IsProfitRecognized = true;
+                        _context.Installments.Update(installment);
                     }
                 }
 

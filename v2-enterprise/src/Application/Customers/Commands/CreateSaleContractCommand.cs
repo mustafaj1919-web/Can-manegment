@@ -345,7 +345,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                         AccountId = cashAccount.Id,
                         Debit = downPayment,
                         Credit = 0,
-                        Description = $"الدفعة المقدمة لعقد البيع {contractNumber}"
+                        Description = $"الدفعة المقدمة لعقد البيع {contractNumber}",
+                        VehicleId = vehicle.Id
                     });
                 }
 
@@ -359,7 +360,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                         AccountId = customer.AccountId,
                         Debit = AccountingAmount.RoundMoney(remainingBalance + totalProfitMarkup),
                         Credit = 0,
-                        Description = $"مديونية متبقية لعقد البيع بالتقسيط {contractNumber}"
+                        Description = $"مديونية متبقية لعقد البيع بالتقسيط {contractNumber}",
+                        VehicleId = vehicle.Id
                     });
                 }
 
@@ -371,7 +373,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     AccountId = cogsAccount.Id,
                     Debit = bookValue,
                     Credit = 0,
-                    Description = $"تكلفة السيارة المباعة {vehicle.Model}"
+                    Description = $"تكلفة السيارة المباعة {vehicle.Model}",
+                    VehicleId = vehicle.Id
                 });
 
                 // ب. الطرف الدائن:
@@ -383,7 +386,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     AccountId = salesRevenueAccount.Id,
                     Debit = 0,
                     Credit = AccountingAmount.RoundMoney(salePrice - discount),
-                    Description = $"إيراد بيع سيارة {vehicle.Model} - عقد {contractNumber}"
+                    Description = $"إيراد بيع سيارة {vehicle.Model} - عقد {contractNumber}",
+                    VehicleId = vehicle.Id
                 });
 
                 // 2. حساب ضريبة المبيعات المستحقة: 2202
@@ -396,7 +400,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                         AccountId = salesTaxAccount.Id,
                         Debit = 0,
                         Credit = taxAmount,
-                        Description = $"ضريبة مبيعات مستحقة لعقد البيع {contractNumber}"
+                        Description = $"ضريبة مبيعات مستحقة لعقد البيع {contractNumber}",
+                        VehicleId = vehicle.Id
                     });
                 }
 
@@ -410,7 +415,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                         AccountId = registrationFeesAccount.Id,
                         Debit = 0,
                         Credit = registrationFees,
-                        Description = $"أمانات رسوم التسجيل لعقد البيع {contractNumber}"
+                        Description = $"أمانات رسوم التسجيل لعقد البيع {contractNumber}",
+                        VehicleId = vehicle.Id
                     });
                 }
 
@@ -424,7 +430,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                         AccountId = deferredProfitAccount!.Id,
                         Debit = 0,
                         Credit = totalProfitMarkup,
-                        Description = $"أرباح تقسيط مؤجلة غير محققة لعقد البيع {contractNumber}"
+                        Description = $"أرباح تقسيط مؤجلة غير محققة لعقد البيع {contractNumber}",
+                        VehicleId = vehicle.Id
                     });
                 }
 
@@ -436,7 +443,8 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     AccountId = inventoryAccount.Id,
                     Debit = 0,
                     Credit = bookValue,
-                    Description = $"تخفيض المخزون لبيع سيارة {vehicle.Model}"
+                    Description = $"تخفيض المخزون لبيع سيارة {vehicle.Model}",
+                    VehicleId = vehicle.Id
                 });
 
                 if (!journalEntry.IsBalanced)

@@ -12,6 +12,7 @@ namespace CarShowroomManagementV2.Domain.Entities
         public decimal PaidAmount { get; set; } = 0; // المبلغ الذي تم سداده فعلياً
         public string Status { get; set; } = "Pending"; // Pending, Paid, PartiallyPaid, Overdue, Cancelled
         public DateTime? PaymentDate { get; set; } // تاريخ السداد المالي الفعلي
+        public bool IsProfitRecognized { get; set; } = false;
 
         // علاقة التنقل
         public virtual InstallmentPlan? InstallmentPlan { get; set; }
