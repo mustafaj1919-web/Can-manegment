@@ -391,6 +391,8 @@ interface JournalLineInput {
   debit: string
   credit: string
   description: string
+  currency: string
+  exchangeRate: string
 }
 
 function flatLeafAccounts(nodes: ChartAccountNode[]): ChartAccountNode[] {
@@ -406,24 +408,18 @@ function flatLeafAccounts(nodes: ChartAccountNode[]): ChartAccountNode[] {
 function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
-  const [currency, setCurrency] = useState('IQD')
-  const [exchangeRate, setExchangeRate] = useState('1500')
   const [lines, setLines] = useState<JournalLineInput[]>([
-    { accountId: '', debit: '', credit: '', description: '' },
-    { accountId: '', debit: '', credit: '', description: '' },
+    { accountId: '', debit: '', credit: '', description: '', currency: 'IQD', exchangeRate: '1500' },
+    { accountId: '', debit: '', credit: '', description: '', currency: 'IQD', exchangeRate: '1500' },
   ])
 
   const { data: rateData } = useQuery({
-    queryKey: ['exchange-rate-je'],
+    queryKey: ['exchange-rate-je-flat'],
     queryFn: getExchangeRate,
     staleTime: 60_000,
   })
 
-  useEffect(() => {
-    if (rateData?.rate) {
-      setExchangeRate(String(rateData.rate))
-    }
-  }, [rateData])
+  const currentSystemRate = rateData?.rate ? String(rateData.rate) : '1500'
 
   const { data: coaData } = useQuery({
     queryKey: ['chart-of-accounts-flat'],
@@ -445,7 +441,7 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
   })
 
   const addLine = () => {
-    setLines(prev => [...prev, { accountId: '', debit: '', credit: '', description: '' }])
+    setLines(prev => [...prev, { accountId: '', debit: '', credit: '', description: '', currency: 'IQD', exchangeRate: currentSystemRate }])
   }
 
   const removeLine = (idx: number) => {
@@ -459,13 +455,24 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
       const updated = { ...l, [field]: val }
       if (field === 'debit' && val !== '') updated.credit = ''
       if (field === 'credit' && val !== '') updated.debit = ''
+      if (field === 'currency' && val === 'USD') updated.exchangeRate = currentSystemRate
       return updated
     }))
   }
 
-  const totalDebit = lines.reduce((sum, l) => sum + (parseFloat(l.debit) || 0), 0)
-  const totalCredit = lines.reduce((sum, l) => sum + (parseFloat(l.credit) || 0), 0)
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0
+  const getIqdValue = (l: JournalLineInput) => {
+    const rateVal = l.currency === 'USD' ? (parseFloat(l.exchangeRate) || 1500) : 1.0
+    const debitVal = parseFloat(l.debit) || 0
+    const creditVal = parseFloat(l.credit) || 0
+    return {
+      debit: l.currency === 'USD' ? Math.round(debitVal * rateVal) : debitVal,
+      credit: l.currency === 'USD' ? Math.round(creditVal * rateVal) : creditVal,
+    }
+  }
+
+  const totalDebit = lines.reduce((sum, l) => sum + getIqdValue(l).debit, 0)
+  const totalCredit = lines.reduce((sum, l) => sum + getIqdValue(l).credit, 0)
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 1 && totalDebit > 0
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -482,26 +489,28 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
       return
     }
     if (!isBalanced) {
-      toast.error('القيد غير متوازن مالياً: إجمالي المدين يجب أن يساوي إجمالي الدائن')
+      toast.error('القيد غير متوازن بالدينار: إجمالي المدين يجب أن يساوي إجمالي الدائن')
       return
     }
 
-    const rateVal = currency === 'USD' ? (parseFloat(exchangeRate) || 1500) : 1.0
-    const finalDescription = currency === 'USD'
-      ? `[$${totalDebit.toLocaleString('en-US')} @ ${rateVal.toLocaleString('en-US')}] ${description}`
-      : description
-
     mutation.mutate({
       entryDate,
-      description: finalDescription,
+      description,
       lines: lines.map(l => {
+        const rateVal = l.currency === 'USD' ? (parseFloat(l.exchangeRate) || 1500) : 1.0
         const lineDebit = parseFloat(l.debit) || 0
         const lineCredit = parseFloat(l.credit) || 0
+        const isUsd = l.currency === 'USD'
+
+        const lineDesc = isUsd
+          ? (l.description ? `[$${(lineDebit || lineCredit).toLocaleString()} @ ${rateVal}] ${l.description}` : `[$${(lineDebit || lineCredit).toLocaleString()} @ ${rateVal}]`)
+          : l.description
+
         return {
           accountId: l.accountId,
-          debit: currency === 'USD' ? Math.round(lineDebit * rateVal) : lineDebit,
-          credit: currency === 'USD' ? Math.round(lineCredit * rateVal) : lineCredit,
-          description: l.description || undefined
+          debit: isUsd ? Math.round(lineDebit * rateVal) : lineDebit,
+          credit: isUsd ? Math.round(lineCredit * rateVal) : lineCredit,
+          description: lineDesc || undefined
         }
       })
     })
@@ -509,14 +518,14 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="glass w-full max-w-3xl rounded-xl border border-border/50 p-6 shadow-2xl flex flex-col max-h-[90vh]">
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="glass w-full max-w-4xl rounded-xl border border-border/50 p-6 shadow-2xl flex flex-col max-h-[90vh]">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-bold text-foreground">إنشاء سند قيد محاسبي جديد</h3>
           <button onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40"><X className="h-4 w-4" /></button>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 pr-1" dir="rtl">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
               <label className="mb-1 block text-xs text-muted-foreground">البيان الإجمالي للقيد *</label>
               <Input
@@ -537,39 +546,7 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                 className="h-9 bg-secondary/30 border-border/50 text-sm"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">العملة *</label>
-              <Select value={currency} onValueChange={setCurrency}>
-                <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-xs">
-                  <SelectValue placeholder="اختر العملة" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="IQD">دينار عراقي (IQD)</SelectItem>
-                  <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-
-          {currency === 'USD' && (
-            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5 items-center">
-              <div className="md:col-span-2 flex items-center text-[11px] text-indigo-400 gap-1.5">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>سيتم إدخال المبالغ بالدولار، ويقوم النظام تلقائياً بالتحويل للدينار.</span>
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs text-muted-foreground">سعر الصرف (دينار لكل دولار) *</label>
-                <Input
-                  type="number"
-                  placeholder="1500"
-                  value={exchangeRate}
-                  onChange={e => setExchangeRate(e.target.value)}
-                  required
-                  className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric"
-                />
-              </div>
-            </motion.div>
-          )}
 
           <div className="space-y-2">
             <div className="flex justify-between items-center pb-1 border-b border-border/30">
@@ -582,7 +559,7 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
 
             <div className="space-y-2.5">
               {lines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-[2fr_1.2fr_1.2fr_2fr_auto] gap-2.5 items-start bg-secondary/10 p-2.5 rounded-lg border border-border/20">
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-[1.8fr_0.8fr_0.8fr_0.9fr_0.9fr_1.5fr_auto] gap-2 items-start bg-secondary/10 p-2.5 rounded-lg border border-border/20">
                   <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">الحساب</label>
                     <Select value={line.accountId} onValueChange={v => updateLine(idx, 'accountId', v)}>
@@ -595,6 +572,27 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                     </Select>
                   </div>
                   <div>
+                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">العملة</label>
+                    <Select value={line.currency} onValueChange={v => updateLine(idx, 'currency', v)}>
+                      <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="IQD">د.ع</SelectItem>
+                        <SelectItem value="USD">$ دولار</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">سعر الصرف</label>
+                    <Input
+                      type="number"
+                      placeholder="1500"
+                      disabled={line.currency === 'IQD'}
+                      value={line.currency === 'IQD' ? '1' : line.exchangeRate}
+                      onChange={e => updateLine(idx, 'exchangeRate', e.target.value)}
+                      className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-center"
+                    />
+                  </div>
+                  <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">مدين</label>
                     <Input
                       type="number"
@@ -603,9 +601,9 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                       onChange={e => updateLine(idx, 'debit', e.target.value)}
                       className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-emerald-400"
                     />
-                    {currency === 'USD' && line.debit && (
+                    {line.currency === 'USD' && line.debit && (
                       <span className="text-[10px] text-emerald-400/80 block mt-0.5 font-numeric text-left">
-                        ≈ {Math.round(parseFloat(line.debit) * (parseFloat(exchangeRate) || 1500)).toLocaleString()} د.ع
+                        ≈ {Math.round(parseFloat(line.debit) * (parseFloat(line.exchangeRate) || 1500)).toLocaleString()} د.ع
                       </span>
                     )}
                   </div>
@@ -618,9 +616,9 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                       onChange={e => updateLine(idx, 'credit', e.target.value)}
                       className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-rose-400"
                     />
-                    {currency === 'USD' && line.credit && (
+                    {line.currency === 'USD' && line.credit && (
                       <span className="text-[10px] text-rose-400/80 block mt-0.5 font-numeric text-left">
-                        ≈ {Math.round(parseFloat(line.credit) * (parseFloat(exchangeRate) || 1500)).toLocaleString()} د.ع
+                        ≈ {Math.round(parseFloat(line.credit) * (parseFloat(line.exchangeRate) || 1500)).toLocaleString()} د.ع
                       </span>
                     )}
                   </div>
@@ -653,19 +651,19 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
           <div className="flex flex-wrap items-center justify-between p-3 rounded-lg border border-border/40 bg-secondary/20">
             <div className="flex gap-4 text-xs font-semibold">
               <div>
-                <span className="text-muted-foreground">إجمالي المدين: </span>
-                <span className="font-numeric text-emerald-400">{formatMoney(totalDebit, currency as any)}</span>
+                <span className="text-muted-foreground">إجمالي المدين (دينار): </span>
+                <span className="font-numeric text-emerald-400">{formatMoney(totalDebit, 'IQD')}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">إجمالي الدائن: </span>
-                <span className="font-numeric text-rose-400">{formatMoney(totalCredit, currency as any)}</span>
+                <span className="text-muted-foreground">إجمالي الدائن (دينار): </span>
+                <span className="font-numeric text-rose-400">{formatMoney(totalCredit, 'IQD')}</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 text-xs font-bold font-numeric">
               {isBalanced ? (
-                <span className="text-emerald-400 flex items-center gap-1"><Check className="h-4 w-4" /> القيد متوازن</span>
+                <span className="text-emerald-400 flex items-center gap-1"><Check className="h-4 w-4" /> القيد متوازن بالدينار</span>
               ) : (
-                <span className="text-amber-400 flex items-center gap-1"><AlertCircle className="h-4 w-4" /> القيد غير متوازن ({formatMoney(Math.abs(totalDebit - totalCredit), currency as any)})</span>
+                <span className="text-amber-400 flex items-center gap-1"><AlertCircle className="h-4 w-4" /> القيد غير متوازن ({formatMoney(Math.abs(totalDebit - totalCredit), 'IQD')})</span>
               )}
             </div>
           </div>
