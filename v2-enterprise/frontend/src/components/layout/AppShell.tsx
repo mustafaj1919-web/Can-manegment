@@ -9,12 +9,10 @@ import {
   LayoutDashboard, Car, TrendingUp, CalendarDays, Menu, Settings,
   X, Plus, Calculator, FileText, ShoppingBag, Users, Wallet, ReceiptText
 } from 'lucide-react'
-import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
 import { getCurrentUser } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
-import { useUiStore } from '@/lib/stores/ui-store'
 import { getNotifications } from '@/lib/api/dashboard'
 import { cn } from '@/lib/utils'
 import { useInstallmentAlerts } from '@/hooks/useInstallmentAlerts'
@@ -50,7 +48,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const prefersReducedMotion = useReducedMotion()
   const { isAuthenticated, isLoading, setAuth, clearAuth, setLoading } = useAuthStore()
   const { setBranches, setActiveBranch } = useBranchStore()
-  const { sidebarCollapsed, toggleSidebar } = useUiStore()
 
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
 
@@ -161,17 +158,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell-root relative min-h-screen bg-background flex flex-row" dir="rtl">
-      {/* Desktop Sidebar (Fixed 52px Icon Rail) */}
-      <Sidebar />
-
       {/* Main content + Topbar */}
       <div className="flex flex-col flex-1 min-h-screen min-w-0 transition-all duration-200">
-        <TopNav
-          collapsed={sidebarCollapsed}
-          onToggleSidebar={toggleSidebar}
-          onToggleMobile={() => {}}
-        />
-        
+        <TopNav />
+
         <main className="flex-1 pb-24 lg:pb-12">
           <div className="page-container">
             <AnimatePresence mode="wait" initial={false}>

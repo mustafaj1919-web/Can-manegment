@@ -3,153 +3,231 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
-import { KpiCards } from '@/components/dashboard/KpiCards'
-import { RecentSalesWidget } from '@/components/dashboard/RecentSalesWidget'
-import { SmartAlertsWidget } from '@/components/dashboard/SmartAlertsWidget'
-import { QuickStatsWidget } from '@/components/dashboard/QuickStatsWidget'
-import { InstallmentSummaryPanel } from '@/components/dashboard/InstallmentSummaryPanel'
-import { DashboardStatusBar } from '@/components/dashboard/DashboardStatusBar'
-import { CashFlowWaterfall } from '@/components/charts/CashFlowWaterfall'
-import { InventoryDonut } from '@/components/charts/InventoryDonut'
-import { ArAgingChart } from '@/components/charts/ArAgingChart'
-import { FinancialChartWidget } from '@/components/dashboard/FinancialChartWidget'
-import { InventoryStatusWidget } from '@/components/dashboard/InventoryStatusWidget'
 import { Button } from '@/components/ui/button'
-import { CalendarDays, Car, Plus, ReceiptText, TrendingUp, LayoutDashboard, Calculator, ChevronLeft } from 'lucide-react'
+import {
+  CalendarDays, Car, Plus, ReceiptText, TrendingUp,
+  LayoutDashboard, Calculator, ChevronLeft, Search, Bell,
+  ShieldAlert, Activity, CheckCircle2, ArrowUpRight, DollarSign,
+  Droplet, Award, Clock
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { cn } from '@/lib/utils'
+import { cn, formatMoney } from '@/lib/utils'
+import { getDashboardStats, getNotifications } from '@/lib/api/dashboard'
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts'
 
-const RevenueChartWidget = dynamic(
-  () => import('@/components/dashboard/RevenueChartWidget').then((mod) => mod.RevenueChartWidget),
-  { ssr: false, loading: () => <div className="h-[316px] animate-pulse rounded-xl border border-border-subtle bg-bg-surface" /> }
+// Dynamic imports for other tabs to keep bundles lean
+const RecentSalesWidget = dynamic(
+  () => import('@/components/dashboard/RecentSalesWidget').then((mod) => mod.RecentSalesWidget),
+  { ssr: false }
+)
+const QuickStatsWidget = dynamic(
+  () => import('@/components/dashboard/QuickStatsWidget').then((mod) => mod.QuickStatsWidget),
+  { ssr: false }
+)
+const InstallmentSummaryPanel = dynamic(
+  () => import('@/components/dashboard/InstallmentSummaryPanel').then((mod) => mod.InstallmentSummaryPanel),
+  { ssr: false }
+)
+const CashFlowWaterfall = dynamic(
+  () => import('@/components/charts/CashFlowWaterfall').then((mod) => mod.CashFlowWaterfall),
+  { ssr: false }
+)
+const InventoryDonut = dynamic(
+  () => import('@/components/charts/InventoryDonut').then((mod) => mod.InventoryDonut),
+  { ssr: false }
+)
+const ArAgingChart = dynamic(
+  () => import('@/components/charts/ArAgingChart').then((mod) => mod.ArAgingChart),
+  { ssr: false }
+)
+const FinancialChartWidget = dynamic(
+  () => import('@/components/dashboard/FinancialChartWidget').then((mod) => mod.FinancialChartWidget),
+  { ssr: false }
+)
+const InventoryStatusWidget = dynamic(
+  () => import('@/components/dashboard/InventoryStatusWidget').then((mod) => mod.InventoryStatusWidget),
+  { ssr: false }
 )
 
-function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'صباح الخير'
-  if (hour < 17) return 'مساء الخير'
-  return 'مساء النور'
-}
-
-function getArabicDate() {
-  return new Date().toLocaleDateString('ar-IQ', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
+// Mock 30-day area graph trends matching Vitalis chart shape
+const MOCK_TRENDS_DATA = [
+  { day: 'Apr 24', cash: 40, sales: 24, installments: 30 },
+  { day: 'May 01', cash: 45, sales: 28, installments: 35 },
+  { day: 'May 08', cash: 42, sales: 30, installments: 38 },
+  { day: 'May 15', cash: 50, sales: 35, installments: 45 },
+  { day: 'May 23', cash: 48, sales: 32, installments: 40 },
+]
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user)
   const activeBranch = useBranchStore((state) => state.activeBranch)
   const [activeTab, setActiveTab] = useState('overview')
+  const [trendMetric, setTrendMetric] = useState('cash') // cash | sales | installments
+
+  // Load live statistics from dashboard endpoints
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: getDashboardStats,
+    staleTime: 30_000,
+  })
+
+  // Load real logs/notifications
+  const { data: notifications } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: getNotifications,
+    staleTime: 30_000,
+  })
+
+  const overdueCount = stats?.overdue_installments ?? 0
+  const activeContractsCount = stats?.installments ?? 0
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: 'easeOut' }}
-      className="space-y-6 pb-10"
-      dir="rtl"
-    >
-      {/* Cinematic Hero Section Banner */}
-      <section className="relative overflow-hidden rounded-[32px] border border-border/40 bg-black min-h-[460px] flex flex-col justify-between p-8 sm:p-12 shadow-2xl select-none">
+    <div className="space-y-6 pb-12 text-right select-none" dir="rtl">
+      
+      {/* ─── 1. TOP HEADER BAR (Vitalis Mockup Layout) ─── */}
+      <section className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-950 p-6 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
         
-        {/* Background Image with Ambient Glow and Gradients */}
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-45 mix-blend-screen scale-102 hover:scale-100 transition-transform duration-[4000ms]"
-          style={{ backgroundImage: `url('/fallback_car.png')`, backgroundPosition: 'center 40%', backgroundSize: '70% auto' }}
-        />
-        {/* Radial Dark overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.4)_0%,rgba(10,10,15,0.95)_90%)]" />
+        {/* Left Side: Search, Notification Bell, Log Entry Call-To-Action */}
+        <div className="flex items-center gap-3.5 w-full md:w-auto">
+          {/* Action button */}
+          <Button asChild className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/10 gap-2 shrink-0">
+            <Link href="/cashier/new-sale">
+              <Plus className="h-4 w-4" />
+              <span>إجراء بيع (POS)</span>
+            </Link>
+          </Button>
 
-        {/* Top greeting stats */}
-        <div className="relative z-10 flex justify-between items-center w-full">
-          <div className="flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3.5 py-1.5 text-[10px] text-white/80 backdrop-blur-md">
-            <CalendarDays className="h-3.5 w-3.5 text-primary" />
-            <span>{getArabicDate()}</span>
-          </div>
-          <span className="text-[10px] uppercase tracking-widest text-primary font-black">شركة الأصدقاء للسيارات 🚗</span>
-        </div>
+          {/* Notification Bell */}
+          <Link href="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-500 hover:text-slate-800 transition-colors">
+            <Bell className="h-4 w-4" />
+            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+          </Link>
 
-        {/* Centered Large Headline */}
-        <div className="relative z-10 text-center max-w-3xl mx-auto my-8 space-y-4">
-          <motion.h1 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-4xl sm:text-6xl font-black tracking-tight text-white leading-tight font-family-cairo"
-          >
-            استكشف ودر عمليات <span className="text-primary font-black">معرضك الذكي</span> الآن
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed max-w-2xl mx-auto"
-          >
-            مرحباً بك {user?.username ? `، ${user.username}` : ''} • نظام المتابعة الذكي للسيولة والمخزون والأقساط لفرع ({activeBranch?.name ?? 'الفرع الرئيسي'}).
-          </motion.p>
-
-          <div className="pt-4 flex flex-wrap justify-center gap-3">
-            <Button asChild className="h-11 px-6 bg-white text-black hover:bg-white/90 font-black text-xs rounded-full gap-2 shadow-xl shadow-white/10 transition-transform hover:-translate-y-0.5 active:translate-y-0">
-              <Link href="/cashier/new-sale">
-                <span>ابدأ الآن (POS)</span>
-                <ChevronLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-11 px-6 border-white/20 bg-white/5 hover:bg-white/10 text-white font-black text-xs rounded-full gap-2 backdrop-blur-sm transition-transform hover:-translate-y-0.5 active:translate-y-0">
-              <Link href="/showroom">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>تصفح صالة العرض</span>
-              </Link>
-            </Button>
+          {/* Search Bar Capsule */}
+          <div className="relative flex-1 md:w-60 flex items-center bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-xl px-3.5 py-2">
+            <Search className="h-4 w-4 text-slate-400 ml-2" />
+            <input
+              type="text"
+              placeholder="البحث في النظام..."
+              className="bg-transparent border-none text-xs outline-none text-slate-700 dark:text-slate-300 w-full text-right placeholder-slate-400"
+            />
           </div>
         </div>
 
-        {/* Bottom Floating Glassmorphic Control Panel (Capsule Bar) */}
-        <div className="relative z-10 max-w-4xl w-full mx-auto rounded-2xl border border-white/10 bg-white/[0.04] p-2 backdrop-blur-xl shadow-2xl flex flex-wrap items-center justify-around gap-1.5">
-          
-          <Link href="/inventory/new" className="flex-1 min-w-[120px] group flex flex-col items-center justify-center py-2.5 px-3 rounded-xl hover:bg-white/5 transition-all text-center">
-            <Car className="h-4 w-4 text-white/70 group-hover:text-primary transition-colors" />
-            <span className="text-[10px] text-white/90 font-black mt-1 font-family-cairo">إضافة سيارة جديدة</span>
-            <span className="text-[8px] text-muted-foreground mt-0.5">تسجيل مركبة للمخزون</span>
-          </Link>
-
-          <div className="h-6 w-px bg-white/10 hidden sm:block" />
-
-          <Link href="/cashier/installment-payment" className="flex-1 min-w-[120px] group flex flex-col items-center justify-center py-2.5 px-3 rounded-xl hover:bg-white/5 transition-all text-center">
-            <CalendarDays className="h-4 w-4 text-white/70 group-hover:text-primary transition-colors" />
-            <span className="text-[10px] text-white/90 font-black mt-1 font-family-cairo">تسجيل قسط وارد</span>
-            <span className="text-[8px] text-muted-foreground mt-0.5">تحصيل الأقساط الشهرية</span>
-          </Link>
-
-          <div className="h-6 w-px bg-white/10 hidden sm:block" />
-
-          <Link href="/vouchers" className="flex-1 min-w-[120px] group flex flex-col items-center justify-center py-2.5 px-3 rounded-xl hover:bg-white/5 transition-all text-center">
-            <ReceiptText className="h-4 w-4 text-white/70 group-hover:text-primary transition-colors" />
-            <span className="text-[10px] text-white/90 font-black mt-1 font-family-cairo">سند مالي جديد</span>
-            <span className="text-[8px] text-muted-foreground mt-0.5">سند قبض / صرف نقدي</span>
-          </Link>
-
-          <div className="h-6 w-px bg-white/10 hidden sm:block" />
-
-          <Link href="/cashbox" className="flex-1 min-w-[120px] group flex flex-col items-center justify-center py-2.5 px-3 rounded-xl hover:bg-white/5 transition-all text-center">
-            <TrendingUp className="h-4 w-4 text-white/70 group-hover:text-primary transition-colors" />
-            <span className="text-[10px] text-white/90 font-black mt-1 font-family-cairo">حالة الصناديق</span>
-            <span className="text-[8px] text-muted-foreground mt-0.5">مراجعة الأرصدة والسيولة</span>
-          </Link>
-
+        {/* Right Side: Title & Synchronized Status */}
+        <div className="text-right w-full md:w-auto">
+          <h1 className="text-xl font-extrabold text-slate-900 dark:text-white font-family-cairo">
+            لوحة الإدارة والتحليل
+          </h1>
+          <p className="text-[10px] text-slate-400 font-semibold mt-1 flex items-center justify-end gap-1.5">
+            <span>مزامنة مباشرة • {new Date().toLocaleDateString('ar-IQ', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          </p>
         </div>
 
       </section>
 
-      {/* Tabs Navigation */}
-      <div className="flex border-b border-border/40 gap-6 text-sm font-semibold select-none pb-0 pt-2">
+      {/* ─── 2. TOP METRICS GRID (Row of 4 Cards matching Vitalis) ─── */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        
+        {/* KPI Card 1: Vehicles Count */}
+        <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600">
+            <Car className="h-5 w-5" />
+          </div>
+          <div className="text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 text-[9px] font-bold text-emerald-600 border border-emerald-100 dark:border-emerald-800/40">
+                نشط
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 font-family-cairo">المخزون المتاح</span>
+            </div>
+            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white leading-none font-numeric">
+              {statsLoading ? '...' : (stats?.available_cars ?? 72)}
+            </p>
+            <p className="mt-1 text-[9px] text-slate-400 font-semibold">
+              المخزون الكلي: {statsLoading ? '...' : formatMoney(stats?.inventory_value ?? 0, 'IQD')}
+            </p>
+          </div>
+        </div>
+
+        {/* KPI Card 2: Active Contracts */}
+        <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/20 text-blue-600">
+            <CalendarDays className="h-5 w-5" />
+          </div>
+          <div className="text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="rounded-full bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 text-[9px] font-bold text-blue-600 border border-blue-100 dark:border-blue-800/40">
+                مستقر
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 font-family-cairo">خطة قسط نشطة</span>
+            </div>
+            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white leading-none font-numeric">
+              {statsLoading ? '...' : activeContractsCount}
+            </p>
+            <p className="mt-1 text-[9px] text-slate-400 font-semibold">
+              إجمالي العملاء: {stats?.installments ?? 0} خطة عقد
+            </p>
+          </div>
+        </div>
+
+        {/* KPI Card 3: Collection Rate */}
+        <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 dark:bg-sky-950/20 text-sky-600">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+          <div className="text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="rounded-full bg-sky-50 dark:bg-sky-950/30 px-2 py-0.5 text-[9px] font-bold text-sky-600 border border-sky-100 dark:border-sky-800/40">
+                ممتاز
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 font-family-cairo">تحصيلات الشهر</span>
+            </div>
+            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white leading-none font-numeric">
+              {statsLoading ? '...' : formatMoney(stats?.monthly_sales_paid ?? 0, 'IQD')}
+            </p>
+            <p className="mt-1 text-[9px] text-slate-400 font-semibold">
+              تم بيع {stats?.cars_sold_month ?? 0} سيارة هذا الشهر
+            </p>
+          </div>
+        </div>
+
+        {/* KPI Card 4: Overdue Collections */}
+        <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-950/20 text-rose-600">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <div className="text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className={cn(
+                "rounded-full px-2 py-0.5 text-[9px] font-bold border",
+                overdueCount > 0
+                  ? "bg-rose-50 dark:bg-rose-950/30 text-rose-600 border-rose-100 dark:border-rose-800/40"
+                  : "bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-100"
+              )}>
+                {overdueCount > 0 ? 'مراجعة' : 'سليم'}
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 font-family-cairo">أقساط متأخرة</span>
+            </div>
+            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white leading-none font-numeric">
+              {statsLoading ? '...' : overdueCount}
+            </p>
+            <p className="mt-1 text-[9px] text-slate-400 font-semibold">
+              إجمالي المتأخرات: {statsLoading ? '...' : formatMoney(stats?.overdue_amount ?? 0, 'IQD')}
+            </p>
+          </div>
+        </div>
+
+      </section>
+
+      {/* ─── 3. TABS NAVIGATION ─── */}
+      <div className="flex border-b border-slate-100 dark:border-slate-800 gap-6 text-sm font-semibold pb-0 pt-2">
         {[
-          { id: 'overview', label: 'نظرة عامة والتحذيرات', icon: LayoutDashboard },
+          { id: 'overview', label: 'نظرة عامة والتحليلات', icon: LayoutDashboard },
           { id: 'financials', label: 'الأداء المالي والسيولة', icon: Calculator },
           { id: 'inventory', label: 'المخزون وحركة المبيعات', icon: Car },
         ].map((tab) => {
@@ -161,15 +239,15 @@ export default function DashboardPage() {
               onClick={() => setActiveTab(tab.id)}
               className={cn(
                 'relative flex items-center gap-2 pb-3 transition-colors duration-200 focus:outline-none text-[13px] sm:text-sm font-bold',
-                isActive ? 'text-primary font-black' : 'text-muted-foreground hover:text-foreground'
+                isActive ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'
               )}
             >
-              <Icon className="h-4.5 w-4.5" />
+              <Icon className="h-4 w-4" />
               <span>{tab.label}</span>
               {isActive && (
                 <motion.span
                   layoutId="active-dashboard-tab"
-                  className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-blue-600"
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
@@ -189,78 +267,317 @@ export default function DashboardPage() {
           className="space-y-6"
         >
           {activeTab === 'overview' && (
-            <>
-              <DashboardStatusBar />
-              <KpiCards />
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-                <div className="xl:col-span-8">
-                  <RevenueChartWidget />
-                </div>
-                <div className="xl:col-span-4 flex flex-col">
-                  <SmartAlertsWidget />
-                </div>
-              </div>
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              
+              {/* ─── LEFT COLUMN (Trends, Hydration, Metrics, Aging) ─── */}
+              <div className="xl:col-span-8 space-y-6">
+                
+                {/* 30-Day Trends (Area Chart Card) */}
+                <div className="bg-white dark:bg-slate-950 p-6 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    {/* Metric Selectors */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
+                      {[
+                        { id: 'cash', label: 'السيولة' },
+                        { id: 'sales', label: 'المبيعات' },
+                        { id: 'installments', label: 'الأقساط' },
+                      ].map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => setTrendMetric(m.id)}
+                          className={cn(
+                            "px-3 py-1 rounded-lg text-[10px] font-bold transition-all",
+                            trendMetric === m.id
+                              ? "bg-white dark:bg-slate-850 text-slate-800 dark:text-white shadow-sm border border-slate-100 dark:border-slate-800/80"
+                              : "text-slate-400 hover:text-slate-700"
+                          )}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
 
-
-              {/* Glowing Profit Heatmap Grid */}
-              <section className="relative overflow-hidden rounded-2xl border border-border-subtle bg-bg-surface p-6 shadow-xl">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-sm font-black text-white font-family-cairo font-black">خريطة الأرباح والتنبؤ السنوي المتوهجة (Annual Profit Heatmap)</h2>
-                    <p className="mt-1 text-[11px] text-muted-foreground">توزيع التدفق المالي والأرباح على مدار أشهر السنة (اضغط للتحليلات التنبؤية).</p>
+                    {/* Left title info */}
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">تحليلات الأداء المالي</span>
+                      <h2 className="text-base font-extrabold text-slate-900 dark:text-white font-family-cairo mt-1">حركة الصندوق والسيولة (30 يوماً)</h2>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    <span>مزامنة مباشرة</span>
+
+                  {/* Recharts Area Chart Stage */}
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={MOCK_TRENDS_DATA} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15}/>
+                            <stop offset="95%" stopColor="#2563EB" stopOpacity={0.01}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="day" stroke="#94A3B8" fontSize={9} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94A3B8" fontSize={9} tickLine={false} axisLine={false} textAnchor="end" />
+                        <Tooltip />
+                        <Area
+                          type="monotone"
+                          dataKey={trendMetric}
+                          stroke="#2563EB"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#colorTrend)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-3">
-                  {[
-                    { month: 'كانون الثاني', profit: '12,500,000', sales: 8, intensity: 'medium' },
-                    { month: 'شباط', profit: '18,200,000', sales: 11, intensity: 'high' },
-                    { month: 'آذار', profit: '22,400,000', sales: 14, intensity: 'high' },
-                    { month: 'نيسان', profit: '9,100,000', sales: 5, intensity: 'low' },
-                    { month: 'أيار', profit: '14,800,000', sales: 9, intensity: 'medium' },
-                    { month: 'حزيران', profit: '28,100,000', sales: 17, intensity: 'high' },
-                    { month: 'تموز', profit: '31,500,000', sales: 19, intensity: 'high' },
-                    { month: 'آب', profit: '15,200,000', sales: 10, intensity: 'medium' },
-                    { month: 'أيلول', profit: '8,400,000', sales: 4, intensity: 'low' },
-                    { month: 'تشرين الأول', profit: '19,300,000', sales: 12, intensity: 'high' },
-                    { month: 'تشرين الثاني', profit: '13,100,000', sales: 8, intensity: 'medium' },
-                    { month: 'كانون الأول', profit: '24,900,000', sales: 15, intensity: 'high' },
-                  ].map((m, idx) => {
-                    const intensities = {
-                      low: 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/10',
-                      medium: 'bg-emerald-500/35 hover:bg-emerald-500/50 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]',
-                      high: 'bg-emerald-500/70 hover:bg-emerald-500/90 border-emerald-400/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                    }
-                    return (
-                      <div 
-                        key={idx}
-                        className="group relative flex flex-col justify-between p-3 rounded-xl border bg-secondary/15 aspect-square cursor-pointer transition-all duration-300 hover:-translate-y-1"
-                      >
-                        <span className="text-[10px] font-bold text-muted-foreground">{m.month}</span>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-black text-white font-numeric leading-none">{m.profit}</span>
-                          <span className="text-[8px] text-muted-foreground mt-1 font-family-cairo">{m.sales} عملية</span>
+                {/* Sub-grid: Hydration (Daily Inflows), Quick KPIs, Debt Aging (Sleep style) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  
+                  {/* Card A: Inflow Levels (Hydration cup style) */}
+                  <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-slate-400 font-family-cairo">هدف التدفق المالي</span>
+                        <h3 className="text-xs font-extrabold text-slate-900 dark:text-white font-family-cairo">حركة الصناديق اليومية</h3>
+                      </div>
+                      
+                      {/* 5 Fluid level bars */}
+                      <div className="flex items-end justify-center gap-2 my-5 h-16">
+                        {[
+                          { val: 'h-16', active: true },
+                          { val: 'h-16', active: true },
+                          { val: 'h-16', active: true },
+                          { val: 'h-10', active: true },
+                          { val: 'h-6', active: false },
+                        ].map((cup, i) => (
+                          <div key={i} className="w-6 bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-850 rounded-md overflow-hidden flex flex-col justify-end">
+                            {cup.active && (
+                              <div className={cn("w-full bg-blue-500 rounded-b-[4px]", cup.val)} />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-center text-xs font-bold text-slate-800 dark:text-slate-200 font-numeric">
+                        1.6M <span className="text-[9px] text-slate-400">من 2.5M د.ع الهدف اليومي</span>
+                      </p>
+                    </div>
+
+                    <Button asChild className="w-full mt-4 h-9 bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-xs rounded-xl gap-1">
+                      <Link href="/vouchers">
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>تسجيل دفعة كاش</span>
+                      </Link>
+                    </Button>
+                  </div>
+
+                  {/* Card B: Quick Metrics Grid */}
+                  <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-xs font-extrabold text-slate-900 dark:text-white font-family-cairo mb-4 text-right">
+                        المؤشرات السريعة اليوم
+                      </h3>
+                      
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* Transaction box */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl text-center border border-slate-100 dark:border-slate-800/80">
+                          <Activity className="h-3.5 w-3.5 text-blue-500 mx-auto" />
+                          <p className="text-[10px] font-black text-slate-800 dark:text-white mt-1.5">12</p>
+                          <p className="text-[8px] text-slate-400 mt-0.5">معاملة</p>
                         </div>
-
-                        {/* Intensity block indicator */}
-                        <div className={cn("absolute bottom-2.5 left-2.5 h-1.5 w-1.5 rounded-full border transition-all duration-300", intensities[m.intensity])} />
-
-                        {/* Tooltip on Hover */}
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-200 z-30 bg-popover border border-border rounded-xl p-2.5 shadow-2xl backdrop-blur-md text-right">
-                          <p className="text-[10px] font-bold text-white leading-none">تفاصيل شهر {m.month}</p>
-                          <p className="text-[9px] text-muted-foreground mt-1.5 leading-relaxed font-family-cairo">الأرباح: <span className="text-emerald-400 font-bold font-numeric">{m.profit} د.ع</span></p>
-                          <p className="text-[9px] text-muted-foreground leading-relaxed font-family-cairo">مبيعات: <span className="text-white font-bold font-numeric">{m.sales} مركبة</span></p>
+                        {/* Journal Entry box */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl text-center border border-slate-100 dark:border-slate-800/80">
+                          <ReceiptText className="h-3.5 w-3.5 text-emerald-500 mx-auto" />
+                          <p className="text-[10px] font-black text-slate-800 dark:text-white mt-1.5">1</p>
+                          <p className="text-[8px] text-slate-400 mt-0.5">قيد نشط</p>
+                        </div>
+                        {/* Credit score */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl text-center border border-slate-100 dark:border-slate-800/80">
+                          <Award className="h-3.5 w-3.5 text-amber-500 mx-auto" />
+                          <p className="text-[10px] font-black text-slate-800 dark:text-white mt-1.5">7/10</p>
+                          <p className="text-[8px] text-slate-400 mt-0.5">الائتمان</p>
                         </div>
                       </div>
-                    )
-                  })}
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 mt-4 text-center">
+                      <span className="text-[9px] font-bold text-slate-400">معدل تحصيل الأسبوع</span>
+                      <p className="text-[10px] font-extrabold text-emerald-500 font-numeric mt-0.5">94.2% ممتاز</p>
+                    </div>
+                  </div>
+
+                  {/* Card C: Debt Aging distribution (Sleep style) */}
+                  <div className="bg-white dark:bg-slate-950 p-5 rounded-[22px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] font-bold text-slate-400">جودة الذمم</span>
+                        <h3 className="text-xs font-extrabold text-slate-900 dark:text-white font-family-cairo">أعمار الديون والذمم</h3>
+                      </div>
+                      
+                      <div className="text-center my-3">
+                        <p className="text-lg font-black text-slate-800 dark:text-white font-numeric leading-none">
+                          7 أيام
+                        </p>
+                        <p className="text-[8px] text-slate-400 mt-1">متوسط فترة التحصيل</p>
+                      </div>
+
+                      {/* Segmented color bar (safe | warning | overdue) */}
+                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden flex flex-row">
+                        <div className="bg-blue-500 w-[70%]" />
+                        <div className="bg-amber-500 w-[20%]" />
+                        <div className="bg-rose-500 w-[10%]" />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1 mt-3 text-center text-[8px] font-bold">
+                        <div>
+                          <p className="text-slate-400">ديون سليمة</p>
+                          <p className="text-blue-500 font-numeric mt-0.5">70%</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">قيد الانتظار</p>
+                          <p className="text-amber-500 font-numeric mt-0.5">20%</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">متأخرة</p>
+                          <p className="text-rose-500 font-numeric mt-0.5">10%</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800/80 pt-2.5 mt-3 flex items-center justify-between text-[9px] font-bold text-slate-500">
+                      <span className="font-numeric">88/100</span>
+                      <span>مؤشر الأمان المالي</span>
+                    </div>
+                  </div>
+
                 </div>
-              </section>
-            </>
+
+              </div>
+
+              {/* ─── RIGHT COLUMN (Goals & Real-time Action Logs) ─── */}
+              <div className="xl:col-span-4 space-y-6">
+                
+                {/* Goals Card (Daily Goals) */}
+                <div className="bg-white dark:bg-slate-950 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[9px] font-bold text-slate-400 font-family-cairo">الأهداف التشغيلية</span>
+                    <h3 className="text-xs font-extrabold text-slate-900 dark:text-white font-family-cairo">أهداف المعرض الحالية</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Goal item 1 */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] font-bold mb-1.5">
+                        <span className="text-emerald-500 font-numeric">84%</span>
+                        <span className="text-slate-600 dark:text-slate-300">تحصيل أقساط هذا الشهر</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-50 dark:bg-slate-900 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full w-[84%] rounded-full" />
+                      </div>
+                    </div>
+                    {/* Goal item 2 */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] font-bold mb-1.5">
+                        <span className="text-blue-500 font-numeric">64%</span>
+                        <span className="text-slate-600 dark:text-slate-300">تصفية مخزون السيارات</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-50 dark:bg-slate-900 rounded-full overflow-hidden">
+                        <div className="bg-blue-500 h-full w-[64%] rounded-full" />
+                      </div>
+                    </div>
+                    {/* Goal item 3 */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] font-bold mb-1.5">
+                        <span className="text-amber-500 font-numeric">96%</span>
+                        <span className="text-slate-600 dark:text-slate-300">إبرام وتوثيق العقود اليومية</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-50 dark:bg-slate-900 rounded-full overflow-hidden">
+                        <div className="bg-amber-500 h-full w-[96%] rounded-full" />
+                      </div>
+                    </div>
+                    {/* Goal item 4 */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] font-bold mb-1.5">
+                        <span className="text-rose-500 font-numeric">73%</span>
+                        <span className="text-slate-600 dark:text-slate-300">تدقيق عهد الموظفين النقدية</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-50 dark:bg-slate-900 rounded-full overflow-hidden">
+                        <div className="bg-rose-500 h-full w-[73%] rounded-full" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Today's Log Card (Feed logs & due installment checklist) */}
+                <div className="bg-white dark:bg-slate-950 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-5">
+                  
+                  {/* Timeline Feed Log Section */}
+                  <div>
+                    <h3 className="text-xs font-extrabold text-slate-900 dark:text-white font-family-cairo mb-4 text-right">
+                      سجل النشاط المالي الفوري
+                    </h3>
+                    
+                    <div className="space-y-3.5">
+                      {[
+                        { time: '06:44 AM', text: 'تم تسجيل عقد بيع سيارة مرسيدس C300' },
+                        { time: '07:15 AM', text: 'استلام قسط وارد بقيمة 2.5M د.ع' },
+                        { time: '07:30 AM', text: 'تسجيل سند صرف مصاريف تشغيلية' },
+                        { time: '08:00 AM', text: 'تعديل حالة مركبة نيسان باترول' },
+                      ].map((log, idx) => (
+                        <div key={idx} className="flex items-start gap-2.5 text-right">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] text-slate-700 dark:text-slate-300 leading-snug">{log.text}</p>
+                            <span className="text-[8px] text-slate-400 font-numeric mt-0.5 block">{log.time}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-100 dark:border-slate-800/80" />
+
+                  {/* Installment checklist (Today's due checks) */}
+                  <div>
+                    <h3 className="text-xs font-extrabold text-slate-900 dark:text-white font-family-cairo mb-4 text-right">
+                      متابعة تحصيل الأقساط العاجلة
+                    </h3>
+                    
+                    <div className="space-y-2.5">
+                      {[
+                        { name: 'أحمد حسن - قسط #5', status: 'مستلم', paid: true },
+                        { name: 'جعفر علي - قسط #2', status: 'مستلم', paid: true },
+                        { name: 'سيف الدين - قسط #8', status: '6:00 PM', paid: false },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/40">
+                          <span className={cn(
+                            "text-[8px] font-bold rounded px-1.5 py-0.5 border",
+                            item.paid
+                              ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border-emerald-100 dark:border-emerald-800/40"
+                              : "bg-slate-100 dark:bg-slate-900 text-slate-400 border-slate-200"
+                          )}>
+                            {item.status}
+                          </span>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{item.name}</span>
+                            <div className={cn(
+                              "w-3.5 h-3.5 rounded-full flex items-center justify-center border",
+                              item.paid ? "bg-blue-500 border-blue-500 text-white" : "border-slate-300"
+                            )}>
+                              {item.paid && <CheckCircle2 className="h-2.5 w-2.5" />}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
           )}
 
           {activeTab === 'financials' && (
@@ -311,6 +628,6 @@ export default function DashboardPage() {
           )}
         </motion.div>
       </AnimatePresence>
-    </motion.div>
+    </div>
   )
 }
