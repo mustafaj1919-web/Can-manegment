@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using CarShowroomManagementV2.Application.Inventory.Commands;
 using CarShowroomManagementV2.Application.Inventory.Queries;
 using CarShowroomManagementV2.Application.Common.Interfaces;
+using CarShowroomManagementV2.Domain.Entities;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
@@ -292,5 +293,103 @@ namespace CarShowroomManagementV2.API.Controllers
         }
 
         public record AssignBranchRequest(Guid BranchId);
+
+        // 9. رفع صورة جماعي لكل السيارات من نفس الموديل
+        [HttpPost("bulk-images")]
+        public async Task<IActionResult> BulkUploadImages([FromForm] string brand, [FromForm] string model, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { success = false, message = "لم يتم رفع أي ملف." });
+
+            if (file.Length > MaxImageBytes)
+                return BadRequest(new { success = false, message = "حجم الصورة يتجاوز الحد الأقصى المسموح به (5 MB)." });
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedImageExtensions.Contains(ext))
+                return BadRequest(new { success = false, message = $"نوع الملف غير مسموح به. الأنواع المقبولة: {string.Join(", ", AllowedImageExtensions)}" });
+
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            var fileBytes = memoryStream.ToArray();
+
+            if (!IsValidImageMagicBytes(fileBytes, ext))
+                return BadRequest(new { success = false, message = "محتوى الملف لا يطابق نوع الصورة المتوقع." });
+
+            if (!TryGetImageDimensions(fileBytes, ext, out var width, out var height))
+                return BadRequest(new { success = false, message = "تعذّر قراءة أبعاد الصورة." });
+            if (width > MaxImageDimension || height > MaxImageDimension)
+                return BadRequest(new { success = false, message = $"أبعاد الصورة كبيرة جداً. الحد الأقصى {MaxImageDimension}×{MaxImageDimension} بكسل." });
+
+            var vehicles = await _context.Vehicles
+                .IgnoreQueryFilters()
+                .Where(v => v.Model == model && (string.IsNullOrEmpty(brand) || v.Brand == brand))
+                .ToListAsync();
+
+            if (vehicles.Count == 0)
+                return BadRequest(new { success = false, message = "لا توجد سيارات تطابق هذا الموديل." });
+
+            var storagePath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "vehicles");
+            if (!Directory.Exists(storagePath)) Directory.CreateDirectory(storagePath);
+            var secureFileName = $"{Guid.NewGuid().ToString("N")}{ext}";
+            var fullFilePath = Path.Combine(storagePath, secureFileName);
+            await System.IO.File.WriteAllBytesAsync(fullFilePath, fileBytes);
+
+            foreach (var vehicle in vehicles)
+            {
+                _context.VehicleImages.Add(new VehicleImage
+                {
+                    Id = Guid.NewGuid(),
+                    VehicleId = vehicle.Id,
+                    FileName = secureFileName,
+                    UploadedAt = DateTime.UtcNow
+                });
+            }
+            await _context.SaveChangesAsync(default);
+
+            return Ok(new { success = true, updated_count = vehicles.Count, filename = secureFileName, message = $"تم إضافة الصورة لـ {vehicles.Count} سيارة." });
+        }
+
+        // 10. تحديث مواصفات جماعي حسب الموديل
+        [HttpPut("bulk-specs")]
+        public async Task<IActionResult> BulkUpdateSpecs([FromBody] BulkSpecsRequest request)
+        {
+            if (string.IsNullOrEmpty(request.Model))
+                return BadRequest(new { success = false, message = "الموديل مطلوب." });
+
+            var vehicles = await _context.Vehicles
+                .IgnoreQueryFilters()
+                .Where(v => v.Model == request.Model && (string.IsNullOrEmpty(request.Brand) || v.Brand == request.Brand))
+                .ToListAsync();
+
+            if (vehicles.Count == 0)
+                return BadRequest(new { success = false, message = "لا توجد سيارات تطابق هذا الموديل." });
+
+            foreach (var vehicle in vehicles)
+            {
+                if (!string.IsNullOrEmpty(request.Condition)) vehicle.Condition = request.Condition;
+                if (!string.IsNullOrEmpty(request.FuelType)) vehicle.FuelType = request.FuelType;
+                if (!string.IsNullOrEmpty(request.Transmission)) vehicle.Transmission = request.Transmission;
+                if (!string.IsNullOrEmpty(request.EngineSize)) vehicle.EngineSize = request.EngineSize;
+                if (request.Cylinders.HasValue) vehicle.Cylinders = request.Cylinders;
+                if (request.SeatCount.HasValue) vehicle.SeatCount = request.SeatCount;
+                if (!string.IsNullOrEmpty(request.ImportCountry)) vehicle.ImportCountry = request.ImportCountry;
+            }
+
+            await _context.SaveChangesAsync(default);
+            return Ok(new { success = true, updated_count = vehicles.Count, message = $"تم تحديث مواصفات {vehicles.Count} سيارة." });
+        }
+
+        public class BulkSpecsRequest
+        {
+            public string Brand { get; set; } = string.Empty;
+            public string Model { get; set; } = string.Empty;
+            public string? Condition { get; set; }
+            public string? FuelType { get; set; }
+            public string? Transmission { get; set; }
+            public string? EngineSize { get; set; }
+            public int? Cylinders { get; set; }
+            public int? SeatCount { get; set; }
+            public string? ImportCountry { get; set; }
+        }
     }
 }

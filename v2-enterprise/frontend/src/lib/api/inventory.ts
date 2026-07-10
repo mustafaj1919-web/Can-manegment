@@ -466,6 +466,46 @@ export async function deleteVehicleCost(carId: number | string, costId: number |
   return Promise.resolve()
 }
 
+export async function bulkUploadPhoto(
+  brand: string,
+  model: string,
+  file: File
+): Promise<{ success: boolean; updated_count: number; message: string }> {
+  const { apiClient } = await import('./client')
+  const formData = new FormData()
+  formData.append('brand', brand)
+  formData.append('model', model)
+  formData.append('file', file)
+  const response = await apiClient.post<any>('/Inventory/bulk-images', formData)
+  return response.data
+}
+
+export async function bulkUpdateSpecs(
+  brand: string,
+  model: string,
+  specs: {
+    condition?: string
+    fuelType?: string
+    transmission?: string
+    engineSize?: string
+    cylinders?: number
+    seatCount?: number
+    importCountry?: string
+  }
+): Promise<{ success: boolean; updated_count: number; message: string }> {
+  return put<any>('/Inventory/bulk-specs', {
+    Brand: brand,
+    Model: model,
+    Condition: specs.condition ?? null,
+    FuelType: specs.fuelType ?? null,
+    Transmission: specs.transmission ?? null,
+    EngineSize: specs.engineSize ?? null,
+    Cylinders: specs.cylinders ?? null,
+    SeatCount: specs.seatCount ?? null,
+    ImportCountry: specs.importCountry ?? null,
+  })
+}
+
 export async function getVehicleProfitabilityReport(onlySold = false): Promise<ProfitabilityReport> {
   const res = await get<any>(`/Inventory/profitability-report?onlySold=${onlySold}`)
   const d = (res && res.success && res.data) ? res.data : res

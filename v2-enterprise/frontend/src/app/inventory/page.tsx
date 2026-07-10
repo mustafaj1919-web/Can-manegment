@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, type Variants } from 'framer-motion'
 import {
   ArrowUpRight, Building2, Car, Download, Eye,
-  Fuel, Gauge, LayoutGrid, List, Palette, Plus, Search, Settings, X, Clock, MapPin,
+  Fuel, Gauge, LayoutGrid, Layers, List, Palette, Plus, Search, Settings, X, Clock, MapPin,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { RowAction } from '@/components/shared/AdvancedTable'
@@ -24,6 +24,7 @@ import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
 import { toast } from 'sonner'
 import { useBranchStore } from '@/lib/stores/branch-store'
 import { ShowroomPlanner } from '@/components/inventory/ShowroomPlanner'
+import { BulkModelUpdateModal } from '@/components/inventory/BulkModelUpdateModal'
 import { useAuthStore } from '@/lib/stores/auth-store'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -281,6 +282,7 @@ export default function InventoryPage() {
   const [page,      setPage]      = useState(1)
   const [exporting, setExporting] = useState(false)
   const [assignCar, setAssignCar] = useState<any>(null)
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
   const { branches } = useBranchStore()
   const canSeeAll = branches.length > 1
   const perPage = 18
@@ -530,6 +532,15 @@ export default function InventoryPage() {
         actions={
           <>
             {viewToggle}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkModalOpen(true)}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              تحديث جماعي
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -993,6 +1004,7 @@ export default function InventoryPage() {
     </div>
 
     {assignCar && <AssignBranchModal car={assignCar} onClose={() => setAssignCar(null)} />}
+    {bulkModalOpen && <BulkModelUpdateModal onClose={() => setBulkModalOpen(false)} />}
     </>
   )
 }
