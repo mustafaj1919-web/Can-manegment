@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   AL-SADAKA MOTORS — Design Tokens
+   Premium automotive design system: Electric Blue + Carbon + Silver
+   ========================================================================== */
+
+:root {
+  /* Brand */
+  --color-primary: #2563eb;        /* Electric Blue */
+  --color-primary-light: #3b82f6;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-rgb: 37, 99, 235;
+
+  --color-silver: #94a3b8;         /* Metal Silver */
+  --color-silver-light: #cbd5e1;
+  --color-silver-dark: #64748b;
+
+  --color-carbon: #05070d;         /* Background Dark Carbon */
+  --color-carbon-2: #0a0e18;
+  --color-carbon-3: #10141f;
+
+  /* Light theme surface */
+  --bg: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f6f7f9;
+  --bg-muted: #eef0f3;
+  --fg: #0a0e18;
+  --fg-muted: #55606f;
+  --fg-subtle: #8891a0;
+  --border: rgba(10, 14, 24, 0.09);
+  --border-strong: rgba(10, 14, 24, 0.16);
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(10, 14, 24, 0.08);
+  --shadow-color: 220 40% 8%;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-2xl: 2.25rem;
+
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark {
+  --bg: #05070d;
+  --bg-elevated: #0a0e18;
+  --bg-subtle: #0d1119;
+  --bg-muted: #10141f;
+  --fg: #f4f6f9;
+  --fg-muted: #a7b0bf;
+  --fg-subtle: #6b7484;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --glass-bg: rgba(10, 14, 24, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --shadow-color: 220 60% 2%;
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: var(--font-cairo), var(--font-inter), sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, sans-serif;
+
+  --color-primary: var(--color-primary);
+  --color-primary-light: var(--color-primary-light);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-silver: var(--color-silver);
+  --color-silver-light: var(--color-silver-light);
+  --color-silver-dark: var(--color-silver-dark);
+  --color-carbon: var(--color-carbon);
+  --color-carbon-2: var(--color-carbon-2);
+  --color-carbon-3: var(--color-carbon-3);
+
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-bg-muted: var(--bg-muted);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+
+  --animate-marquee: marquee 32s linear infinite;
+  --animate-fade-up: fade-up 0.8s var(--ease-premium) both;
+  --animate-shimmer: shimmer 2.2s linear infinite;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+}
+
+html[lang="ar"] body {
+  font-family: var(--font-arabic);
+  letter-spacing: 0;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-silver);
+  opacity: 0.4;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+/* Focus ring — accessible, on-brand */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Utility layer */
+@layer utilities {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--glass-border);
+  }
+
+  .text-balance { text-wrap: balance; }
+
+  .container-premium {
+    width: 100%;
+    max-width: 84rem;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .container-premium { padding-inline: 2rem; }
+  }
+  @media (min-width: 1280px) {
+    .container-premium { padding-inline: 2.5rem; }
+  }
+
+  .text-gradient-primary {
+    background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary) 60%, #1e40af);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-gradient-silver {
+    background: linear-gradient(135deg, var(--fg) 20%, var(--color-silver) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 0 1px rgba(var(--color-primary-rgb), 0.25), 0 20px 60px -15px rgba(var(--color-primary-rgb), 0.45);
+  }
+
+  .card-elevated {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.06), 0 12px 32px -12px hsl(var(--shadow-color) / 0.18);
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-muted) 25%, var(--bg-subtle) 37%, var(--bg-muted) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.6s ease infinite;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .input-field {
+    width: 100%;
+    height: 3rem;
+    border-radius: 0.875rem;
+    border: 1px solid var(--border-strong);
+    background: var(--bg);
+    padding-inline: 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+  .input-field:focus {
+    border-color: var(--color-primary);
+  }
+  textarea.input-field {
+    height: auto;
+    padding-block: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

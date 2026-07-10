@@ -23,6 +23,8 @@ sshpass -p "$SERVER_PASS" rsync -az --delete \
   --exclude='.next' \
   --exclude='*.DS_Store' \
   --exclude='.claude' \
+  --exclude='backups' \
+  --exclude='static' \
   "$LOCAL_DIR/" \
   "$SERVER_USER@$SERVER_IP:$SERVER_DIR/"
 

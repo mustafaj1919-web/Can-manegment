@@ -3,21 +3,39 @@ services:
     image: postgres:16-alpine
     container_name: v2-postgres-db
     environment:
-      POSTGRES_DB: CarShowroomV2
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5433:5432"
+      - "5433:5432" # Exposed locally to allow direct DB client connection
     volumes:
       - v2_postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d CarShowroomV2"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - v2-network
+
+  v2-redis-cache:
+    image: redis:7-alpine
+    container_name: v2-redis-cache
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - v2_redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
+    networks:
+      - v2-network
 
   v2-enterprise-api:
     image: carshowroom-v2-api:latest
@@ -26,32 +44,40 @@ services:
       context: .
       dockerfile: src/API/Dockerfile
     ports:
-      - "8080:8080"
+      - "8080:8080" # Exposed locally to allow Swagger & Mobile app connection
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=v2-postgres-db;Database=CarShowroomV2;Username=postgres;Password=postgres_password
-      - JwtSettings__Secret=${JWT_SECRET:?JWT_SECRET is required}
-      - JwtSettings__Issuer=CarShowroomEnterprise
-      - JwtSettings__Audience=CarShowroomEnterpriseUsers
-      - AdminSettings__InitialPassword=${ADMIN_INITIAL_PASSWORD:-Admin@Showroom2024!}
+      - ASPNETCORE_ENVIRONMENT=Development # Development mode keeps Swagger UI active on localhost
+      - ASPNETCORE_AllowedHosts=*
+      - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
+      - JwtSettings__Secret=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - AdminSettings__InitialPassword=${ADMIN_INITIAL_PASSWORD}
       - AdminSettings__ForceResetPassword=${RESET_ADMIN_PASSWORD:-false}
+      - GoogleAuth__WebClientId=${GOOGLE_WEB_CLIENT_ID}
+      - GoogleAuth__IosClientId=${GOOGLE_IOS_CLIENT_ID}
+      - GoogleAuth__AndroidClientId=${GOOGLE_ANDROID_CLIENT_ID}
       - Cors__AllowedOrigins__0=http://localhost
       - Cors__AllowedOrigins__1=http://localhost:3000
       - Cors__AllowedOrigins__2=http://localhost:80
       - Cors__AllowedOrigins__3=https://alsadaka.com
       - Cors__AllowedOrigins__4=https://www.alsadaka.com
-      - Cors__AllowedOrigins__5=${SERVER_URL:-http://192.168.68.200}
-      - Cors__AllowedOrigins__6=${SERVER_URL_HTTPS:-https://192.168.68.200}
-      - AllowedHosts=*
-    volumes:
-      - v2_vehicle_photos:/app/storage/vehicles
-      - v2_dataprotection_keys:/home/appuser/.aspnet/DataProtection-Keys
+      - Cors__AllowedOrigins__5=http://127.0.0.1:8080
     depends_on:
       v2-postgres-db:
         condition: service_healthy
+      v2-redis-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ./static/uploads/vehicles:/app/storage/vehicles
+    restart: unless-stopped
     networks:
       - v2-network
-    restart: unless-stopped
 
   v2-enterprise-frontend:
     image: carshowroom-v2-frontend:latest
@@ -59,22 +85,29 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        - BACKEND_URL=http://v2-enterprise-api:8080
+    ports:
+      - "3000:3000" # Exposed locally for direct frontend access
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development # Enables developer logs & fast refresh
       - NEXT_TELEMETRY_DISABLED=1
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      - BACKEND_URL=http://v2-enterprise-api:8080
     depends_on:
       - v2-enterprise-api
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - v2-network
     restart: unless-stopped
 
-  v2-nginx:
-    image: nginx:1.27-alpine
-    container_name: v2-nginx
+  v2-nginx-proxy:
+    image: nginx:alpine
+    container_name: v2-nginx-proxy
     ports:
       - "80:80"
       - "443:443"
@@ -82,16 +115,31 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
-      - v2-enterprise-frontend
-      - v2-enterprise-api
+      v2-enterprise-api:
+        condition: service_healthy
+      v2-enterprise-frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
     networks:
       - v2-network
+
+  v2-adminer:
+    image: adminer:latest
+    container_name: v2-adminer
+    ports:
+      - "127.0.0.1:8085:8080" # Exposed locally for quick database management
     restart: unless-stopped
+    networks:
+      - v2-network
 
 volumes:
   v2_postgres_data:
-  v2_vehicle_photos:
-  v2_dataprotection_keys:
+  v2_redis_data:
 
 networks:
   v2-network:

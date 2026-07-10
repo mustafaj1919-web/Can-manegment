@@ -169,7 +169,7 @@ export async function getCashDashboard(): Promise<CashDashboard> {
       if (rateRes?.rate) {
         exRate = rateRes.rate
       }
-    } catch {}
+    } catch { /* exchange rate is optional; fall back to 1500 */ }
 
     const cashAccounts = tb.accounts
       .filter(a => a.code.startsWith('111'))
@@ -212,7 +212,7 @@ export async function getCashDashboard(): Promise<CashDashboard> {
           note: latest.note
         }
       }
-    } catch {}
+    } catch { /* cashbox close history is optional */ }
 
     return {
       cashbox_balance_iqd: cashboxBalanceIqd,

@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       const cfg = error.config as (InternalAxiosRequestConfig & { skipAuthRedirect?: boolean }) | undefined
       if (!cfg?.skipAuthRedirect && typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        try { useAuthStore.getState().clearAuth() } catch {}
+        try { useAuthStore.getState().clearAuth() } catch { /* store may not be ready */ }
         window.location.href = '/login'
       }
     }

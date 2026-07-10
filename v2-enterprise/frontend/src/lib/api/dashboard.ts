@@ -13,40 +13,36 @@ interface RawDashboardResponse {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  try {
-    const raw = await get<RawDashboardResponse>('/Dashboard')
+  const raw = await get<RawDashboardResponse>('/Dashboard')
 
-    // Flask returns { stats: { available_cars_count, sold_cars_count, ... }, labels: {...} }
-    const s: Record<string, number> = (raw.stats as Record<string, number>) ?? (raw as unknown as Record<string, number>)
+  // Flask returns { stats: { available_cars_count, sold_cars_count, ... }, labels: {...} }
+  const s: Record<string, number> = (raw.stats as Record<string, number>) ?? (raw as unknown as Record<string, number>)
 
-    return {
-      available_cars:        s.available_cars_count  ?? s.available_cars  ?? 0,
-      sold_cars:             s.sold_cars_count        ?? s.sold_cars       ?? 0,
-      reserved_cars:         s.reserved_cars          ?? 0,
-      customers:             s.customers_count        ?? s.customers       ?? 0,
-      sales:                 s.sales_count            ?? s.sales           ?? 0,
-      purchases:             s.purchases_count        ?? s.purchases       ?? 0,
-      installments:          s.installments           ?? 0,
-      cashbox_balance:       s.cashbox_balance        ?? 0,
-      cashbox_currency:      'IQD',
-      overdue_installments:  s.overdue_installments   ?? 0,
-      total_sales_amount:    s.total_revenue          ?? s.total_sales_amount    ?? 0,
-      total_purchases_amount: s.total_purchases_paid  ?? s.total_purchases_amount ?? 0,
-      overdue_amount:        s.overdue_amount         ?? raw.installment_summary?.overdue_amount ?? 0,
-      receivables:           s.receivables            ?? raw.installment_summary?.total_receivables ?? 0,
-      today_payments:        s.today_payments         ?? 0,
-      monthly_sales_paid:    s.monthly_sales_paid     ?? raw.monthly_summary?.sales_paid ?? 0,
-      monthly_purchases_paid: s.monthly_purchases_paid ?? raw.monthly_summary?.purchases_paid ?? 0,
-      monthly_profit:        s.monthly_profit         ?? raw.monthly_summary?.profit ?? 0,
-      inventory_value:       s.inventory_value        ?? 0,
-      payables:              s.payables               ?? 0,
-      annual_profit:         s.annual_profit          ?? 0,
-      cars_sold_month:       s.cars_sold_month        ?? 0,
-      installment_summary:   raw.installment_summary,
-      monthly_summary:       raw.monthly_summary,
-    }
-  } catch (error) {
-    throw error
+  return {
+    available_cars:        s.available_cars_count  ?? s.available_cars  ?? 0,
+    sold_cars:             s.sold_cars_count        ?? s.sold_cars       ?? 0,
+    reserved_cars:         s.reserved_cars          ?? 0,
+    customers:             s.customers_count        ?? s.customers       ?? 0,
+    sales:                 s.sales_count            ?? s.sales           ?? 0,
+    purchases:             s.purchases_count        ?? s.purchases       ?? 0,
+    installments:          s.installments           ?? 0,
+    cashbox_balance:       s.cashbox_balance        ?? 0,
+    cashbox_currency:      'IQD',
+    overdue_installments:  s.overdue_installments   ?? 0,
+    total_sales_amount:    s.total_revenue          ?? s.total_sales_amount    ?? 0,
+    total_purchases_amount: s.total_purchases_paid  ?? s.total_purchases_amount ?? 0,
+    overdue_amount:        s.overdue_amount         ?? raw.installment_summary?.overdue_amount ?? 0,
+    receivables:           s.receivables            ?? raw.installment_summary?.total_receivables ?? 0,
+    today_payments:        s.today_payments         ?? 0,
+    monthly_sales_paid:    s.monthly_sales_paid     ?? raw.monthly_summary?.sales_paid ?? 0,
+    monthly_purchases_paid: s.monthly_purchases_paid ?? raw.monthly_summary?.purchases_paid ?? 0,
+    monthly_profit:        s.monthly_profit         ?? raw.monthly_summary?.profit ?? 0,
+    inventory_value:       s.inventory_value        ?? 0,
+    payables:              s.payables               ?? 0,
+    annual_profit:         s.annual_profit          ?? 0,
+    cars_sold_month:       s.cars_sold_month        ?? 0,
+    installment_summary:   raw.installment_summary,
+    monthly_summary:       raw.monthly_summary,
   }
 }
 
@@ -105,11 +101,10 @@ export async function getNotifications(): Promise<{
   due_soon: Notification[]
   audit_logs: AuditLog[]
 }> {
-  try {
-    const raw = await get<RawNotificationsResponse>('/Notifications', { skipAuthRedirect: true } as any)
+  const raw = await get<RawNotificationsResponse>('/Notifications', { skipAuthRedirect: true } as any)
 
-    // If the API already returns the expected format (future-proofing), pass it through
-    if (raw.overdue || raw.due_today || raw.due_soon) {
+  // If the API already returns the expected format (future-proofing), pass it through
+  if (raw.overdue || raw.due_today || raw.due_soon) {
       return {
         overdue:    raw.overdue    ?? [],
         due_today:  raw.due_today  ?? [],
@@ -179,8 +174,5 @@ export async function getNotifications(): Promise<{
     }
 
     return { overdue, due_today, due_soon, audit_logs, defaulting_customers }
-  } catch (error) {
-    throw error
-  }
 }
 

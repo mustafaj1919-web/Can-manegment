@@ -50,6 +50,9 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
         public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
         public DbSet<RecurringJournalTemplate> RecurringJournalTemplates => Set<RecurringJournalTemplate>();
         public DbSet<RecurringTemplateLine> RecurringTemplateLines => Set<RecurringTemplateLine>();
+        public DbSet<AppUser> AppUsers => Set<AppUser>();
+        public DbSet<Conversation> Conversations => Set<Conversation>();
+        public DbSet<Message> Messages => Set<Message>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -105,6 +108,42 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
             modelBuilder.Entity<Customer>()
                 .HasIndex(c => new { c.IdNumber, c.BranchId })
                 .IsUnique(); // منع تكرار رقم الهوية داخل نفس الفرع
+
+            // مستخدمو تسجيل الدخول عبر Google — فريد بمعرّف Google، وربط اختياري بحساب عميل حقيقي
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(u => u.GoogleId)
+                .IsUnique();
+
+            modelBuilder.Entity<AppUser>()
+                .HasOne(u => u.LinkedCustomer)
+                .WithMany()
+                .HasForeignKey(u => u.LinkedCustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // محادثات الموبايل حول السيارات
+            modelBuilder.Entity<Conversation>()
+                .HasOne(c => c.Vehicle)
+                .WithMany()
+                .HasForeignKey(c => c.VehicleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Conversation>()
+                .HasOne(c => c.Customer)
+                .WithMany()
+                .HasForeignKey(c => c.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Conversation>()
+                .HasOne(c => c.AppUser)
+                .WithMany()
+                .HasForeignKey(c => c.AppUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Message>()
+                .HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Customer>()
                 .HasOne(c => c.Account)

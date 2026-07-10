@@ -1,3 +1,4 @@
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +65,98 @@ namespace CarShowroomManagementV2.API.Controllers
                         name = customer.FullName ?? customer.Name,
                         phone = customer.Phone,
                         email = customer.Email
+                    }
+                }
+            });
+        }
+
+        // POST /api/customer/auth/google
+        [AllowAnonymous]
+        [HttpPost("auth/google")]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
+        {
+            if (string.IsNullOrEmpty(request.IdToken))
+            {
+                return BadRequest(new { success = false, message = "رمز Google مطلوب." });
+            }
+
+            // توكن ID الصادر من تطبيق موبايل يحمل audience = عميل تلك المنصة (iOS/Android) وليس serverClientId،
+            // لذا يجب قبول جميع عملاء Google المسجّلين للتطبيق كـ audience صالح
+            var validAudiences = new[]
+            {
+                _configuration["GoogleAuth:WebClientId"],
+                _configuration["GoogleAuth:IosClientId"],
+                _configuration["GoogleAuth:AndroidClientId"]
+            }.Where(a => !string.IsNullOrEmpty(a)).ToArray();
+
+            if (validAudiences.Length == 0)
+            {
+                return StatusCode(500, new { success = false, message = "تسجيل الدخول عبر Google غير مُهيأ على الخادم." });
+            }
+
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = validAudiences
+                });
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "فشل التحقق من توكن Google. Audiences المُهيأة: {Audiences}", string.Join(", ", validAudiences));
+                return Unauthorized(new { success = false, message = "تعذر التحقق من حساب Google، يرجى إعادة المحاولة." });
+            }
+
+            var appUser = await _context.AppUsers
+                .FirstOrDefaultAsync(u => u.GoogleId == payload.Subject);
+
+            if (appUser == null)
+            {
+                appUser = new AppUser
+                {
+                    GoogleId = payload.Subject,
+                    Email = payload.Email ?? string.Empty,
+                    Name = payload.Name ?? payload.Email ?? "مستخدم Google",
+                    PhotoUrl = payload.Picture
+                };
+                _context.AppUsers.Add(appUser);
+            }
+            else
+            {
+                // تحديث الاسم/الصورة إذا تغيّرت من جهة Google
+                appUser.Email = payload.Email ?? appUser.Email;
+                appUser.Name = payload.Name ?? appUser.Name;
+                appUser.PhotoUrl = payload.Picture ?? appUser.PhotoUrl;
+            }
+            await _context.SaveChangesAsync();
+
+            Customer? linkedCustomer = null;
+            if (appUser.LinkedCustomerId.HasValue)
+            {
+                linkedCustomer = await _context.Customers
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(c => c.Id == appUser.LinkedCustomerId.Value);
+            }
+
+            var token = linkedCustomer != null
+                ? GenerateJwtTokenForCustomer(linkedCustomer)
+                : GenerateJwtTokenForAppUser(appUser);
+
+            return Ok(new
+            {
+                success = true,
+                message = "تم تسجيل الدخول عبر Google بنجاح",
+                data = new
+                {
+                    token,
+                    user = new
+                    {
+                        id = appUser.Id,
+                        name = linkedCustomer?.FullName ?? linkedCustomer?.Name ?? appUser.Name,
+                        email = appUser.Email,
+                        photoUrl = appUser.PhotoUrl,
+                        isLinkedToCustomer = linkedCustomer != null
                     }
                 }
             });
@@ -331,11 +424,41 @@ namespace CarShowroomManagementV2.API.Controllers
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        private string GenerateJwtTokenForAppUser(AppUser appUser)
+        {
+            var secretKey = _configuration["JwtSettings:Secret"]
+                ?? throw new InvalidOperationException("JwtSettings:Secret غير مُهيأ في ملف الإعدادات.");
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, appUser.Id.ToString()),
+                new Claim(ClaimTypes.Name, appUser.Name),
+                new Claim(ClaimTypes.Role, "GoogleUser")
+            };
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["JwtSettings:Issuer"] ?? "CarShowroomEnterprise",
+                audience: _configuration["JwtSettings:Audience"] ?? "CarShowroomEnterpriseUsers",
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(24),
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
     }
 
     public class CustomerLoginRequest
     {
         public string Phone { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class GoogleLoginRequest
+    {
+        public string IdToken { get; set; } = string.Empty;
     }
 }

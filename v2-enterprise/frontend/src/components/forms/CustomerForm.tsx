@@ -473,7 +473,6 @@ export function CustomerForm({ customer }: CustomerFormProps) {
               <div className="grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
                 <div className="relative overflow-hidden rounded-lg border border-border/40 bg-black/30">
                   <img src={scanCrop.dataUrl} alt="معاينة المسح" className="max-h-[520px] w-full object-contain" />
-                  {/* eslint-disable-next-line react/forbid-component-props -- dynamic crop positioning requires inline style */}
                   <div
                     className="absolute border-2 border-cyan-400 bg-cyan-400/10 shadow-[0_0_0_9999px_rgba(0,0,0,.45)]"
                     style={{

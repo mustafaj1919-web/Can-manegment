@@ -14,12 +14,26 @@ import {
   executeRecurringEntry,
   type RecurringLine,
 } from '@/lib/api/recurring-entries'
+import { getChartOfAccounts, type ChartAccountNode } from '@/lib/api/accounting'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { AccountCombobox } from '@/components/ui/AccountCombobox'
 import { toast } from 'sonner'
+
+function flatLeafAccounts(nodes: ChartAccountNode[]) {
+  const result: { code: string; name: string }[] = []
+  function walk(list: ChartAccountNode[]) {
+    for (const n of list) {
+      if (!n.children?.length) result.push({ code: n.code ?? '', name: n.name ?? '' })
+      else walk(n.children)
+    }
+  }
+  walk(nodes)
+  return result
+}
 
 interface FormLine {
   accountCode: string
@@ -63,6 +77,9 @@ export default function RecurringEntriesPage() {
     queryKey: ['recurring-entries'],
     queryFn: getRecurringEntries,
   })
+
+  const { data: coaData } = useQuery({ queryKey: ['coa'], queryFn: getChartOfAccounts, staleTime: 300_000 })
+  const leafAccounts = coaData ? flatLeafAccounts(coaData.items) : []
 
   const createMutation = useMutation({
     mutationFn: () => createRecurringEntry({ name, description, frequency, dayOfMonth, lines }),
@@ -195,8 +212,7 @@ export default function RecurringEntriesPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border/30 bg-secondary/20 text-muted-foreground">
-                    <th className="px-3 py-2 text-right">كود الحساب</th>
-                    <th className="px-3 py-2 text-right">اسم الحساب</th>
+                    <th className="px-3 py-2 text-right" colSpan={2}>الحساب</th>
                     <th className="px-3 py-2 text-center">مدين/دائن</th>
                     <th className="px-3 py-2 text-left">المبلغ</th>
                     <th className="px-3 py-2 text-right">البيان</th>
@@ -206,20 +222,17 @@ export default function RecurringEntriesPage() {
                 <tbody>
                   {lines.map((line, i) => (
                     <tr key={i} className="border-b border-border/20">
-                      <td className="px-2 py-1.5">
-                        <Input
+                      <td className="px-2 py-1.5" colSpan={2}>
+                        <AccountCombobox
                           value={line.accountCode}
-                          onChange={e => updateLine(i, 'accountCode', e.target.value)}
-                          placeholder="1001"
-                          className="h-7 text-xs bg-secondary/20 w-24"
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Input
-                          value={line.accountName}
-                          onChange={e => updateLine(i, 'accountName', e.target.value)}
-                          placeholder="اسم الحساب"
-                          className="h-7 text-xs bg-secondary/20 w-36"
+                          accounts={leafAccounts}
+                          onChange={v => {
+                            const acct = leafAccounts.find(a => a.code === v)
+                            updateLine(i, 'accountCode', v)
+                            if (acct) updateLine(i, 'accountName', acct.name)
+                          }}
+                          placeholder="اختر الحساب..."
+                          className="h-7 text-xs min-w-[200px]"
                         />
                       </td>
                       <td className="px-2 py-1.5 text-center">

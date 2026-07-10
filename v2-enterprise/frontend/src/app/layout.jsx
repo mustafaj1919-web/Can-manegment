@@ -45,6 +45,9 @@ export const metadata = {
     shortcut: '/icons/icon-192x192.png',
     apple: '/icons/icon-152x152.png',
   },
+}
+
+export const viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: dark)',  color: '#0a0a0a' },
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },

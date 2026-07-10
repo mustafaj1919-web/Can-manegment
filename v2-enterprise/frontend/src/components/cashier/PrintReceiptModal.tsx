@@ -292,7 +292,7 @@ export function PrintReceiptModal({ open, onOpenChange, type, data }: PrintRecei
       </div>
     </div>
   </div>
-  <script>window.onload = () => { window.print(); window.close(); }<\/script>
+  <script>window.onload = () => { window.print(); window.close(); }</script>
 </body>
 </html>`)
       win.document.close()
@@ -357,7 +357,7 @@ export function PrintReceiptModal({ open, onOpenChange, type, data }: PrintRecei
 </head>
 <body>
 ${content}
-<script>window.onload = () => { window.print(); window.close(); }<\/script>
+<script>window.onload = () => { window.print(); window.close(); }</script>
 </body>
 </html>`)
     win.document.close()

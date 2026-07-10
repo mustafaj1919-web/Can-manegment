@@ -221,7 +221,8 @@ namespace CarShowroomManagementV2.UnitTests.Inventory
             context.Vehicles.AddRange(
                 new Vehicle
                 {
-                    Model = "Toyota Camry",
+                    Brand = "Toyota",
+                    Model = "Camry",
                     ChassisNumber = "PUBLIC-AVAILABLE-1",
                     Year = 2025,
                     Color = "White",
@@ -264,7 +265,8 @@ namespace CarShowroomManagementV2.UnitTests.Inventory
             var context = GetSqliteDbContext();
             var vehicle = new Vehicle
             {
-                Model = "Lexus LX600",
+                Brand = "Lexus",
+                Model = "LX600",
                 ChassisNumber = "PRIVATE-VIN-123",
                 Year = 2025,
                 Color = "Black",

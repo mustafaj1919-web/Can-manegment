@@ -16,9 +16,12 @@ import { getExchangeRate } from '@/lib/api/exchange-rate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Skeleton } from '@/components/ui/skeleton'
 import { exportXlsx } from '@/lib/export'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 const REF_TYPE_OPTS = [
   { value: 'all',      label: 'كل أنواع العمليات' },
@@ -395,6 +398,8 @@ interface JournalLineInput {
   exchangeRate: string
 }
 
+import { AccountCombobox } from '@/components/ui/AccountCombobox'
+
 function flatLeafAccounts(nodes: ChartAccountNode[]): ChartAccountNode[] {
   const result: ChartAccountNode[] = []
   function walk(n: ChartAccountNode) {
@@ -562,14 +567,12 @@ function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; on
                 <div key={idx} className="grid grid-cols-1 md:grid-cols-[1.8fr_0.8fr_0.8fr_0.9fr_0.9fr_1.5fr_auto] gap-2 items-start bg-secondary/10 p-2.5 rounded-lg border border-border/20">
                   <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">الحساب</label>
-                    <Select value={line.accountId} onValueChange={v => updateLine(idx, 'accountId', v)}>
-                      <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-xs"><SelectValue placeholder="اختر الحساب..." /></SelectTrigger>
-                      <SelectContent className="max-h-48">
-                        {leafAccounts.map(a => (
-                          <SelectItem key={a.accountId} value={a.accountId ?? ''}>{a.code} — {a.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <AccountCombobox
+                      value={line.accountId}
+                      accounts={leafAccounts.map(a => ({ code: a.code ?? '', name: a.name ?? '', id: a.accountId ?? '' }))}
+                      onChange={v => updateLine(idx, 'accountId', v)}
+                      valueKey="id"
+                    />
                   </div>
                   <div>
                     <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">العملة</label>

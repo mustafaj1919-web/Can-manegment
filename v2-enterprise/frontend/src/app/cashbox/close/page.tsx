@@ -5,19 +5,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Lock, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatMoney } from '@/lib/utils'
 import {
   getCashboxCloses, createCashboxClose, getCurrentBalance,
   type CashboxCloseRecord,
 } from '@/lib/api/vouchers'
+import { getChartOfAccounts, type ChartAccountNode } from '@/lib/api/accounting'
+import { AccountCombobox } from '@/components/ui/AccountCombobox'
 
-const CASH_ACCOUNTS = [
-  { code: '111001', name: 'الصندوق الرئيسي' },
-  { code: '111002', name: 'صندوق فرع الأصدقاء' },
-  { code: '111003', name: 'صندوق فرع الأصدقاء 2' },
-]
+function flatLeafAccounts(nodes: ChartAccountNode[]): ChartAccountNode[] {
+  const result: ChartAccountNode[] = []
+  function walk(list: ChartAccountNode[]) {
+    for (const n of list) {
+      if (!n.children?.length) result.push(n)
+      else walk(n.children)
+    }
+  }
+  walk(nodes)
+  return result
+}
 
 export default function CashboxClosePage() {
   const [accountCode,    setAccountCode]    = useState('111001')
@@ -26,6 +33,12 @@ export default function CashboxClosePage() {
   const [formError,      setFormError]      = useState('')
 
   const qc = useQueryClient()
+
+  const { data: coaData } = useQuery({ queryKey: ['coa'], queryFn: getChartOfAccounts, staleTime: 300_000 })
+  const cashAccounts = coaData
+    ? flatLeafAccounts(coaData.items).filter(a => a.code?.startsWith('111') || a.code?.startsWith('112'))
+        .map(a => ({ code: a.code ?? '', name: a.name ?? '' }))
+    : [{ code: '111001', name: 'الصندوق الرئيسي' }]
 
   const { data: balanceData, isLoading: balanceLoading, refetch: refetchBalance } = useQuery({
     queryKey: ['cashbox-balance', accountCode],
@@ -85,14 +98,14 @@ export default function CashboxClosePage() {
       {/* Account selector */}
       <div className="glass rounded-xl p-5 space-y-5">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="w-[220px]">
+          <div className="w-[280px]">
             <label className="text-[11px] text-muted-foreground mb-1 block">حساب الصندوق</label>
-            <Select value={accountCode} onValueChange={v => { setAccountCode(v); setActualBalance('') }}>
-              <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CASH_ACCOUNTS.map(a => <SelectItem key={a.code} value={a.code}>{a.code} — {a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <AccountCombobox
+              value={accountCode}
+              accounts={cashAccounts}
+              onChange={v => { setAccountCode(v); setActualBalance('') }}
+              placeholder="اختر حساب الصندوق..."
+            />
           </div>
           <Button variant="ghost" size="sm" onClick={() => refetchBalance()} className="h-9 gap-1.5 text-xs">
             <RefreshCw className="h-3.5 w-3.5" />

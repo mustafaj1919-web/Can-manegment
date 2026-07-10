@@ -52,6 +52,9 @@ services:
       - JwtSettings__Audience=${JWT_AUDIENCE}
       - AdminSettings__InitialPassword=${ADMIN_INITIAL_PASSWORD}
       - AdminSettings__ForceResetPassword=${RESET_ADMIN_PASSWORD:-false}
+      - GoogleAuth__WebClientId=${GOOGLE_WEB_CLIENT_ID}
+      - GoogleAuth__IosClientId=${GOOGLE_IOS_CLIENT_ID}
+      - GoogleAuth__AndroidClientId=${GOOGLE_ANDROID_CLIENT_ID}
     depends_on:
       v2-postgres-db:
         condition: service_healthy
@@ -62,6 +65,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    volumes:
+      - ./static/uploads/vehicles:/app/storage/vehicles
     restart: always
     networks:
       - v2-prod-network
@@ -111,10 +116,33 @@ services:
     networks:
       - v2-prod-network
 
+  v2-portainer:
+    image: portainer/portainer-ce:latest
+    container_name: v2-portainer
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - v2_prod_portainer_data:/data
+    restart: always
+    networks:
+      - v2-prod-network
+
+  v2-adminer:
+    image: adminer:latest
+    container_name: v2-adminer
+    ports:
+      - "127.0.0.1:8085:8080"
+    restart: always
+    networks:
+      - v2-prod-network
+
 volumes:
   v2_prod_postgres_data:
     driver: local
   v2_prod_redis_data:
+    driver: local
+  v2_prod_portainer_data:
     driver: local
 
 networks:

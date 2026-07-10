@@ -47,13 +47,12 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
                 return null;
             }
 
-            var (brand, model) = GetPublicVehiclesQueryHandler.SplitModel(vehicle.Model);
             return new PublicVehicleDetailsDto
             {
                 Id = vehicle.Id,
                 BranchId = vehicle.BranchId,
-                Brand = brand,
-                Model = model,
+                Brand = string.IsNullOrWhiteSpace(vehicle.Brand) ? "سيارة" : vehicle.Brand,
+                Model = vehicle.Model,
                 Year = vehicle.Year,
                 Color = vehicle.Color ?? string.Empty,
                 Status = vehicle.Status,

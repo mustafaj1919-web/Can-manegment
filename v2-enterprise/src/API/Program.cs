@@ -752,4 +752,58 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
     {
         Log.Warning(ex, "تعذر تعديل الجداول لإضافة أعمدة الفاتورة الإلكترونية.");
     }
+
+    // إنشاء جدول مستخدمي تسجيل الدخول عبر Google (تطبيق الموبايل) إذا لم يكن موجوداً
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""AppUsers"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""GoogleId"" text NOT NULL DEFAULT '',
+                ""Email"" text NOT NULL DEFAULT '',
+                ""Name"" text NOT NULL DEFAULT '',
+                ""PhotoUrl"" text,
+                ""LinkedCustomerId"" uuid REFERENCES ""Customers""(""Id"") ON DELETE SET NULL,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AppUsers_GoogleId"" ON ""AppUsers"" (""GoogleId"");
+        ");
+        Log.Information("تم التحقق من جدول AppUsers أو إنشاؤه.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جدول AppUsers.");
+    }
+
+    // إنشاء جداول محادثات ورسائل الموبايل حول السيارات إذا لم تكن موجودة
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Conversations"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""VehicleId"" uuid NOT NULL REFERENCES ""Vehicles""(""Id"") ON DELETE CASCADE,
+                ""CustomerId"" uuid REFERENCES ""Customers""(""Id"") ON DELETE CASCADE,
+                ""AppUserId"" uuid REFERENCES ""AppUsers""(""Id"") ON DELETE CASCADE,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""LastMessageAt"" timestamp with time zone NOT NULL DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""Messages"" (
+                ""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""ConversationId"" uuid NOT NULL REFERENCES ""Conversations""(""Id"") ON DELETE CASCADE,
+                ""SenderType"" text NOT NULL DEFAULT 'Customer',
+                ""SenderName"" text NOT NULL DEFAULT '',
+                ""Body"" text NOT NULL DEFAULT '',
+                ""IsRead"" boolean NOT NULL DEFAULT false,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_Conversations_CustomerId"" ON ""Conversations"" (""CustomerId"");
+            CREATE INDEX IF NOT EXISTS ""IX_Conversations_AppUserId"" ON ""Conversations"" (""AppUserId"");
+            CREATE INDEX IF NOT EXISTS ""IX_Messages_ConversationId"" ON ""Messages"" (""ConversationId"");
+        ");
+        Log.Information("تم التحقق من جداول Conversations وMessages أو إنشاؤها.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جداول Conversations وMessages.");
+    }
 }

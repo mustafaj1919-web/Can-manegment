@@ -16,6 +16,7 @@ import {
   type Voucher, type VoucherType, type CreateVoucherPayload,
 } from '@/lib/api/vouchers'
 import { getChartOfAccounts, type ChartAccountNode } from '@/lib/api/accounting'
+import { AccountCombobox } from '@/components/ui/AccountCombobox'
 import { getExchangeRate } from '@/lib/api/exchange-rate'
 import { get, post } from '@/lib/api/client'
 import { toast } from 'sonner'
@@ -205,8 +206,9 @@ export default function VouchersPage() {
   }, [exRateData, formExchangeRate])
 
   const allLeafAccounts = coaData ? flatLeafAccounts(coaData.items) : []
-  const cashBankAccounts = allLeafAccounts.filter(a => CASH_BANK_PREFIXES.includes(a.code))
-  const contraAccounts   = allLeafAccounts.filter(a => !CASH_BANK_PREFIXES.includes(a.code))
+  const toOption = (a: ChartAccountNode) => ({ code: a.code ?? '', name: a.name ?? '' })
+  const cashBankAccounts = allLeafAccounts.filter(a => CASH_BANK_PREFIXES.includes(a.code)).map(toOption)
+  const contraAccounts   = allLeafAccounts.filter(a => !CASH_BANK_PREFIXES.includes(a.code)).map(toOption)
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateVoucherPayload) => createVoucher(payload),
@@ -396,14 +398,12 @@ export default function VouchersPage() {
               <label className="text-[11px] text-muted-foreground mb-1 block">
                 {isTransfer ? 'حساب الوجهة (مدين) *' : activeType === 'receipt' ? 'الصندوق/البنك (مدين) *' : 'الحساب المقابل (مدين) *'}
               </label>
-              <Select value={formDebitCode} onValueChange={setFormDebitCode}>
-                <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-sm"><SelectValue placeholder="اختر حساباً" /></SelectTrigger>
-                <SelectContent className="max-h-48">
-                  {(isTransfer ? cashBankAccounts : activeType === 'receipt' ? cashBankAccounts : contraAccounts).map(a => (
-                    <SelectItem key={a.code} value={a.code}>{a.code} — {a.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AccountCombobox
+                value={formDebitCode}
+                accounts={isTransfer ? cashBankAccounts : activeType === 'receipt' ? cashBankAccounts : contraAccounts}
+                onChange={setFormDebitCode}
+                placeholder="اختر حساباً"
+              />
             </div>
 
             {/* Credit account */}
@@ -411,14 +411,12 @@ export default function VouchersPage() {
               <label className="text-[11px] text-muted-foreground mb-1 block">
                 {isTransfer ? 'حساب المصدر (دائن) *' : activeType === 'payment' ? 'الصندوق/البنك (دائن) *' : 'الحساب المقابل (دائن) *'}
               </label>
-              <Select value={formCreditCode} onValueChange={setFormCreditCode}>
-                <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-sm"><SelectValue placeholder="اختر حساباً" /></SelectTrigger>
-                <SelectContent className="max-h-48">
-                  {(isTransfer ? cashBankAccounts : activeType === 'payment' ? cashBankAccounts : contraAccounts).map(a => (
-                    <SelectItem key={a.code} value={a.code}>{a.code} — {a.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AccountCombobox
+                value={formCreditCode}
+                accounts={isTransfer ? cashBankAccounts : activeType === 'payment' ? cashBankAccounts : contraAccounts}
+                onChange={setFormCreditCode}
+                placeholder="اختر حساباً"
+              />
             </div>
 
             <div className="sm:col-span-2 lg:col-span-1">

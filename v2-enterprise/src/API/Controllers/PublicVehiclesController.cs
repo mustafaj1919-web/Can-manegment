@@ -80,6 +80,8 @@ namespace CarShowroomManagementV2.API.Controllers
                     fuel_type = v.FuelType,
                     price = v.TargetSellingPrice,
                     status = v.Status,
+                    notes = v.Notes,
+                    condition = v.Condition,
                     images = v.Images.Select(i => new { id = i.Id, filename = i.FileName })
                 })
                 .ToListAsync();

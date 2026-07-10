@@ -11,10 +11,11 @@ DECLARE
   v3 UUID := 'a1000003-0000-0000-0000-000000000003';
   v4 UUID := 'a1000004-0000-0000-0000-000000000004';
 
-  c1 UUID := '084ef224-da5f-4d06-86a4-aea06e8ef185';
+  c1 UUID := 'bb000010-0000-0000-0000-000000000010';
   c2 UUID := 'b2000001-0000-0000-0000-000000000001';
 
   s1      UUID := 'c3000001-0000-0000-0000-000000000001';
+  acc_c1  UUID := 'b2acc003-0000-0000-0000-000000000003';
   acc_c2  UUID := 'b2acc001-0000-0000-0000-000000000001';
   acc_sup UUID := 'b2acc002-0000-0000-0000-000000000002';
 
@@ -40,13 +41,33 @@ DECLARE
   n           INTEGER;
 BEGIN
 
+-- Core Accounts for seed data
+INSERT INTO "Accounts" ("Id","AccountCode","Name","Type","IsActive","BranchId","CreatedBy","CreatedAt") VALUES
+  ('22222222-2222-2222-2222-222222222222', '11010001', 'صندوق النقدية الرئيسي', 1, true, branch_id, admin_id, now_ts),
+  ('33333333-3333-3333-3333-333333333333', '12010001', 'مخزون السيارات', 1, true, branch_id, admin_id, now_ts),
+  ('44444444-4444-4444-4444-444444444444', '13010001', 'حسابات العملاء المدينين', 1, true, branch_id, admin_id, now_ts),
+  ('77777777-7777-7777-7777-777777777777', '41010001', 'إيرادات المبيعات والفوائد', 4, true, branch_id, admin_id, now_ts),
+  ('88888888-8888-8888-8888-888888888888', '51010001', 'تكلفة السيارات المباعة', 5, true, branch_id, admin_id, now_ts)
+ON CONFLICT ("Id") DO NOTHING;
+
 -- Vehicles
-INSERT INTO "Vehicles" ("Id","Model","ChassisNumber","EngineNumber","Color","Year","PurchaseCost","CustomDuties","MaintenanceCost","BookValue","TargetSellingPrice","IsSold","Status","CreatedAt","CreatedBy","BranchId")
+INSERT INTO "Vehicles" ("Id","Model","ChassisNumber","EngineNumber","Color","Year","PurchaseCost","CustomDuties","MaintenanceCost","BookValue","TargetSellingPrice","IsSold","Status","CreatedAt","CreatedBy","BranchId","Currency")
 VALUES
-  (v1,'Toyota Camry 2024','1HGCM82633A004352','2AZ-FE-001','White',2024,25000000,2000000,500000,27500000,32000000,false,'Available',now_ts,admin_id,branch_id),
-  (v2,'Kia Sportage 2023','KNDPC3A21H7231456','G4NA-789','Black',2023,20000000,1500000,300000,21800000,26000000,false,'Available',now_ts - INTERVAL '10 days',admin_id,branch_id),
-  (v3,'Hyundai Tucson 2022','5NPE34AF1JH693418','G4KD-456','Silver',2022,18000000,1200000,800000,20000000,24000000,true,'Sold',now_ts - INTERVAL '5 days',admin_id,branch_id),
-  (v4,'Toyota Corolla 2023','2T1BURHE0JC045231','1ZR-FE-222','Red',2023,15000000,1000000,200000,16200000,20000000,false,'Available',now_ts - INTERVAL '20 days',admin_id,branch_id)
+  (v1,'Toyota Camry 2024','1HGCM82633A004352','2AZ-FE-001','White',2024,25000000,2000000,500000,27500000,32000000,false,'Available',now_ts,admin_id,branch_id,'IQD'),
+  (v2,'Kia Sportage 2023','KNDPC3A21H7231456','G4NA-789','Black',2023,20000000,1500000,300000,21800000,26000000,false,'Available',now_ts - INTERVAL '10 days',admin_id,branch_id,'IQD'),
+  (v3,'Hyundai Tucson 2022','5NPE34AF1JH693418','G4KD-456','Silver',2022,18000000,1200000,800000,20000000,24000000,true,'Sold',now_ts - INTERVAL '5 days',admin_id,branch_id,'IQD'),
+  (v4,'Toyota Corolla 2023','2T1BURHE0JC045231','1ZR-FE-222','Red',2023,15000000,1000000,200000,16200000,20000000,false,'Available',now_ts - INTERVAL '20 days',admin_id,branch_id,'IQD')
+ON CONFLICT ("Id") DO NOTHING;
+
+-- Account for first customer
+INSERT INTO "Accounts" ("Id","AccountCode","Name","Type","IsActive","BranchId","CreatedBy","CreatedAt")
+VALUES (acc_c1,'13010001','Customer Account - First Customer',1,true,branch_id,admin_id,now_ts)
+ON CONFLICT ("Id") DO NOTHING;
+
+-- First customer (re-insert / ensure c1 exists)
+INSERT INTO "Customers" ("Id","Name","FullName","Phone","Address","IdType","IdNumber","IdIssueDate","IdExpiryDate","Nationality","DateOfBirth","CustomerType","Notes","AccountId","CreatedAt","CreatedBy","BranchId")
+VALUES
+  (c1,'First Customer','First Customer','07901234501','Baghdad',NULL,'IQ-10010001',NULL,NULL,'iraqi',NULL,'Individual',NULL,acc_c1,now_ts - INTERVAL '15 days',admin_id,branch_id)
 ON CONFLICT ("Id") DO NOTHING;
 
 -- Account for second customer

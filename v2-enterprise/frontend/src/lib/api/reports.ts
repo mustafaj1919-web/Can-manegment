@@ -553,13 +553,9 @@ export async function getSalesProfitReport(params: { fromDate?: string; toDate?:
 }
 
 export async function getMonthlyProfitReport(months = 12): Promise<MonthlyProfitResponse> {
-  try {
-    const res = await get<any>(`/reports/monthly-profit?months=${months}`)
-    if (res && res.success && res.data) {
-      return res.data
-    }
-    return res
-  } catch (error) {
-    throw error
+  const res = await get<any>(`/reports/monthly-profit?months=${months}`)
+  if (res && res.success && res.data) {
+    return res.data
   }
+  return res
 }

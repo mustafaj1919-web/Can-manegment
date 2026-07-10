@@ -213,7 +213,7 @@ export default function TrialBalancePage() {
           <div className="overflow-x-auto">
             <table className={cn("w-full min-w-[640px] text-sm transition-colors", isLocalLight ? "text-muted-foreground" : "text-foreground")}>
               <thead>
-                <tr className={cn("border-b transition-colors", isLocalLight ? "border-slate-200 bg-slate-100/50" : "border-border/50 bg-secondary/20")}>
+                <tr className={cn("transition-colors", isLocalLight ? "bg-slate-100/50" : "bg-secondary/20")}>
                   <th className={cn("px-5 py-3 text-start text-xs font-medium transition-colors", isLocalLight ? "text-muted-foreground" : "text-muted-foreground")}>رمز الحساب</th>
                   <th className={cn("px-4 py-3 text-start text-xs font-medium transition-colors", isLocalLight ? "text-muted-foreground" : "text-muted-foreground")}>اسم الحساب</th>
                   <th className={cn("px-4 py-3 text-start text-xs font-medium transition-colors", isLocalLight ? "text-muted-foreground" : "text-muted-foreground")}>النوع</th>
@@ -229,8 +229,8 @@ export default function TrialBalancePage() {
               <tbody>
                 {filtered.map((account) => (
                   <tr key={account.code} className={cn(
-                    "border-b transition-colors",
-                    isLocalLight ? "border-slate-100 hover:bg-slate-50" : "border-border/20 hover:bg-secondary/10"
+                    "transition-colors",
+                    isLocalLight ? "hover:bg-slate-50" : "hover:bg-secondary/10"
                   )}>
                     <td className={cn("px-5 py-2.5 font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-cyan-700" : "text-cyan-300")}>{account.code}</td>
                     <td className={cn("px-4 py-2.5 text-xs transition-colors", isLocalLight ? "text-muted-foreground" : "text-foreground/90")}>{account.name}</td>
@@ -254,7 +254,7 @@ export default function TrialBalancePage() {
               {/* Totals row */}
               {!activeFilter && data && (
                 <tfoot>
-                  <tr className={cn("border-t transition-colors", isLocalLight ? "border-slate-300 bg-slate-100" : "border-border/50 bg-secondary/20")}>
+                  <tr className={cn("transition-colors", isLocalLight ? "bg-slate-100" : "bg-secondary/20")}>
                     <td colSpan={3} className={cn("px-5 py-3 text-xs font-semibold transition-colors", isLocalLight ? "text-muted-foreground" : "text-foreground")}>الإجمالي</td>
                     <td className={cn("px-4 py-3 text-end font-numeric text-xs font-bold transition-colors", isLocalLight ? "text-emerald-700" : "text-emerald-400")}>
                       {formatMoney(data.total_debit, 'IQD')}

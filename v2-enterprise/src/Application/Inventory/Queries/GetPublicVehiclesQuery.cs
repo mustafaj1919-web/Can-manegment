@@ -80,41 +80,26 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
                 Total = total,
                 Page = page,
                 PerPage = perPage,
-                Items = vehicles.Select(vehicle =>
+                Items = vehicles.Select(vehicle => new PublicVehicleDto
                 {
-                    var (brand, model) = SplitModel(vehicle.Model);
-                    return new PublicVehicleDto
-                    {
-                        Id = vehicle.Id,
-                        BranchId = vehicle.BranchId,
-                        Brand = brand,
-                        Model = model,
-                        Year = vehicle.Year,
-                        Color = vehicle.Color ?? string.Empty,
-                        Status = vehicle.Status,
-                        SellingPrice = vehicle.TargetSellingPrice > 0 ? vehicle.TargetSellingPrice : null,
-                        CreatedAt = vehicle.CreatedAt,
-                        Photos = vehicle.Images
-                            .OrderBy(image => image.UploadedAt)
-                            .Select(image => new PublicVehiclePhotoDto
-                            {
-                                Id = image.Id,
-                                FileName = image.FileName
-                            })
-                            .ToList()
-                    };
+                    Id = vehicle.Id,
+                    BranchId = vehicle.BranchId,
+                    Brand = string.IsNullOrWhiteSpace(vehicle.Brand) ? "سيارة" : vehicle.Brand,
+                    Model = vehicle.Model,
+                    Year = vehicle.Year,
+                    Color = vehicle.Color ?? string.Empty,
+                    Status = vehicle.Status,
+                    SellingPrice = vehicle.TargetSellingPrice > 0 ? vehicle.TargetSellingPrice : null,
+                    CreatedAt = vehicle.CreatedAt,
+                    Photos = vehicle.Images
+                        .OrderBy(image => image.UploadedAt)
+                        .Select(image => new PublicVehiclePhotoDto
+                        {
+                            Id = image.Id,
+                            FileName = image.FileName
+                        })
+                        .ToList()
                 }).ToList()
-            };
-        }
-
-        internal static (string Brand, string Model) SplitModel(string value)
-        {
-            var parts = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-            return parts.Length switch
-            {
-                0 => ("سيارة", "غير محدد"),
-                1 => (parts[0], parts[0]),
-                _ => (parts[0], parts[1])
             };
         }
     }

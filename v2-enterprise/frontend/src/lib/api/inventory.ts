@@ -105,7 +105,7 @@ function mapVehicleFromBackend(v: any): Car {
     plate_number:      v.plateNumber      ?? v.plate_number     ?? v.PlateNumber ?? '',
     plate_status:      v.plateStatus      ?? v.plate_status     ?? v.PlateStatus ?? null,
     mileage:           v.mileage          ?? v.Mileage          ?? null,
-    engine_size:       v.engineSize       ?? v.EngineSize       ?? v.engine_size ?? null,
+    engine_size:       v.engineSize       ?? v.EngineSize       ?? v.engine_size ?? v.engine ?? null,
     cylinders:         v.cylinders        ?? v.Cylinders        ?? null,
     transmission:      v.transmission     ?? v.Transmission     ?? null,
     fuel_type:         v.fuelType         ?? v.FuelType         ?? v.fuel_type ?? null,
@@ -113,7 +113,7 @@ function mapVehicleFromBackend(v: any): Car {
     seat_count:        v.seatCount        ?? v.SeatCount        ?? v.seat_count ?? null,
     seat_material:     v.seatMaterial     ?? v.SeatMaterial     ?? v.seat_material ?? null,
     purchase_price:    v.purchaseCost     ?? v.purchase_price   ?? v.PurchaseCost ?? 0,
-    selling_price:     v.targetSellingPrice ?? v.selling_price  ?? v.TargetSellingPrice ?? null,
+    selling_price:     v.targetSellingPrice ?? v.selling_price  ?? v.TargetSellingPrice ?? v.price ?? null,
     currency:          v.currency         ?? v.Currency         ?? 'IQD',
     status:            v.status           ?? v.Status           ?? 'Available',
     notes:             v.notes            ?? v.Notes            ?? null,
@@ -186,6 +186,87 @@ export async function getPublicCarById(id: string | number): Promise<Car> {
     return mapVehicleFromBackend(res.data)
   }
   return mapVehicleFromBackend(res)
+}
+
+/* ─── Richer public catalog API (brand/price/year/fuel filters, leads) ──── */
+
+export interface PublicVehicleFilters {
+  brands: string[]
+  years: number[]
+  fuel_types: string[]
+}
+
+export async function getPublicVehicles(params: {
+  page?: number
+  per_page?: number
+  search?: string
+  brand?: string
+  minPrice?: number
+  maxPrice?: number
+  year?: number
+  fuelType?: string
+} = {}): Promise<CarsListResponse> {
+  const qs = new URLSearchParams()
+  qs.set('page', String(params.page ?? 1))
+  qs.set('perPage', String(params.per_page ?? 12))
+  if (params.search) qs.set('search', params.search)
+  if (params.brand) qs.set('brand', params.brand)
+  if (params.minPrice != null) qs.set('minPrice', String(params.minPrice))
+  if (params.maxPrice != null) qs.set('maxPrice', String(params.maxPrice))
+  if (params.year) qs.set('year', String(params.year))
+  if (params.fuelType) qs.set('fuelType', params.fuelType)
+
+  const res = await get<any>(`/public/vehicles?${qs.toString()}`)
+  const data = res?.data ?? res
+  return {
+    items: (data?.items ?? []).map(mapVehicleFromBackend),
+    total: data?.total ?? 0,
+    page: data?.page ?? params.page ?? 1,
+    per_page: data?.per_page ?? params.per_page ?? 12,
+  }
+}
+
+export async function getPublicVehicleById(id: string): Promise<Car> {
+  const res = await get<any>(`/public/vehicles/${id}`)
+  return mapVehicleFromBackend(res?.data ?? res)
+}
+
+export async function getPublicVehicleFilters(): Promise<PublicVehicleFilters> {
+  const res = await get<any>('/public/vehicles/filters')
+  const data = res?.data ?? res
+  return {
+    brands: data?.brands ?? [],
+    years: data?.years ?? [],
+    fuel_types: data?.fuel_types ?? [],
+  }
+}
+
+export async function submitVehicleLead(payload: {
+  name: string
+  phone: string
+  vehicleId?: string
+  message?: string
+}): Promise<{ success: boolean; message: string }> {
+  return post<any>('/public/vehicles/leads', {
+    Name: payload.name,
+    Phone: payload.phone,
+    VehicleId: payload.vehicleId ?? null,
+    Message: payload.message ?? null,
+  })
+}
+
+export async function submitVisitRequest(payload: {
+  name: string
+  phone: string
+  vehicleId?: string
+  visitDate: string
+}): Promise<{ success: boolean; message: string }> {
+  return post<any>('/public/vehicles/visit-requests', {
+    Name: payload.name,
+    Phone: payload.phone,
+    VehicleId: payload.vehicleId ?? null,
+    VisitDate: payload.visitDate,
+  })
 }
 
 // تحويل حقول الفورم (snake_case) إلى حقول أمر السيارة في الباكيند (PascalCase).
