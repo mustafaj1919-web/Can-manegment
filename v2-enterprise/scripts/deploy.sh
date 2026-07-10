@@ -10,6 +10,7 @@ SERVER_USER="mustafa"
 SERVER_PASS="Aldulimi99"
 SERVER_DIR="/home/mustafa/can-management"
 LOCAL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+COMPOSE_FILE="docker-compose.prod.yml"   # Production compose — always use this on the server
 
 echo "▶ تحديث nginx.conf بـ IP الجديد: $SERVER_IP"
 sed -i.bak "s/server_name localhost 127\.0\.0\.1 [0-9.]* _;/server_name localhost 127.0.0.1 $SERVER_IP _;/" \
@@ -25,27 +26,25 @@ sshpass -p "$SERVER_PASS" rsync -az --delete \
   --exclude='.claude' \
   --exclude='backups' \
   --exclude='static' \
+  --exclude='website-php' \
   "$LOCAL_DIR/" \
   "$SERVER_USER@$SERVER_IP:$SERVER_DIR/"
 
-# إرسال .env بشكل منفصل (غير مشمول في rsync لأسباب أمنية عادةً)
+# إرسال .env بشكل منفصل (غير مشمول في rsync لأسباب أمنية)
 sshpass -p "$SERVER_PASS" rsync -az \
   "$LOCAL_DIR/.env" \
   "$SERVER_USER@$SERVER_IP:$SERVER_DIR/.env"
 
-echo "▶ بناء وتشغيل على السيرفر ..."
+echo "▶ بناء وتشغيل على السيرفر (Production) ..."
 sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" bash <<ENDSSH
   set -e
   cd $SERVER_DIR
 
-  # كتابة متغير SERVER_URL للـ CORS
-  export SERVER_URL=http://$SERVER_IP
+  # بناء وتشغيل بالإعدادات الإنتاجية
+  docker compose -f $COMPOSE_FILE build
+  docker compose -f $COMPOSE_FILE up -d
 
-  # بناء وتشغيل
-  SERVER_URL=http://$SERVER_IP docker compose build
-  SERVER_URL=http://$SERVER_IP docker compose up -d
-
-  docker compose ps
+  docker compose -f $COMPOSE_FILE ps
 ENDSSH
 
 echo "✓ تم النشر بنجاح — http://$SERVER_IP"

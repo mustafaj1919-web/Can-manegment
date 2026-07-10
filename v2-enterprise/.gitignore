@@ -4,6 +4,7 @@
 .env.*.local
 *.pfx
 *.key
+nginx/certs/*.crt
 
 # ─── Node / Next.js (frontend) ─────────────────────────
 node_modules/

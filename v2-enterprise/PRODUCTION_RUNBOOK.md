@@ -32,12 +32,14 @@
 
 1. **نسخ ملف المتغيرات البيئية وتعديله**:
    ```bash
-   cp .env.production.example .env
+   cp .env.example .env
    ```
 2. **تعديل الملف `.env`**:
    * قم بتوليد كلمة مرور قوية جداً لقاعدة البيانات وتعيينها في `POSTGRES_PASSWORD`.
    * قم بتوليد مفتاح أمان عشوائي طويل (مشفّر 256 بت) وتعيينه في `JWT_SECRET`.
    * قم بتحديث سلسلة اتصال قاعدة البيانات `CONNECTION_STRING` بكلمة المرور الجديدة.
+   * أضف بيانات اعتماد Google Sign-In (`GOOGLE_WEB_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, وبشكل اختياري `GOOGLE_ANDROID_CLIENT_ID`).
+   * انسخ شهادة SSL الخاصة بك إلى `nginx/certs/alsadaka.crt` و `nginx/certs/alsadaka.key` يدوياً (لا تُودعهما في Git).
 3. **بناء وتشغيل الحاويات**:
    ```bash
    docker compose -f docker-compose.prod.yml up --build -d
