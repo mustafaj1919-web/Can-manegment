@@ -37,6 +37,8 @@ export interface Car {
   created_at: string | null
   photos?: CarPhoto[]
   cover_photo?: CarPhoto | null
+  supplier_id?: string | null
+  supplier_name?: string | null
 }
 
 export interface CarsListResponse {
@@ -120,19 +122,22 @@ function mapVehicleFromBackend(v: any): Car {
     created_at:        v.createdAt        ?? v.created_at       ?? null,
     photos,
     cover_photo,
+    supplier_id:       v.supplierId       ?? v.supplier_id      ?? null,
+    supplier_name:     v.supplierName     ?? v.supplier_name    ?? null,
   }
 }
 
 /* ─── API functions ──────────────────────────────────────────────────────── */
 
 export async function getCars(params: {
-  page?: number; per_page?: number; status?: string; search?: string
+  page?: number; per_page?: number; status?: string; search?: string; supplier_id?: string
 } = {}): Promise<CarsListResponse> {
   const qs = new URLSearchParams()
   qs.set('page',     String(params.page     ?? 1))
   qs.set('per_page', String(params.per_page ?? 25))
-  if (params.status) qs.set('status', params.status)
-  if (params.search) qs.set('search', params.search)
+  if (params.status)      qs.set('status',      params.status)
+  if (params.search)      qs.set('search',      params.search)
+  if (params.supplier_id) qs.set('supplier_id', params.supplier_id)
   const res = await get<any>(`/Inventory?${qs.toString()}`)
   if (res && res.success && res.data) {
     const data = res.data

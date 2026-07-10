@@ -12,6 +12,7 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
     public class GetVehiclesListQuery : IRequest<List<VehicleListDto>>
     {
         public string? Status { get; set; }
+        public Guid? SupplierId { get; set; }
     }
 
     public class VehicleListDto
@@ -35,6 +36,8 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
         public string Status { get; set; } = string.Empty;
         public Guid BranchId { get; set; }
         public string? CoverImage { get; set; }
+        public Guid? SupplierId { get; set; }
+        public string? SupplierName { get; set; }
     }
 
     public class GetVehiclesListQueryHandler : IRequestHandler<GetVehiclesListQuery, List<VehicleListDto>>
@@ -48,14 +51,24 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
 
         public async Task<List<VehicleListDto>> Handle(GetVehiclesListQuery request, CancellationToken cancellationToken)
         {
-            var query = _context.Vehicles.AsQueryable();
+            var vehicleQuery = _context.Vehicles.AsQueryable();
 
             if (!string.IsNullOrEmpty(request.Status))
+                vehicleQuery = vehicleQuery.Where(v => v.Status == request.Status);
+
+            if (request.SupplierId.HasValue)
             {
-                query = query.Where(v => v.Status == request.Status);
+                var sid = request.SupplierId.Value;
+                var vehicleIds = await _context.Purchases
+                    .IgnoreQueryFilters()
+                    .Where(p => p.SupplierId == sid)
+                    .Select(p => p.VehicleId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+                vehicleQuery = vehicleQuery.Where(v => vehicleIds.Contains(v.Id));
             }
 
-            return await query
+            var vehicles = await vehicleQuery
                 .Select(v => new VehicleListDto
                 {
                     Id = v.Id,
@@ -79,6 +92,34 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
                     CoverImage = v.Images.OrderBy(i => i.UploadedAt).Select(i => i.FileName).FirstOrDefault()
                 })
                 .ToListAsync(cancellationToken);
+
+            // جلب المورد لكل سيارة عبر Purchases
+            var vehicleIdsList = vehicles.Select(v => v.Id).ToList();
+            var purchaseSupplierMap = await _context.Purchases
+                .IgnoreQueryFilters()
+                .Where(p => vehicleIdsList.Contains(p.VehicleId))
+                .GroupBy(p => p.VehicleId)
+                .Select(g => new { VehicleId = g.Key, SupplierId = g.OrderByDescending(p => p.Id).Select(p => p.SupplierId).FirstOrDefault() })
+                .ToListAsync(cancellationToken);
+
+            var supplierIds = purchaseSupplierMap.Select(x => x.SupplierId).Distinct().ToList();
+            var supplierNames = await _context.Suppliers
+                .IgnoreQueryFilters()
+                .Where(s => supplierIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+
+            var supplierMap = purchaseSupplierMap.ToDictionary(x => x.VehicleId, x => x.SupplierId);
+            foreach (var v in vehicles)
+            {
+                if (supplierMap.TryGetValue(v.Id, out var sid))
+                {
+                    v.SupplierId = sid;
+                    supplierNames.TryGetValue(sid, out var sname);
+                    v.SupplierName = sname;
+                }
+            }
+
+            return vehicles;
         }
     }
 }

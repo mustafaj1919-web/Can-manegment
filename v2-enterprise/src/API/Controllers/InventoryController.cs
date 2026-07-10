@@ -164,13 +164,14 @@ namespace CarShowroomManagementV2.API.Controllers
         public async Task<IActionResult> GetAll(
             [FromQuery] string? status,
             [FromQuery] string? search,
+            [FromQuery] Guid? supplier_id,
             [FromQuery] int page = 1,
             [FromQuery] int per_page = 25)
         {
             if (page < 1) page = 1;
             if (per_page < 1 || per_page > 100) per_page = 25;
 
-            var query = new GetVehiclesListQuery { Status = status };
+            var query = new GetVehiclesListQuery { Status = status, SupplierId = supplier_id };
             var all = await Mediator.Send(query);
 
             if (!string.IsNullOrWhiteSpace(search))

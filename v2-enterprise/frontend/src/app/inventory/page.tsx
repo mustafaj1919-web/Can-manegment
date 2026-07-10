@@ -13,6 +13,7 @@ import type { RowAction } from '@/components/shared/AdvancedTable'
 import { cn, formatMoney, getStatusVariant, photoUrl, translateStatus } from '@/lib/utils'
 import { getCars } from '@/lib/api/inventory'
 import type { CarPhoto } from '@/lib/api/inventory'
+import { getSuppliers } from '@/lib/api/suppliers'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
@@ -88,6 +89,9 @@ interface SidebarFilterProps {
   onStatusChange: (v: string) => void
   condition: string
   onConditionChange: (v: string) => void
+  supplierId: string
+  onSupplierChange: (v: string) => void
+  suppliers: { id: string; name: string }[]
   hasFilters: boolean
   onReset: () => void
   counts?: { available: number; reserved: number; sold: number }
@@ -97,6 +101,7 @@ interface SidebarFilterProps {
 function SidebarFilter({
   status, onStatusChange,
   condition, onConditionChange,
+  supplierId, onSupplierChange, suppliers,
   hasFilters, onReset,
   counts, totalCount,
 }: SidebarFilterProps) {
@@ -167,6 +172,50 @@ function SidebarFilter({
           </button>
         ))}
       </div>
+
+      {/* Supplier */}
+      {suppliers.length > 0 && (
+        <>
+          <div className="border-y border-border/30 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/45">المورد</p>
+          </div>
+          <div className="space-y-0.5 px-2 py-2">
+            <button
+              type="button"
+              onClick={() => onSupplierChange('all')}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors text-start',
+                supplierId === 'all'
+                  ? 'bg-[hsl(var(--primary)/0.10)] text-primary'
+                  : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground',
+              )}
+            >
+              <span className={cn('flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors', supplierId === 'all' ? 'border-primary bg-primary' : 'border-muted-foreground/25')}>
+                {supplierId === 'all' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </span>
+              الكل
+            </button>
+            {suppliers.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onSupplierChange(s.id)}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors text-start',
+                  supplierId === s.id
+                    ? 'bg-[hsl(var(--primary)/0.10)] text-primary'
+                    : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground',
+                )}
+              >
+                <span className={cn('flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors', supplierId === s.id ? 'border-primary bg-primary' : 'border-muted-foreground/25')}>
+                  {supplierId === s.id && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </span>
+                <span className="truncate">{s.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Reset */}
       {hasFilters && (
@@ -283,6 +332,7 @@ export default function InventoryPage() {
   const [exporting, setExporting] = useState(false)
   const [assignCar, setAssignCar] = useState<any>(null)
   const [bulkModalOpen, setBulkModalOpen] = useState(false)
+  const [supplierId, setSupplierId] = useState('all')
   const { branches } = useBranchStore()
   const canSeeAll = branches.length > 1
   const perPage = 18
@@ -410,7 +460,8 @@ export default function InventoryPage() {
     per_page: perPage,
     status: status === 'all' ? undefined : status,
     search: search.trim() || undefined,
-  }), [page, search, status])
+    supplier_id: supplierId === 'all' ? undefined : supplierId,
+  }), [page, search, status, supplierId])
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', params],
@@ -418,6 +469,13 @@ export default function InventoryPage() {
     staleTime: 30_000,
     retry: 1,
   })
+
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: () => getSuppliers({ per_page: 100 }),
+    staleTime: 300_000,
+  })
+  const suppliersList = suppliersData?.data ?? []
 
   // Query to get all available cars when the planner view is enabled
   const { data: allAvailableData } = useQuery({
@@ -469,11 +527,11 @@ export default function InventoryPage() {
   )
   const total      = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const hasFilters = !!(search || status !== 'all' || condition !== 'all')
+  const hasFilters = !!(search || status !== 'all' || condition !== 'all' || supplierId !== 'all')
   const totalCount = counts ? counts.available + counts.reserved + counts.sold : undefined
 
   function resetFilters() {
-    setSearch(''); setStatus('all'); setCondition('all'); setPage(1)
+    setSearch(''); setStatus('all'); setCondition('all'); setSupplierId('all'); setPage(1)
   }
 
   async function handleExport() {
@@ -678,6 +736,9 @@ export default function InventoryPage() {
               onStatusChange={s => { setStatus(s); setPage(1) }}
               condition={condition}
               onConditionChange={c => { setCondition(c); setPage(1) }}
+              supplierId={supplierId}
+              onSupplierChange={s => { setSupplierId(s); setPage(1) }}
+              suppliers={suppliersList.map(s => ({ id: s.id, name: s.name }))}
               hasFilters={hasFilters}
               onReset={resetFilters}
               counts={counts}
@@ -906,7 +967,12 @@ export default function InventoryPage() {
                               <h4 className="text-sm font-bold text-foreground font-family-cairo leading-snug truncate">
                                 {car.brand} {car.model}
                               </h4>
-                              
+                              {car.supplier_name && (
+                                <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
+                                  المورد: {car.supplier_name}
+                                </p>
+                              )}
+
                               {/* Chips for Year, Color, Mileage */}
                               <div className="flex flex-wrap gap-1 mt-1">
                                 <span className="font-numeric text-[10px] font-bold px-2 py-0.5 rounded bg-secondary/50 text-foreground/80">{car.manufacturing_year}</span>
