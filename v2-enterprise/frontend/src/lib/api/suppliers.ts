@@ -52,8 +52,16 @@ export interface BulkPurchasePayload {
   branchId?: string
   brand?: string
   model: string
+  trim?: string
   year: number
   color?: string
+  condition?: string
+  fuelType?: string
+  transmission?: string
+  engineSize?: string
+  cylinders?: number
+  seatCount?: number
+  importCountry?: string
   purchaseCost: number
   paidAmount: number  // 0 = full credit on supplier account
   targetSellingPrice: number
@@ -122,8 +130,16 @@ export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<
     PaymentMethod: methodMap[payload.paymentMethod] ?? 1,
     Brand: payload.brand ?? null,
     Model: payload.model,
+    Trim: payload.trim ?? null,
     Color: payload.color ?? null,
     Year: payload.year,
+    Condition: payload.condition ?? null,
+    FuelType: payload.fuelType ?? null,
+    Transmission: payload.transmission ?? null,
+    EngineSize: payload.engineSize ?? null,
+    Cylinders: payload.cylinders ?? null,
+    SeatCount: payload.seatCount ?? null,
+    ImportCountry: payload.importCountry ?? null,
     TargetSellingPrice: payload.targetSellingPrice,
     ChassisNumbers: payload.chassisNumbers,
     PaidAmount: payload.paidAmount,

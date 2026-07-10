@@ -21,8 +21,16 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash; // used only when PaidAmount > 0
         public string? Brand { get; set; }
         public string Model { get; set; } = string.Empty;
+        public string? Trim { get; set; }
         public string? Color { get; set; }
         public int Year { get; set; }
+        public string? Condition { get; set; }
+        public string? FuelType { get; set; }
+        public string? Transmission { get; set; }
+        public string? EngineSize { get; set; }
+        public int? Cylinders { get; set; }
+        public int? SeatCount { get; set; }
+        public string? ImportCountry { get; set; }
         public decimal TargetSellingPrice { get; set; }
         public List<string> ChassisNumbers { get; set; } = new();
         public Dictionary<string, BulkVehicleOverride>? VehicleOverrides { get; set; }
@@ -175,11 +183,19 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         Id = Guid.NewGuid(),
                         Brand = request.Brand,
                         Model = request.Model,
+                        Trim = request.Trim,
                         ChassisNumber = vin,
                         Color = !string.IsNullOrWhiteSpace(overrides?.Color) ? overrides.Color : request.Color,
                         PlateNumber = overrides?.PlateNumber,
                         Notes = overrides?.Notes,
                         Year = request.Year,
+                        Condition = request.Condition,
+                        FuelType = request.FuelType,
+                        Transmission = request.Transmission,
+                        EngineSize = request.EngineSize,
+                        Cylinders = request.Cylinders,
+                        SeatCount = request.SeatCount,
+                        ImportCountry = request.ImportCountry,
                         PurchaseCost = purchaseCost,
                         BookValue = purchaseCost,
                         TargetSellingPrice = effectiveTargetPrice,

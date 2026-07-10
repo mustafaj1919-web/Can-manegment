@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BrandModelSelect, type TrimSpec } from '@/components/forms/BrandModelSelect'
 import { useVinDecoder } from '@/lib/useVinDecoder'
-import { useBranchStore } from '@/lib/stores/branch-store'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { QuickSupplierDialog } from '@/components/purchases/QuickSupplierDialog'
@@ -238,22 +237,19 @@ function VehicleDetailRow({
 
 function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
   const router = useRouter()
-  const { branches, activeBranch } = useBranchStore()
-  const [selectedBranchId, setSelectedBranchId] = useState('')
-
-  useEffect(() => {
-    if (activeBranch && !selectedBranchId) {
-      setSelectedBranchId(String(activeBranch.id))
-    } else if (branches.length > 0 && !selectedBranchId) {
-      setSelectedBranchId(String(branches[0].id))
-    }
-  }, [activeBranch, branches, selectedBranchId])
-
   const [sellerId, setSellerId] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
+  const [trim, setTrim] = useState('')
   const [year, setYear] = useState(String(new Date().getFullYear()))
   const [color, setColor] = useState('')
+  const [condition, setCondition] = useState('')
+  const [fuelType, setFuelType] = useState('')
+  const [transmission, setTransmission] = useState('')
+  const [engineSize, setEngineSize] = useState('')
+  const [cylinders, setCylinders] = useState('')
+  const [seatCount, setSeatCount] = useState('')
+  const [importCountry, setImportCountry] = useState('')
   const [purchasePrice, setPurchasePrice] = useState('')
   const [targetPrice, setTargetPrice] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Cash')
@@ -329,15 +325,22 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
         supplierId: sellerId,
         brand: brand.trim() || undefined,
         model: model.trim(),
+        trim: trim.trim() || undefined,
         year: Number(year),
         color: color.trim() || undefined,
+        condition: condition || undefined,
+        fuelType: fuelType || undefined,
+        transmission: transmission || undefined,
+        engineSize: engineSize.trim() || undefined,
+        cylinders: cylinders ? Number(cylinders) : undefined,
+        seatCount: seatCount ? Number(seatCount) : undefined,
+        importCountry: importCountry.trim() || undefined,
         purchaseCost: Number(purchasePrice),
         paidAmount: totalPaid > 0 ? paidPerCar : 0,
         targetSellingPrice: Number(targetPrice) || Number(purchasePrice),
         paymentMethod: paymentMethod as any,
         chassisNumbers: uniqueVins,
         vehicleOverrides: Object.keys(vehicleOverrides).length > 0 ? vehicleOverrides : undefined,
-        branchId: selectedBranchId || undefined,
       })
     } catch {
       return
@@ -377,59 +380,52 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
 
   return (
     <div className="space-y-5">
-      {/* Supplier & Branch */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SectionCard title="المورد">
-          <div className="mb-3 flex justify-end">
+      {/* Supplier */}
+      <SectionCard title="المورد">
+        <div className="flex items-start gap-4">
+          <div className="flex-1">
+            {sellersLoading ? (
+              <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
+            ) : (
+              <div>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">اختر المورد *</Label>
+                <Select value={sellerId} onValueChange={setSellerId}>
+                  <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
+                    <SelectValue placeholder="اختر المورد" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {sellers.map(s => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.full_name || s.name} — {s.phone || '-'}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldError msg={errors.sellerId} />
+              </div>
+            )}
+          </div>
+          <div className="shrink-0 mt-5">
             <QuickSupplierDialog onSuccess={(id) => { setSellerId(id); setErrors(e => ({ ...e, sellerId: '' })) }} />
           </div>
-          {sellersLoading ? (
-            <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
-          ) : (
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">اختر المورد *</Label>
-              <Select value={sellerId} onValueChange={setSellerId}>
-                <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
-                  <SelectValue placeholder="اختر المورد" />
-                </SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {sellers.map(s => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.full_name || s.name} — {s.phone || '-'}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FieldError msg={errors.sellerId} />
-            </div>
-          )}
-        </SectionCard>
-
-        <SectionCard title="فرع الشراء والتسجيل">
-          <div className="mb-3 flex h-[28px] justify-end" />
-          <div>
-            <Label className="mb-1.5 block text-xs text-muted-foreground">اختر الفرع المستهدف للشراء *</Label>
-            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-              <SelectTrigger className="bg-secondary/30 border-border/60">
-                <SelectValue placeholder="اختر الفرع" />
-              </SelectTrigger>
-              <SelectContent className="max-h-64">
-                {branches.map(b => (
-                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </SectionCard>
-      </div>
+        </div>
+      </SectionCard>
 
       {/* Shared car details */}
-      <SectionCard title="بيانات السيارة (مشتركة)" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <SectionCard title="بيانات السيارة (مشتركة لكل الباتش)" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <BrandModelSelect
           brand={brand}
           model={model}
-          trim=""
-          onBrandChange={(b) => { setBrand(b); setModel('') }}
-          onModelChange={(m) => setModel(m)}
-          onTrimSelect={() => {}}
+          trim={trim}
+          onBrandChange={(b) => { setBrand(b); setModel(''); setTrim('') }}
+          onModelChange={(m) => { setModel(m); setTrim('') }}
+          onTrimSelect={(t, specs) => {
+            setTrim(t)
+            if (specs?.transmission) setTransmission(specs.transmission)
+            if (specs?.fuel_type) setFuelType(specs.fuel_type)
+            if (specs?.engine_size) setEngineSize(specs.engine_size)
+            if (specs?.cylinders) setCylinders(String(specs.cylinders))
+            if (specs?.seat_count) setSeatCount(String(specs.seat_count))
+            if (specs?.import_country) setImportCountry(specs.import_country)
+          }}
           brandError={errors.brand}
           modelError={errors.model}
         />
@@ -444,6 +440,56 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
           <Input value={color} onChange={e => setColor(e.target.value)}
             placeholder="أبيض، أسود... (يمكن تخصيص لكل سيارة)"
             className="bg-secondary/30 border-border/60" />
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">الحالة</Label>
+          <Select value={condition} onValueChange={setCondition}>
+            <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue placeholder="اختر الحالة" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="New">جديدة</SelectItem>
+              <SelectItem value="Used">مستعملة</SelectItem>
+              <SelectItem value="Damaged">متضررة</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">نوع الوقود</Label>
+          <Select value={fuelType} onValueChange={setFuelType}>
+            <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue placeholder="اختر نوع الوقود" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Gasoline">بنزين</SelectItem>
+              <SelectItem value="Diesel">ديزل</SelectItem>
+              <SelectItem value="Hybrid">هايبرد</SelectItem>
+              <SelectItem value="Electric">كهربائي</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">ناقل الحركة</Label>
+          <Select value={transmission} onValueChange={setTransmission}>
+            <SelectTrigger className="bg-secondary/30 border-border/60"><SelectValue placeholder="اختر ناقل الحركة" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Automatic">أوتوماتيك</SelectItem>
+              <SelectItem value="Manual">يدوي</SelectItem>
+              <SelectItem value="CVT">CVT</SelectItem>
+              <SelectItem value="DCT">DCT</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">حجم المحرك</Label>
+          <Input value={engineSize} onChange={e => setEngineSize(e.target.value)}
+            placeholder="1.5، 2.0، 3.5..." className="bg-secondary/30 border-border/60" />
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">عدد الأسطوانات</Label>
+          <Input type="number" value={cylinders} onChange={e => setCylinders(e.target.value)}
+            placeholder="4، 6، 8..." className="font-numeric bg-secondary/30 border-border/60" />
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">بلد الاستيراد</Label>
+          <Input value={importCountry} onChange={e => setImportCountry(e.target.value)}
+            placeholder="الإمارات، الكويت، أمريكا..." className="bg-secondary/30 border-border/60" />
         </div>
       </SectionCard>
 
