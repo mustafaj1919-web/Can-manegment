@@ -55,12 +55,12 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
         public async Task<Guid> Handle(CreatePurchaseCommand request, CancellationToken cancellationToken)
         {
-            var branchId = request.BranchId ?? _currentUserService.BranchId;
+            var branchId = _currentUserService.BranchId;
 
             // 1. التحقق من وجود المورد
             var supplier = await _context.Suppliers
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(s => s.Id == request.SupplierId && s.BranchId == branchId, cancellationToken);
+                .FirstOrDefaultAsync(s => s.Id == request.SupplierId, cancellationToken);
 
             if (supplier == null)
             {
