@@ -329,59 +329,186 @@ namespace CarShowroomManagementV2.API.Controllers
 
         public record AssignBranchRequest(Guid BranchId);
 
-        // 9. رفع صورة جماعي لكل السيارات من نفس الموديل
-        [HttpPost("bulk-images")]
-        public async Task<IActionResult> BulkUploadImages([FromForm] string brand, [FromForm] string model, IFormFile file)
+        // 9أ. عدد السيارات المطابقة لموديل/سنة/فئة معينة (لمعاينة الأثر قبل التحديث الجماعي)
+        [HttpGet("bulk-images/affected-count")]
+        [Authorize(Roles = "Owner,Admin")]
+        public async Task<IActionResult> GetBulkImagesAffectedCount(
+            [FromQuery] string brand, [FromQuery] string model, [FromQuery] int year, [FromQuery] string? trim)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest(new { success = false, message = "لم يتم رفع أي ملف." });
+            if (string.IsNullOrWhiteSpace(model))
+                return BadRequest(new { success = false, message = "الموديل مطلوب." });
 
-            if (file.Length > MaxImageBytes)
-                return BadRequest(new { success = false, message = "حجم الصورة يتجاوز الحد الأقصى المسموح به (5 MB)." });
+            var query = _context.Vehicles.IgnoreQueryFilters()
+                .Where(v => v.Model == model && v.Year == year && (string.IsNullOrEmpty(brand) || v.Brand == brand));
+            if (!string.IsNullOrWhiteSpace(trim))
+                query = query.Where(v => v.Trim == trim);
 
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!AllowedImageExtensions.Contains(ext))
-                return BadRequest(new { success = false, message = $"نوع الملف غير مسموح به. الأنواع المقبولة: {string.Join(", ", AllowedImageExtensions)}" });
+            var count = await query.CountAsync();
+            return Ok(new { success = true, count });
+        }
 
-            using var memoryStream = new MemoryStream();
-            await file.CopyToAsync(memoryStream);
-            var fileBytes = memoryStream.ToArray();
+        // 9ب. تحديث الصور الجماعي — يطبّق مجموعة صور على كل السيارات المطابقة لنفس
+        // الماركة/الموديل/السنة/الفئة، بشكل تحاملي (transactional) بالكامل مع تراجع تام عند أي خطأ.
+        [HttpPost("bulk-images")]
+        [Authorize(Roles = "Owner,Admin")]
+        public async Task<IActionResult> BulkUploadImages(
+            [FromForm] string brand,
+            [FromForm] string model,
+            [FromForm] int year,
+            [FromForm] string? trim,
+            [FromForm] bool replaceExisting,
+            [FromForm] List<IFormFile> files)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            if (!IsValidImageMagicBytes(fileBytes, ext))
-                return BadRequest(new { success = false, message = "محتوى الملف لا يطابق نوع الصورة المتوقع." });
+            if (string.IsNullOrWhiteSpace(model))
+                return BadRequest(new { success = false, message = "الموديل مطلوب." });
+            if (files == null || files.Count == 0)
+                return BadRequest(new { success = false, message = "لم يتم رفع أي صورة." });
 
-            if (!TryGetImageDimensions(fileBytes, ext, out var width, out var height))
-                return BadRequest(new { success = false, message = "تعذّر قراءة أبعاد الصورة." });
-            if (width > MaxImageDimension || height > MaxImageDimension)
-                return BadRequest(new { success = false, message = $"أبعاد الصورة كبيرة جداً. الحد الأقصى {MaxImageDimension}×{MaxImageDimension} بكسل." });
+            // 1) التحقق من كل الملفات قبل لمس القرص أو قاعدة البيانات — فشل أي ملف يوقف العملية بالكامل
+            var validatedFiles = new List<(string ext, byte[] bytes)>();
+            foreach (var file in files)
+            {
+                if (file.Length == 0)
+                    return BadRequest(new { success = false, message = $"الملف {file.FileName} فارغ." });
+                if (file.Length > MaxImageBytes)
+                    return BadRequest(new { success = false, message = $"حجم الصورة {file.FileName} يتجاوز الحد الأقصى المسموح به (5 MB)." });
 
-            var vehicles = await _context.Vehicles
-                .IgnoreQueryFilters()
-                .Where(v => v.Model == model && (string.IsNullOrEmpty(brand) || v.Brand == brand))
-                .ToListAsync();
+                var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+                if (!AllowedImageExtensions.Contains(ext))
+                    return BadRequest(new { success = false, message = $"نوع الملف {file.FileName} غير مسموح به. الأنواع المقبولة: {string.Join(", ", AllowedImageExtensions)}" });
 
+                using var memoryStream = new MemoryStream();
+                await file.CopyToAsync(memoryStream);
+                var fileBytes = memoryStream.ToArray();
+
+                if (!IsValidImageMagicBytes(fileBytes, ext))
+                    return BadRequest(new { success = false, message = $"محتوى الملف {file.FileName} لا يطابق نوع الصورة المتوقع." });
+                if (!TryGetImageDimensions(fileBytes, ext, out var width, out var height))
+                    return BadRequest(new { success = false, message = $"تعذّر قراءة أبعاد الصورة {file.FileName}." });
+                if (width > MaxImageDimension || height > MaxImageDimension)
+                    return BadRequest(new { success = false, message = $"أبعاد الصورة {file.FileName} كبيرة جداً. الحد الأقصى {MaxImageDimension}×{MaxImageDimension} بكسل." });
+
+                validatedFiles.Add((ext, fileBytes));
+            }
+
+            // 2) تحديد السيارات المطابقة تمامًا (ماركة + موديل + سنة، والفئة إن حُدّدت)
+            var vehiclesQuery = _context.Vehicles.IgnoreQueryFilters()
+                .Where(v => v.Model == model && v.Year == year && (string.IsNullOrEmpty(brand) || v.Brand == brand));
+            if (!string.IsNullOrWhiteSpace(trim))
+                vehiclesQuery = vehiclesQuery.Where(v => v.Trim == trim);
+
+            var vehicles = await vehiclesQuery.ToListAsync();
             if (vehicles.Count == 0)
-                return BadRequest(new { success = false, message = "لا توجد سيارات تطابق هذا الموديل." });
+                return BadRequest(new { success = false, message = "لا توجد سيارات تطابق هذا الموديل/السنة/الفئة." });
+
+            var dbContext = _context as DbContext;
+            if (dbContext == null)
+                return StatusCode(500, new { success = false, message = "خطأ داخلي في السياق." });
 
             var storagePath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "vehicles");
-            if (!Directory.Exists(storagePath)) Directory.CreateDirectory(storagePath);
-            var secureFileName = $"{Guid.NewGuid().ToString("N")}{ext}";
-            var fullFilePath = Path.Combine(storagePath, secureFileName);
-            await System.IO.File.WriteAllBytesAsync(fullFilePath, fileBytes);
+            Directory.CreateDirectory(storagePath);
 
-            foreach (var vehicle in vehicles)
+            var writtenFilePaths = new List<string>(); // لتنظيفها إن فشلت العملية وتراجعنا
+            using var transaction = await dbContext.Database.BeginTransactionAsync();
+            try
             {
-                _context.VehicleImages.Add(new VehicleImage
+                // 3) وضع الاستبدال: إزالة مراجع الصور القديمة لكل سيارة متأثرة
+                var removedFileCandidates = new HashSet<string>();
+                if (replaceExisting)
                 {
-                    Id = Guid.NewGuid(),
-                    VehicleId = vehicle.Id,
-                    FileName = secureFileName,
-                    UploadedAt = DateTime.UtcNow
+                    var vehicleIds = vehicles.Select(v => v.Id).ToList();
+                    var oldImages = await _context.VehicleImages
+                        .Where(vi => vehicleIds.Contains(vi.VehicleId))
+                        .ToListAsync();
+                    foreach (var img in oldImages) removedFileCandidates.Add(img.FileName);
+                    _context.VehicleImages.RemoveRange(oldImages);
+                    await _context.SaveChangesAsync();
+                }
+
+                // 4) حفظ كل صورة جديدة مرة واحدة فقط على القرص (كتابة مؤقتة ثم إعادة تسمية ذرّية)
+                var savedFileNames = new List<string>();
+                foreach (var (ext, bytes) in validatedFiles)
+                {
+                    var secureFileName = $"{Guid.NewGuid():N}{ext}";
+                    var tempPath = Path.Combine(storagePath, $".{secureFileName}.partial");
+                    var finalPath = Path.Combine(storagePath, secureFileName);
+                    await System.IO.File.WriteAllBytesAsync(tempPath, bytes);
+                    System.IO.File.Move(tempPath, finalPath);
+                    writtenFilePaths.Add(finalPath);
+                    savedFileNames.Add(secureFileName);
+                }
+
+                // 5) إنشاء سجلات VehicleImages: صف لكل (سيارة × صورة مرفوعة)، بترتيب يضمن أن
+                // أول صورة (savedFileNames[0]) هي الغلاف لكل سيارة (أقدم UploadedAt ضمن صور تلك السيارة تحديدًا)
+                var baseTime = DateTime.UtcNow;
+                long tickOffset = 0;
+                foreach (var vehicle in vehicles)
+                {
+                    foreach (var fileName in savedFileNames)
+                    {
+                        _context.VehicleImages.Add(new VehicleImage
+                        {
+                            Id = Guid.NewGuid(),
+                            VehicleId = vehicle.Id,
+                            FileName = fileName,
+                            UploadedAt = baseTime.AddTicks(tickOffset++)
+                        });
+                    }
+                }
+                await _context.SaveChangesAsync();
+
+                // 6) وضع الاستبدال: حذف الملفات الفعلية اليتيمة فقط (غير مُشار لها من أي سيارة بعد الآن)
+                if (replaceExisting && removedFileCandidates.Count > 0)
+                {
+                    foreach (var fileName in removedFileCandidates)
+                    {
+                        var stillReferenced = await _context.VehicleImages.AnyAsync(vi => vi.FileName == fileName);
+                        if (!stillReferenced)
+                        {
+                            var oldPath = Path.Combine(storagePath, fileName);
+                            if (System.IO.File.Exists(oldPath))
+                                System.IO.File.Delete(oldPath);
+                        }
+                    }
+                }
+
+                // 7) فحص سلامة قبل الـ commit: كل صورة مُشار لها لأي سيارة متأثرة يجب أن يكون لها ملف فعلي
+                var affectedVehicleIds = vehicles.Select(v => v.Id).ToList();
+                var finalReferencedFiles = await _context.VehicleImages
+                    .Where(vi => affectedVehicleIds.Contains(vi.VehicleId))
+                    .Select(vi => vi.FileName)
+                    .Distinct()
+                    .ToListAsync();
+                foreach (var fileName in finalReferencedFiles)
+                {
+                    if (!System.IO.File.Exists(Path.Combine(storagePath, fileName)))
+                        throw new InvalidOperationException($"فشل التحقق من السلامة: الملف {fileName} غير موجود على القرص بعد الحفظ.");
+                }
+
+                await transaction.CommitAsync();
+                stopwatch.Stop();
+
+                return Ok(new
+                {
+                    success = true,
+                    vehiclesUpdated = vehicles.Count,
+                    imagesUploaded = savedFileNames.Count,
+                    imagesReused = (vehicles.Count * savedFileNames.Count) - savedFileNames.Count,
+                    executionTimeMs = stopwatch.ElapsedMilliseconds,
+                    message = $"تم تحديث الصور لـ {vehicles.Count} سيارة."
                 });
             }
-            await _context.SaveChangesAsync(default);
-
-            return Ok(new { success = true, updated_count = vehicles.Count, filename = secureFileName, message = $"تم إضافة الصورة لـ {vehicles.Count} سيارة." });
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                foreach (var path in writtenFilePaths)
+                {
+                    try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch { /* best-effort cleanup only */ }
+                }
+                return StatusCode(500, new { success = false, message = $"فشلت العملية وتم التراجع الكامل عن كل التغييرات: {ex.Message}" });
+            }
         }
 
         // 10. تحديث مواصفات جماعي حسب الموديل

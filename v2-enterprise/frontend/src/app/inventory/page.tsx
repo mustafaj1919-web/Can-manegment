@@ -424,6 +424,19 @@ export default function InventoryPage() {
             </Button>
 
             {isAuthorized && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setBulkModalOpen(true)}
+                className="h-9 gap-1.5 border-[#D0D5DD] text-xs font-semibold text-[#344054] hover:bg-[#F9FAFB]"
+              >
+                <Layers className="h-3.5 w-3.5 text-[#667085]" />
+                <span>تحديث الصور الجماعي</span>
+              </Button>
+            )}
+
+            {isAuthorized && (
               <Button asChild size="sm" className="h-9 gap-1.5 bg-[#175CD3] hover:bg-[#1570EF] text-white font-bold text-xs shadow-xs">
                 <Link href="/inventory/new">
                   <Plus className="h-4 w-4" />

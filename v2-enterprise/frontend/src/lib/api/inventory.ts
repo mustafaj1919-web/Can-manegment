@@ -498,17 +498,47 @@ export function setVehicleCostAccountMapping(costType: string, accountId: string
   return put('/Inventory/vehicle-cost-accounts', { CostType: costType, AccountId: accountId })
 }
 
-export async function bulkUploadPhoto(
-  brand: string,
-  model: string,
-  file: File
-): Promise<{ success: boolean; updated_count: number; message: string }> {
+export interface BulkImageUpdateResult {
+  success: boolean
+  vehiclesUpdated: number
+  imagesUploaded: number
+  imagesReused: number
+  executionTimeMs: number
+  message: string
+}
+
+export async function getBulkImagesAffectedCount(params: {
+  brand: string
+  model: string
+  year: number
+  trim?: string | null
+}): Promise<number> {
+  const qs = new URLSearchParams()
+  qs.set('brand', params.brand)
+  qs.set('model', params.model)
+  qs.set('year', String(params.year))
+  if (params.trim) qs.set('trim', params.trim)
+  const res = await get<{ success: boolean; count: number }>(`/Inventory/bulk-images/affected-count?${qs.toString()}`)
+  return res.count
+}
+
+export async function bulkUploadImages(params: {
+  brand: string
+  model: string
+  year: number
+  trim?: string | null
+  replaceExisting: boolean
+  files: File[]
+}): Promise<BulkImageUpdateResult> {
   const { apiClient } = await import('./client')
   const formData = new FormData()
-  formData.append('brand', brand)
-  formData.append('model', model)
-  formData.append('file', file)
-  const response = await apiClient.post<any>('/Inventory/bulk-images', formData)
+  formData.append('brand', params.brand)
+  formData.append('model', params.model)
+  formData.append('year', String(params.year))
+  formData.append('trim', params.trim ?? '')
+  formData.append('replaceExisting', String(params.replaceExisting))
+  params.files.forEach((file) => formData.append('files', file))
+  const response = await apiClient.post<BulkImageUpdateResult>('/Inventory/bulk-images', formData)
   return response.data
 }
 
