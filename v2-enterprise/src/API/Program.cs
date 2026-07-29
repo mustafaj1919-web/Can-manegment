@@ -218,6 +218,12 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/static/uploads/vehicles",
     ServeUnknownFileTypes = false,
 });
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(vehicleImagesPath),
+    RequestPath = "/static/uploads",
+    ServeUnknownFileTypes = false,
+});
 
 var websiteMediaPath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "website");
 Directory.CreateDirectory(websiteMediaPath);
