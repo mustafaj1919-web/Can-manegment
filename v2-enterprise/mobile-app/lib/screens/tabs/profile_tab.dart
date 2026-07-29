@@ -12,12 +12,12 @@ class ProfileTab extends StatelessWidget {
   final dynamic apiService;
 
   const ProfileTab({
-    Key? key,
+    super.key,
     required this.customerName,
     this.customerEmail,
     this.customerPhotoUrl,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +57,6 @@ class ProfileTab extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: AppColors.luxAccent, width: 2),
                   ),
-                  child: const Icon(
-                    LucideIcons.user_round,
-                    color: AppColors.luxTextMuted,
-                    size: 42,
-                  ),
                   foregroundDecoration: customerPhotoUrl == null
                       ? null
                       : BoxDecoration(
@@ -71,6 +66,11 @@ class ProfileTab extends StatelessWidget {
                             fit: BoxFit.cover,
                           ),
                         ),
+                  child: const Icon(
+                    LucideIcons.user_round,
+                    color: AppColors.luxTextMuted,
+                    size: 42,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -178,7 +178,7 @@ class ProfileTab extends StatelessWidget {
         border: Border.all(color: AppColors.luxBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.28),
+            color: Colors.black.withValues(alpha: 0.28),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),

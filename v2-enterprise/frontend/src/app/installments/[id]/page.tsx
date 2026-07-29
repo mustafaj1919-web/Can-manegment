@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CalendarDays, CheckCircle2, Clock, AlertTriangle, AlertCircle,
-  ArrowRight, Car, User, Banknote, Loader2, DollarSign, MessageCircle,
+  ArrowRight, Car, User, Banknote, Loader2, DollarSign, MessageCircle, Printer,
 } from 'lucide-react'
 import { cn, formatMoney, formatDate, translateStatus } from '@/lib/utils'
 import { getInstallmentPlan, payInstallmentSchedule } from '@/lib/api/installments'
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { post } from '@/lib/api/client'
+import { InstallmentPaymentWorkflow } from '@/components/installments/workflow/InstallmentPaymentWorkflow'
 
 function toWaPhone(phone: string) {
   const d = phone.replace(/\D/g, '')
@@ -98,8 +99,8 @@ function PayModal({
               className="bg-secondary/30 border-border/50 money"
             />
             {amt > schedule.remaining_amount && (
-              <p className="text-[11px] text-rose-400 mt-1">
-                المبلغ أكبر من المتبقي ({formatMoney(schedule.remaining_amount, schedule.currency)})
+              <p className="text-[11px] text-cyan-400 mt-1">
+                سيتم سداد هذا القسط وترحيل الفائض ({formatMoney(amt - schedule.remaining_amount, schedule.currency)}) للأقساط القادمة تلقائياً.
               </p>
             )}
           </div>
@@ -132,7 +133,7 @@ function PayModal({
           <Button variant="ghost" size="sm" onClick={onClose} className="text-xs">إلغاء</Button>
           <Button
             onClick={() => mutation.mutate()}
-            disabled={mutation.isPending || amt <= 0 || amt > schedule.remaining_amount}
+            disabled={mutation.isPending || amt <= 0}
             size="sm"
             className="text-xs gap-1.5"
           >
@@ -215,15 +216,14 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
 
   return (
     <>
-      <AnimatePresence>
-        {payingSchedule && (
-          <PayModal
-            schedule={payingSchedule}
-            onClose={() => setPayingSchedule(null)}
-            onSuccess={handlePaySuccess}
-          />
-        )}
-      </AnimatePresence>
+      {payingSchedule && (
+        <InstallmentPaymentWorkflow
+          open={!!payingSchedule}
+          onOpenChange={(open) => { if (!open) setPayingSchedule(null) }}
+          plan={plan}
+          schedule={payingSchedule}
+        />
+      )}
 
       <div className="max-w-4xl mx-auto space-y-5">
         {/* Header */}
@@ -256,6 +256,25 @@ export default function InstallmentPlanPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
           <div className="flex gap-2">
+            <Button asChild variant="outline" size="sm" className="text-xs gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold">
+              <Link href={`/installments/${plan.id}/receipt`} title="طباعة وصل سداد القسط A5">
+                <Printer className="h-3.5 w-3.5" />
+                <span>طباعة الوصل A5</span>
+              </Link>
+            </Button>
+            {!isPlanPaid && (
+              <Button
+                onClick={() => {
+                  const firstUnpaid = plan.schedules.find(s => s.status !== 'Paid' && s.remaining_amount > 0);
+                  if (firstUnpaid) setPayingSchedule(firstUnpaid);
+                }}
+                size="sm"
+                className="text-xs gap-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+              >
+                <Banknote className="h-3.5 w-3.5" />
+                تسجيل دفعة
+              </Button>
+            )}
             {plan.sale_id && (
               <Button asChild variant="ghost" size="sm" className="text-xs gap-1">
                 <Link href={`/sales/${plan.sale_id}`}>عرض الفاتورة</Link>

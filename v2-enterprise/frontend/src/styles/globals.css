@@ -1,3 +1,5 @@
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -423,6 +425,14 @@
 }
 
 /* ─── Print ──────────────────────────────────────────────────────────────── */
+
+/* Dedicated print-portal target (see ReceiptPrintPortal in InstallmentReceiptA5Document.tsx).
+   Hidden by default so the empty/populated node never affects normal screen layout;
+   only the @media print rule in that component makes it visible for the print pass. */
+#print-root {
+  display: none;
+}
+
 @media print {
 
   .app-topnav,
@@ -444,6 +454,22 @@
     background: white !important;
     box-shadow: none !important;
     transform: none !important;
+  }
+
+  /* Reset inner AppShell wrappers not covered by named classes */
+  .app-shell-root > div,
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    min-height: 0 !important;
+  }
+
+  /* Hide bottom nav and FAB in print */
+  nav.fixed,
+  .fixed.bottom-0,
+  [class*="fixed bottom"] {
+    display: none !important;
   }
 
   html,
@@ -819,6 +845,24 @@
     padding-top: 20px;
     background-image:
       radial-gradient(circle at 50% 0%, rgba(0, 212, 170, 0.04) 0%, transparent 60%);
+  }
+
+  .page-container:has([data-layout="full-width"]),
+  .page-container-full {
+    max-width: 1760px !important;
+    width: min(100%, 1760px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 1.5rem !important; /* 24px */
+    padding-right: 1.5rem !important; /* 24px */
+  }
+
+  @media (min-width: 1440px) {
+    .page-container:has([data-layout="full-width"]),
+    .page-container-full {
+      padding-left: 2rem !important; /* 32px */
+      padding-right: 2rem !important; /* 32px */
+    }
   }
 
   .vehicle-card {
@@ -2410,3 +2454,33 @@ html.light .text-amber-400   { color: #d97706 !important; }
 html.light .text-rose-400    { color: #e11d48 !important; }
 html.light .text-violet-400  { color: #7c3aed !important; }
 html.light .text-blue-400    { color: #2563eb !important; }
+
+/* Global helper override to resolve Tailwind arbitrary HSL variable compilation */
+[class*="bg-[var(--card)]"] {
+  background-color: hsl(var(--card)) !important;
+}
+[class*="bg-[var(--popover)]"] {
+  background-color: hsl(var(--popover)) !important;
+}
+[class*="bg-[var(--bg-base)]"] {
+  background-color: hsl(var(--bg-base)) !important;
+}
+[class*="bg-[var(--bg-surface)]"] {
+  background-color: hsl(var(--bg-surface)) !important;
+}
+
+/* Global helper override to resolve Tailwind border naming conflicts */
+[class*="border-border-subtle"],
+.border-border-subtle {
+  border-color: var(--border-subtle) !important;
+}
+[class*="border-border-default"],
+.border-border-default {
+  border-color: var(--border-default) !important;
+}
+[class*="border-border-strong"],
+.border-border-strong {
+  border-color: var(--border-strong) !important;
+}
+
+

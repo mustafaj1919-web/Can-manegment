@@ -11,9 +11,9 @@ class LoginScreen extends StatefulWidget {
   final ApiService apiService;
 
   const LoginScreen({
-    Key? key,
+    super.key,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -105,7 +105,8 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         setState(() {
           _isGoogleLoading = false;
-          _errorMessage = 'تعذر الحصول على رمز التحقق من Google، يرجى إعادة المحاولة.';
+          _errorMessage =
+              'تعذر الحصول على رمز التحقق من Google، يرجى إعادة المحاولة.';
         });
         return;
       }
@@ -123,7 +124,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       setState(() {
         _googlePhotoUrl = account.photoUrl;
-        _googleName = result['customerName'] ?? account.displayName ?? account.email;
+        _googleName =
+            result['customerName'] ?? account.displayName ?? account.email;
         _isGoogleLoading = false;
       });
 
@@ -226,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           border: Border.all(color: AppColors.softBorder),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 18,
                               offset: const Offset(0, 10),
                             ),
@@ -259,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         border: Border.all(color: AppColors.softBorder),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 24,
                             offset: const Offset(0, 14),
                           ),
@@ -294,14 +296,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 24),
                           _googleLoginButton(),
                           const SizedBox(height: 18),
-                          Row(
+                          const Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: Divider(color: AppColors.softBorder),
                               ),
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
+                                padding: EdgeInsets.symmetric(horizontal: 12),
                                 child: Text(
                                   'أو الدخول بالبيانات',
                                   style: TextStyle(
@@ -311,7 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const Expanded(
+                              Expanded(
                                 child: Divider(color: AppColors.softBorder),
                               ),
                             ],
@@ -361,7 +362,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const Spacer(),
-                              Text(
+                              const Text(
                                 'تذكرني',
                                 style: TextStyle(
                                   color: AppColors.textSecondary,
@@ -412,12 +413,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
-                    Row(
+                    const Row(
                       children: [
-                        const Expanded(
-                            child: Divider(color: AppColors.softBorder)),
+                        Expanded(child: Divider(color: AppColors.softBorder)),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             'للمساعدة والدعم الفني',
                             style: TextStyle(
@@ -427,8 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                        const Expanded(
-                            child: Divider(color: AppColors.softBorder)),
+                        Expanded(child: Divider(color: AppColors.softBorder)),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -481,7 +480,7 @@ class _LoginScreenState extends State<LoginScreen> {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: color.withOpacity(opacity),
+        color: color.withValues(alpha: opacity),
       ),
     );
   }
@@ -501,7 +500,7 @@ class _LoginScreenState extends State<LoginScreen> {
           border: Border.all(color: AppColors.softBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.035),
+              color: Colors.black.withValues(alpha: 0.035),
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),
@@ -593,7 +592,7 @@ class _LoginScreenState extends State<LoginScreen> {
           border: Border.all(color: const Color(0xFFE2E5EA), width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -666,7 +665,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.warmAccent.withOpacity(0.28),
+              color: AppColors.warmAccent.withValues(alpha: 0.28),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),

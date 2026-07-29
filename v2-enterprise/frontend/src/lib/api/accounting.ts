@@ -108,6 +108,7 @@ export const CLASSIFICATION_TYPE: Record<AccountClassification, string> = {
 
 export interface ChartAccountNode {
   id: number
+  key?: string
   accountId?: string
   code: string
   name: string
@@ -116,7 +117,10 @@ export interface ChartAccountNode {
   classification: AccountClassification
   classification_label: string
   is_active: boolean
-  level: 'رئيسي' | 'فرعي' | 'تفصيلي'
+  is_persisted?: boolean
+  is_synthetic?: boolean
+  is_posting_account?: boolean
+  level: 'رئيسي' | 'فرعي' | 'تفصيلي' | 'عقدة هيكلية'
   depth: number
   parent_id: number | null
   parent_code: string | null
@@ -131,6 +135,22 @@ export interface ChartAccountNode {
   subtree_balance: number
   children_count: number
   children: ChartAccountNode[]
+}
+
+export function normalizeAccountCode(value: string): string {
+  return (value || '').trim()
+}
+
+export function formatAccountType(type: string): string {
+  switch (type) {
+    case 'Asset':     return 'موجودات'
+    case 'Liability': return 'مطلوبات'
+    case 'Equity':    return 'حقوق الملكية'
+    case 'Income':
+    case 'Revenue':   return 'إيرادات'
+    case 'Expense':   return 'مصروفات'
+    default:          return type ?? 'موجودات'
+  }
 }
 
 export interface ClassificationSummaryEntry {
@@ -172,9 +192,26 @@ export interface TrialBalanceAccount {
   code: string
   name: string
   type: 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Expense'
+  opening_debit: number
+  opening_credit: number
+  period_debit: number
+  period_credit: number
+  closing_debit: number
+  closing_credit: number
   debit: number
   credit: number
   balance: number
+}
+
+export interface TrialBalanceTotals {
+  opening_debit: number
+  opening_credit: number
+  period_debit: number
+  period_credit: number
+  closing_debit: number
+  closing_credit: number
+  difference: number
+  is_balanced: boolean
 }
 
 export interface TrialBalanceResponse {
@@ -183,6 +220,7 @@ export interface TrialBalanceResponse {
   total_credit: number
   difference: number
   status: 'balanced' | 'unbalanced'
+  totals: TrialBalanceTotals
 }
 
 function buildQuery(params: ExpensesParams = {}) {
@@ -227,59 +265,351 @@ export async function getCashbox(params: ExpensesParams = {}): Promise<CashboxRe
   return Promise.resolve({ filters: { start_date: '', end_date: '', branch_id: null }, branches: [], summary: { sales_paid: 0, purchase_paid: 0, installment_paid: 0, other_income: 0, expenses: 0, balance: 0 }, movements: [] })
 }
 
-export async function getChartOfAccounts(): Promise<ChartOfAccountsResponse> {
-  const tb = await getTrialBalance()
-  const items: ChartAccountNode[] = tb.accounts.map((a, i) => ({
-    id: i + 1, accountId: a.id, code: a.code, name: a.name, type: a.type,
-    type_label: a.type, classification: 'detail' as AccountClassification,
-    classification_label: 'تفصيلي', is_active: true,
-    level: 'تفصيلي' as const, depth: 1,
-    parent_id: null, parent_code: null,
-    debit: a.debit, credit: a.credit, balance: a.balance,
-    own_debit: a.debit, own_credit: a.credit, own_balance: a.balance,
-    subtree_debit: a.debit, subtree_credit: a.credit, subtree_balance: a.balance,
-    children_count: 0, children: [],
-  }))
-  const total_debit  = tb.total_debit
-  const total_credit = tb.total_credit
-  return {
-    total: items.length,
-    summary: { main: 0, branch: 0, detail: items.length },
-    totals: { total_debit, total_credit, difference: tb.difference, status: tb.status },
-    type_summary: {},
-    classification_summary: {} as any,
-    items,
-    flat: items,
-  }
-}
+export async function getTrialBalance(params?: { start_date?: string; end_date?: string }): Promise<TrialBalanceResponse> {
+  const qs = new URLSearchParams()
+  if (params?.start_date) qs.set('fromDate', params.start_date)
+  if (params?.end_date) qs.set('toDate', params.end_date)
 
-export async function getTrialBalance(): Promise<TrialBalanceResponse> {
-  const raw = await get<{ success: boolean; data: Array<{
-    accountId: string; accountCode: string; accountName: string;
-    accountType: string; totalDebit: number; totalCredit: number;
-    netDebit: number; netCredit: number;
-  }> }>('/Accounting/trial-balance')
+  const raw = await get<{
+    success: boolean;
+    data: Array<{
+      accountId: string; accountCode: string; accountName: string;
+      accountType: string;
+      openingDebit?: number; openingCredit?: number;
+      periodDebit?: number; periodCredit?: number;
+      closingDebit?: number; closingCredit?: number;
+      totalDebit: number; totalCredit: number;
+      netDebit: number; netCredit: number;
+    }>;
+    totals?: {
+      openingDebit: number; openingCredit: number;
+      periodDebit: number; periodCredit: number;
+      closingDebit: number; closingCredit: number;
+      difference: number; isBalanced: boolean;
+    }
+  }>(`/Accounting/trial-balance${qs.toString() ? `?${qs.toString()}` : ''}`)
 
-  const accounts: TrialBalanceAccount[] = (raw.data ?? []).map(a => ({
-    id:      a.accountId,
-    code:    a.accountCode,
-    name:    a.accountName,
-    type:    a.accountType as TrialBalanceAccount['type'],
-    debit:   a.totalDebit,
-    credit:  a.totalCredit,
-    balance: a.netDebit - a.netCredit,
-  }))
+  const accounts: TrialBalanceAccount[] = (raw.data ?? []).map(a => {
+    const opening_debit = a.openingDebit || 0
+    const opening_credit = a.openingCredit || 0
+    const period_debit = a.periodDebit || a.totalDebit || 0
+    const period_credit = a.periodCredit || a.totalCredit || 0
+    const closing_debit = a.closingDebit || a.netDebit || 0
+    const closing_credit = a.closingCredit || a.netCredit || 0
 
-  const total_debit  = accounts.reduce((s, a) => s + a.debit, 0)
-  const total_credit = accounts.reduce((s, a) => s + a.credit, 0)
-  const difference   = total_debit - total_credit
+    return {
+      id:             a.accountId,
+      code:           normalizeAccountCode(a.accountCode),
+      name:           a.accountName,
+      type:           a.accountType as TrialBalanceAccount['type'],
+      opening_debit,
+      opening_credit,
+      period_debit,
+      period_credit,
+      closing_debit,
+      closing_credit,
+      debit:          period_debit,
+      credit:         period_credit,
+      balance:        closing_debit - closing_credit,
+    }
+  })
+
+  const opening_debit  = raw.totals?.openingDebit  ?? accounts.reduce((s, a) => s + a.opening_debit, 0)
+  const opening_credit = raw.totals?.openingCredit ?? accounts.reduce((s, a) => s + a.opening_credit, 0)
+  const period_debit   = raw.totals?.periodDebit   ?? accounts.reduce((s, a) => s + a.period_debit, 0)
+  const period_credit  = raw.totals?.periodCredit  ?? accounts.reduce((s, a) => s + a.period_credit, 0)
+  const closing_debit  = raw.totals?.closingDebit  ?? accounts.reduce((s, a) => s + a.closing_debit, 0)
+  const closing_credit = raw.totals?.closingCredit ?? accounts.reduce((s, a) => s + a.closing_credit, 0)
+  const difference     = raw.totals?.difference    ?? (closing_debit - closing_credit)
+  const is_balanced    = raw.totals?.isBalanced    ?? (Math.abs(difference) < 0.01)
 
   return {
     accounts,
-    total_debit,
-    total_credit,
+    total_debit: period_debit,
+    total_credit: period_credit,
     difference,
-    status: Math.abs(difference) < 0.01 ? 'balanced' : 'unbalanced',
+    status: is_balanced ? 'balanced' : 'unbalanced',
+    totals: {
+      opening_debit,
+      opening_credit,
+      period_debit,
+      period_credit,
+      closing_debit,
+      closing_credit,
+      difference,
+      is_balanced,
+    }
+  }
+}
+
+export async function getChartOfAccounts(): Promise<ChartOfAccountsResponse> {
+  const tb = await getTrialBalance()
+
+  const STANDARD_ROOTS: Array<{ code: string; name: string; type: ChartAccountNode['type'] }> = [
+    { code: '1', name: 'الأصول (الموجودات)',          type: 'Asset' },
+    { code: '2', name: 'الخصوم (المطلوبات والالتزامات)', type: 'Liability' },
+    { code: '3', name: 'حقوق الملكية',                type: 'Equity' },
+    { code: '4', name: 'الإيرادات',                   type: 'Income' },
+    { code: '5', name: 'المصروفات',                  type: 'Expense' },
+  ]
+
+  // Map of normalized account code -> ChartAccountNode
+  const nodeMap = new Map<string, ChartAccountNode>()
+
+  // 1. Process real backend accounts from trial balance
+  tb.accounts.forEach((a, idx) => {
+    const code = normalizeAccountCode(a.code)
+    if (!code) return
+
+    const typeLabel = formatAccountType(a.type)
+    const key = `account:${a.id || code}`
+
+    if (nodeMap.has(code)) {
+      const existing = nodeMap.get(code)!
+      existing.key = key
+      existing.accountId = a.id
+      existing.name = a.name || existing.name
+      existing.type = a.type || existing.type
+      existing.type_label = typeLabel
+      existing.is_persisted = true
+      existing.is_synthetic = false
+      existing.debit = a.debit
+      existing.credit = a.credit
+      existing.balance = a.balance
+      existing.own_debit = a.debit
+      existing.own_credit = a.credit
+      existing.own_balance = a.balance
+    } else {
+      nodeMap.set(code, {
+        id: idx + 1,
+        key,
+        accountId: a.id,
+        code,
+        name: a.name,
+        type: a.type,
+        type_label: typeLabel,
+        classification: '',
+        classification_label: 'تفصيلي',
+        is_active: true,
+        is_persisted: true,
+        is_synthetic: false,
+        is_posting_account: true,
+        level: 'تفصيلي',
+        depth: 0,
+        parent_id: null,
+        parent_code: null,
+        debit: a.debit,
+        credit: a.credit,
+        balance: a.balance,
+        own_debit: a.debit,
+        own_credit: a.credit,
+        own_balance: a.balance,
+        subtree_debit: a.debit,
+        subtree_credit: a.credit,
+        subtree_balance: a.balance,
+        children_count: 0,
+        children: [],
+      })
+    }
+  })
+
+  // 2. Ensure standard root nodes exist (without duplicating existing roots)
+  STANDARD_ROOTS.forEach(root => {
+    const code = normalizeAccountCode(root.code)
+    if (nodeMap.has(code)) {
+      const existing = nodeMap.get(code)!
+      if (!existing.name || existing.name === `مجموعة حسابات ${code}`) {
+        existing.name = root.name
+      }
+    } else {
+      nodeMap.set(code, {
+        id: nodeMap.size + 1000,
+        key: `synthetic:${code}`,
+        code,
+        name: root.name,
+        type: root.type,
+        type_label: formatAccountType(root.type),
+        classification: 'fixed_asset',
+        classification_label: 'عقدة هيكلية',
+        is_active: true,
+        is_persisted: false,
+        is_synthetic: true,
+        is_posting_account: false,
+        level: 'رئيسي',
+        depth: 0,
+        parent_id: null,
+        parent_code: null,
+        debit: 0, credit: 0, balance: 0,
+        own_debit: 0, own_credit: 0, own_balance: 0,
+        subtree_debit: 0, subtree_credit: 0, subtree_balance: 0,
+        children_count: 0,
+        children: [],
+      })
+    }
+  })
+
+  function findParentCode(code: string): string | null {
+    if (code.length <= 1) return null
+    for (let len = code.length - 1; len >= 1; len--) {
+      const prefix = code.substring(0, len)
+      if (nodeMap.has(prefix)) {
+        return prefix
+      }
+    }
+    const rootDigit = code.substring(0, 1)
+    if (nodeMap.has(rootDigit) && rootDigit !== code) {
+      return rootDigit
+    }
+    return null
+  }
+
+  // 3. Ensure intermediate parent nodes exist for deep codes if missing
+  const initialCodes = Array.from(nodeMap.keys())
+  initialCodes.forEach(code => {
+    if (code.length > 1) {
+      const rootDigit = code.substring(0, 1)
+      const parentRoot = STANDARD_ROOTS.find(r => r.code === rootDigit)
+      const nodeType = nodeMap.get(code)?.type || parentRoot?.type || 'Asset'
+
+      for (let len = 1; len < code.length; len++) {
+        const prefix = code.substring(0, len)
+        if (!nodeMap.has(prefix)) {
+          let name = `مجموعة حسابات ${prefix}`
+          if (prefix === '11') name = 'الأصول المتداولة'
+          else if (prefix === '12') name = 'الأصول الثابتة'
+          else if (prefix === '21') name = 'الخصوم المتداولة'
+          else if (prefix === '22') name = 'الخصوم طويلة الأجل'
+          else if (prefix === '31') name = 'رأس المال والاحتياطيات'
+          else if (prefix === '41') name = 'إيرادات النشاط الرئيسي'
+          else if (prefix === '51') name = 'تكلفة النشاط والمصاريف'
+
+          nodeMap.set(prefix, {
+            id: nodeMap.size + 2000,
+            key: `synthetic:${prefix}`,
+            code: prefix,
+            name,
+            type: nodeType,
+            type_label: formatAccountType(nodeType),
+            classification: 'current_asset',
+            classification_label: 'عقدة هيكلية',
+            is_active: true,
+            is_persisted: false,
+            is_synthetic: true,
+            is_posting_account: false,
+            level: 'فرعي',
+            depth: 0,
+            parent_id: null,
+            parent_code: null,
+            debit: 0, credit: 0, balance: 0,
+            own_debit: 0, own_credit: 0, own_balance: 0,
+            subtree_debit: 0, subtree_credit: 0, subtree_balance: 0,
+            children_count: 0,
+            children: [],
+          })
+        }
+      }
+    }
+  })
+
+  // 4. Link parents and children (Strict single parent per child & duplicate child prevention)
+  const rootNodes: ChartAccountNode[] = []
+  const sortedNodes = Array.from(nodeMap.values()).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
+
+  sortedNodes.forEach(node => {
+    node.children = []
+    const pCode = findParentCode(node.code)
+    node.parent_code = pCode
+
+    if (pCode && nodeMap.has(pCode) && pCode !== node.code) {
+      const parentNode = nodeMap.get(pCode)!
+      if (!parentNode.children.some(c => c.code === node.code)) {
+        parentNode.children.push(node)
+      }
+    } else {
+      if (!rootNodes.some(r => r.code === node.code)) {
+        rootNodes.push(node)
+      }
+    }
+  })
+
+  // 5. Calculate depth, levels, posting status, and financial rollup
+  function processNode(node: ChartAccountNode, currentDepth: number): { debit: number; credit: number; balance: number } {
+    node.depth = currentDepth
+    node.children_count = node.children.length
+    node.is_posting_account = node.children.length === 0
+    node.type_label = formatAccountType(node.type)
+
+    if (currentDepth === 0) {
+      node.level = node.is_synthetic ? 'عقدة هيكلية' : 'رئيسي'
+    } else if (node.children.length > 0) {
+      node.level = node.is_synthetic ? 'عقدة هيكلية' : 'فرعي'
+    } else {
+      node.level = 'تفصيلي'
+    }
+
+    if (node.children.length === 0) {
+      node.subtree_debit = node.own_debit
+      node.subtree_credit = node.own_credit
+      node.subtree_balance = node.own_balance
+      node.debit = node.own_debit
+      node.credit = node.own_credit
+      node.balance = node.own_balance
+      return { debit: node.own_debit, credit: node.own_credit, balance: node.own_balance }
+    }
+
+    let sumDebit = node.own_debit
+    let sumCredit = node.own_credit
+    let sumBalance = node.own_balance
+
+    node.children.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
+
+    for (const child of node.children) {
+      const res = processNode(child, currentDepth + 1)
+      sumDebit += res.debit
+      sumCredit += res.credit
+      sumBalance += res.balance
+    }
+
+    node.subtree_debit = sumDebit
+    node.subtree_credit = sumCredit
+    node.subtree_balance = sumBalance
+    node.debit = sumDebit
+    node.credit = sumCredit
+    node.balance = sumBalance
+
+    return { debit: sumDebit, credit: sumCredit, balance: sumBalance }
+  }
+
+  rootNodes.forEach(root => processNode(root, 0))
+
+  const flatNodes: ChartAccountNode[] = []
+  function flattenPreOrder(node: ChartAccountNode) {
+    if (!flatNodes.some(n => n.code === node.code)) {
+      flatNodes.push(node)
+      node.children.forEach(flattenPreOrder)
+    }
+  }
+  rootNodes.forEach(flattenPreOrder)
+
+  const persistedAccounts = flatNodes.filter(n => n.is_persisted)
+  const persistedCount = persistedAccounts.length
+
+  const mainCount = persistedAccounts.filter(n => n.level === 'رئيسي').length
+  const branchCount = persistedAccounts.filter(n => n.level === 'فرعي').length
+  const detailCount = persistedAccounts.filter(n => n.level === 'تفصيلي').length
+
+  const total_debit = tb.total_debit
+  const total_credit = tb.total_credit
+  const difference = total_debit - total_credit
+
+  return {
+    total: persistedCount, // ONLY real persisted accounts count!
+    summary: { main: mainCount, branch: branchCount, detail: detailCount || persistedCount },
+    totals: { total_debit, total_credit, difference, status: Math.abs(difference) < 0.01 ? 'balanced' : 'unbalanced' },
+    type_summary: {} as any,
+    classification_summary: {} as any,
+    items: rootNodes,
+    flat: flatNodes,
   }
 }
 

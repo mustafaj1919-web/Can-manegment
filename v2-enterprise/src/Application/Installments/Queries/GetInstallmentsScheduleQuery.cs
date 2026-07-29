@@ -40,18 +40,25 @@ namespace CarShowroomManagementV2.Application.Installments.Queries
         {
             var branchId = _currentUserService.BranchId;
 
+            var contract = await _context.SalesContracts
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(sc => sc.Id == request.SalesContractId, cancellationToken);
+
             // جلب خطة التقسيط المرتبطة بالعقد
             var plan = await _context.InstallmentPlans
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(p => p.SalesContractId == request.SalesContractId && p.BranchId == branchId, cancellationToken);
+                .FirstOrDefaultAsync(p => p.SalesContractId == request.SalesContractId, cancellationToken);
 
             if (plan == null)
             {
                 return new List<InstallmentDto>();
             }
 
+            var isCancelled = plan.Status == "Cancelled" || (contract != null && contract.Status == "Cancelled");
+
             // جلب الأقساط
             var installments = await _context.Installments
+                .IgnoreQueryFilters()
                 .Where(i => i.InstallmentPlanId == plan.Id)
                 .OrderBy(i => i.InstallmentNumber)
                 .Select(i => new InstallmentDto
@@ -61,28 +68,36 @@ namespace CarShowroomManagementV2.Application.Installments.Queries
                     DueDate = i.DueDate,
                     Amount = i.Amount,
                     PaidAmount = i.PaidAmount,
-                    Status = i.Status,
+                    Status = isCancelled ? "Cancelled" : i.Status,
                     PaymentDate = i.PaymentDate
                 })
                 .ToListAsync(cancellationToken);
 
-            // تحديث حالة الأقساط المتأخرة ديناميكياً وعرضها
-            foreach (var inst in installments)
+            if (!isCancelled)
             {
-                if (inst.Status == "Pending" && inst.DueDate < DateTime.UtcNow)
+                // تحديث حالة الأقساط المتأخرة ديناميكياً وعرضها
+                bool hasUpdates = false;
+                foreach (var inst in installments)
                 {
-                    inst.Status = "Overdue";
-                    
-                    // تحديث الحالة في قاعدة البيانات
-                    var dbInst = await _context.Installments.FindAsync(new object[] { inst.Id }, cancellationToken);
-                    if (dbInst != null)
+                    if (inst.Status == "Pending" && inst.DueDate < DateTime.UtcNow)
                     {
-                        dbInst.Status = "Overdue";
-                        _context.Installments.Update(dbInst);
+                        inst.Status = "Overdue";
+                        
+                        // تحديث الحالة في قاعدة البيانات
+                        var dbInst = await _context.Installments.FindAsync(new object[] { inst.Id }, cancellationToken);
+                        if (dbInst != null)
+                        {
+                            dbInst.Status = "Overdue";
+                            _context.Installments.Update(dbInst);
+                            hasUpdates = true;
+                        }
                     }
                 }
+                if (hasUpdates)
+                {
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
             }
-            await _context.SaveChangesAsync(cancellationToken);
 
             return installments;
         }

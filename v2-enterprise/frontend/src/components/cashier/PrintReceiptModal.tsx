@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { formatMoney, formatDate } from '@/lib/utils'
+import { adaptInstallmentReceiptData } from '@/components/installments/installmentReceiptAdapter'
+import { InstallmentReceiptA5Document, printInstallmentReceipt } from '@/components/installments/InstallmentReceiptA5Document'
 
 function tafqeet(num: number, currency: string = 'IQD'): string {
   if (num === 0) return 'صفر'
@@ -83,7 +85,7 @@ function tafqeet(num: number, currency: string = 'IQD'): string {
 interface PrintReceiptModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  type: 'sale' | 'payment' | 'close' | 'schedule'
+  type: 'sale' | 'payment' | 'close' | 'schedule' | 'installment-payment-a5'
   data: any
 }
 
@@ -94,6 +96,15 @@ export function PrintReceiptModal({ open, onOpenChange, type, data }: PrintRecei
 
   const handlePrint = () => {
     if (typeof window === 'undefined') return
+
+    if (type === 'installment-payment-a5') {
+      // The A5 document owns its own print pipeline (portal into #print-root + scoped
+      // @page CSS) so the compiled Tailwind styles survive. Do NOT fall through to the
+      // generic popup-window path below — a fresh window.open() document has none of
+      // this page's stylesheet, so the receipt would print unstyled.
+      void printInstallmentReceipt()
+      return
+    }
 
     if (type === 'payment') {
       const win = window.open('', '_blank', 'width=450,height=600')
@@ -630,6 +641,33 @@ ${content}
           </div>
         )
 
+      case 'installment-payment-a5':
+        return (
+          <>
+            <div className="a5-modal-clip" style={{ width: '413px', height: '291px', overflow: 'hidden', margin: '0 auto' }}>
+              <div className="a5-modal-scale" style={{ width: '210mm', transform: 'scale(0.52)', transformOrigin: 'top right' }}>
+                <InstallmentReceiptA5Document
+                  data={adaptInstallmentReceiptData(data)}
+                />
+              </div>
+            </div>
+            <style jsx global>{`
+              @media print {
+                .a5-modal-clip {
+                  width: auto !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                  margin: 0 !important;
+                }
+                .a5-modal-scale {
+                  transform: none !important;
+                  width: 210mm !important;
+                }
+              }
+            `}</style>
+          </>
+        )
+
       default:
         return null
     }
@@ -642,7 +680,7 @@ ${content}
           <DialogTitle className="font-family-cairo text-md font-bold flex items-center justify-between">
             <span className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-cyan-400" />
-              {type === 'sale' ? 'فاتورة بيع سيارة' : type === 'payment' ? 'سند قبض' : type === 'schedule' ? 'جدول الأقساط' : 'تقرير إقفال الصندوق'}
+              {type === 'sale' ? 'فاتورة بيع سيارة' : type === 'payment' ? 'سند قبض' : type === 'schedule' ? 'جدول الأقساط' : type === 'installment-payment-a5' ? 'وصل سداد قسط A5' : 'تقرير إقفال الصندوق'}
             </span>
           </DialogTitle>
         </DialogHeader>

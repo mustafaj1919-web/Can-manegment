@@ -208,29 +208,38 @@ namespace CarShowroomManagementV2.API.Controllers
                 .OrderBy(p => p.CreatedAt)
                 .ToListAsync();
 
-            // بناء الحركات كـ flat list
-            var raw = new List<(DateTime Date, string EntryNumber, string Description, decimal Debit, decimal Credit, string RefType)>();
+            // العملة الغالبة لهذا المورد (تُستخدم كافتراضي لعمليات السداد،
+            // التي لا يوجد لها حقل عملة خاص بها في جدول Payments)
+            var dominantCurrency = purchases
+                .Where(p => p.Vehicle != null && !string.IsNullOrEmpty(p.Vehicle.Currency))
+                .GroupBy(p => p.Vehicle!.Currency)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .FirstOrDefault() ?? "IQD";
+
+            // بناء الحركات كـ flat list — كل حركة تحمل عملتها الحقيقية الخاصة بها
+            // (شراء بالدولار يبقى بالدولار، ولا يُخلط برصيد مشتريات بالدينار)
+            var raw = new List<(DateTime Date, string EntryNumber, string Description, decimal Debit, decimal Credit, string RefType, string Currency)>();
 
             foreach (var p in purchases)
             {
                 var carName = p.Vehicle != null
                     ? $"{p.Vehicle.Brand} {p.Vehicle.Model} {p.Vehicle.Year} - {p.Vehicle.ChassisNumber}"
                     : p.PurchaseNumber;
+                var purchaseCurrency = !string.IsNullOrEmpty(p.Vehicle?.Currency) ? p.Vehicle!.Currency : dominantCurrency;
 
                 // الشراء: دائن (يزيد الدين للمورد)
-                raw.Add((p.CreatedAt, p.PurchaseNumber, $"شراء: {carName}", 0m, p.PurchaseCost, "Purchase"));
-
-                // الدفعة الفورية: مدين (يخفض الدين)
-                if (p.AmountPaid > 0)
-                    raw.Add((p.CreatedAt, p.PurchaseNumber, $"دفع فوري عند الشراء - {carName}", p.AmountPaid, 0m, "Payment"));
+                raw.Add((p.CreatedAt, p.PurchaseNumber, $"شراء: {carName}", 0m, p.PurchaseCost, "Purchase", purchaseCurrency));
+                // الدفعات الفورية تُقرأ من جدول Payments فقط (أدناه) وليس من AmountPaid
             }
 
             foreach (var pay in supplierPayments)
             {
+                var payCurrency = !string.IsNullOrEmpty(pay.Currency) ? pay.Currency : dominantCurrency;
                 raw.Add((pay.CreatedAt,
                     pay.ReferenceNumber ?? pay.Id.ToString()[..8],
                     pay.Description ?? "دفعة للمورد",
-                    pay.Amount, 0m, "Payment"));
+                    pay.Amount, 0m, "Payment", payCurrency));
             }
 
             // الشراء يسبق الدفع دائماً عند تساوي التاريخ
@@ -245,11 +254,13 @@ namespace CarShowroomManagementV2.API.Controllers
             // فلترة حسب الفترة
             var filtered = raw.Where(r => (!fromDate.HasValue || r.Date >= fromDate.Value) && r.Date <= toDate).ToList();
 
-            // رصيد متراكم
-            decimal running = 0;
+            // رصيد متراكم — منفصل لكل عملة، لأنه لا يجوز جمع دولار مع دينار بنفس الرصيد
+            var runningByCurrency = new Dictionary<string, decimal>();
             var rows = filtered.Select(r =>
             {
-                running += r.Credit - r.Debit;
+                runningByCurrency.TryGetValue(r.Currency, out var prevRunning);
+                var running = prevRunning + r.Credit - r.Debit;
+                runningByCurrency[r.Currency] = running;
                 return new {
                     date            = r.Date,
                     entry_number    = r.EntryNumber,
@@ -257,21 +268,46 @@ namespace CarShowroomManagementV2.API.Controllers
                     debit           = r.Debit,
                     credit          = r.Credit,
                     running_balance = running,
-                    reference_type  = r.RefType
+                    reference_type  = r.RefType,
+                    currency        = r.Currency
                 };
             }).ToList();
 
-            var totalDebit  = rows.Sum(r => r.debit);
-            var totalCredit = rows.Sum(r => r.credit);
-            var balance     = totalCredit - totalDebit;
-            var unpaidAmount = purchases.Where(p => p.PurchaseCost > p.AmountPaid).Sum(p => p.PurchaseCost - p.AmountPaid);
+            // إجمالي منفصل لكل عملة
+            var byCurrency = rows
+                .GroupBy(r => r.currency)
+                .Select(g => new {
+                    currency         = g.Key,
+                    total_debit      = g.Sum(x => x.debit),
+                    total_credit     = g.Sum(x => x.credit),
+                    balance          = g.Sum(x => x.credit) - g.Sum(x => x.debit),
+                    unpaid_purchases = g.Sum(x => x.credit) - g.Sum(x => x.debit)
+                })
+                .OrderByDescending(c => c.currency == dominantCurrency)
+                .ToList();
+
+            // الحقول الأعلى تعكس العملة الغالبة فقط (توافقية مع الواجهات القديمة
+            // وحوار السداد)؛ التفاصيل الحقيقية متعددة العملات في by_currency
+            var dominantSummary = byCurrency.FirstOrDefault(c => c.currency == dominantCurrency);
+            var totalDebit  = dominantSummary?.total_debit ?? 0m;
+            var totalCredit = dominantSummary?.total_credit ?? 0m;
+            var balance     = dominantSummary?.balance ?? 0m;
 
             return Ok(new {
                 success  = true,
                 supplier = new { id = supplier.Id, name = supplier.Name, phone = supplier.Phone, account_id = supplier.AccountId },
                 period   = new { from = fromDate ?? DateTime.MinValue, to = toDate },
-                summary  = new { total_debit = totalDebit, total_credit = totalCredit, balance, unpaid_purchases = unpaidAmount },
-                entries  = rows
+                summary  = new { total_debit = totalDebit, total_credit = totalCredit, balance, unpaid_purchases = balance, currency = dominantCurrency, by_currency = byCurrency },
+                entries  = rows.Select(r => new {
+                    date            = r.date,
+                    entry_number    = r.entry_number,
+                    description     = r.description,
+                    debit           = r.debit,
+                    credit          = r.credit,
+                    running_balance = r.running_balance,
+                    reference_type  = r.reference_type,
+                    currency        = r.currency
+                }).ToList()
             });
         }
     }

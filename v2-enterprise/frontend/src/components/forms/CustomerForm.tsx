@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import { CheckCircle2, FileText, Loader2, Paperclip, ScanLine, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn, photoUrl } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { AuthImage, openAuthDocument } from '@/components/shared/AuthImage'
+import { useAuthStore } from '@/lib/stores/auth-store'
 import {
   createCustomer,
   deleteCustomerDocument,
@@ -41,6 +43,7 @@ function FieldError({ msg }: { msg?: string }) {
 export function CustomerForm({ customer }: CustomerFormProps) {
   const router  = useRouter()
   const isEdit  = Boolean(customer)
+  const token   = useAuthStore(s => s.token)
 
   const [name,          setName]          = useState(customer?.full_name || customer?.name || '')
   const [phone,         setPhone]         = useState(customer?.phone || '')
@@ -389,20 +392,20 @@ export function CustomerForm({ customer }: CustomerFormProps) {
 
                   {existingDocs.map((doc) => {
                     const isPdf = doc.filename.endsWith('.pdf')
-                    const url   = photoUrl(doc.filename, 'customers')
+                    const url   = `/api/Customers/${customer!.id}/documents/${doc.filename}`
                     return (
                       <div key={doc.id} className="relative overflow-hidden rounded-lg border border-border/40 bg-secondary/20">
                         {isPdf ? (
-                          <a href={url} target="_blank" rel="noreferrer"
-                            className="flex h-24 items-center justify-center gap-2 text-xs text-cyan-400 hover:text-cyan-300">
+                          <button type="button" onClick={() => openAuthDocument(url, token)}
+                            className="flex h-24 w-full items-center justify-center gap-2 text-xs text-cyan-400 hover:text-cyan-300">
                             <FileText className="h-8 w-8 opacity-60" />
                             <span className="truncate">{doc.original_filename ?? 'PDF'}</span>
-                          </a>
+                          </button>
                         ) : (
-                          <a href={url} target="_blank" rel="noreferrer">
-                            <img src={url} alt={slot.label}
+                          <button type="button" onClick={() => openAuthDocument(url, token)} className="w-full">
+                            <AuthImage src={url} alt={slot.label}
                               className="aspect-[1.586] w-full bg-black/20 object-contain hover:opacity-90 transition-opacity" />
-                          </a>
+                          </button>
                         )}
                         {isEdit && (
                           <button type="button"

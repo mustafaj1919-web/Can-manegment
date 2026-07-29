@@ -28,6 +28,22 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
         public string? Color { get; set; }
         public int Year { get; set; }
         public decimal TargetSellingPrice { get; set; }
+        
+        // المواصفات الاختيارية
+        public string? Trim { get; set; }
+        public string? Condition { get; set; }
+        public string? PlateNumber { get; set; }
+        public string? PlateStatus { get; set; }
+        public int? Mileage { get; set; }
+        public string? EngineSize { get; set; }
+        public int? Cylinders { get; set; }
+        public string? Transmission { get; set; }
+        public string? FuelType { get; set; }
+        public string? ImportCountry { get; set; }
+        public int? SeatCount { get; set; }
+        public string? SeatMaterial { get; set; }
+        public string? Currency { get; set; }
+        public string? Notes { get; set; }
     }
 
     public class CreatePurchaseCommandValidator : AbstractValidator<CreatePurchaseCommand>
@@ -104,7 +120,21 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     TargetSellingPrice = targetSellingPrice,
                     Status = "Available",
                     IsSold = false,
-                    BranchId = branchId
+                    BranchId = branchId,
+                    Trim = request.Trim,
+                    Condition = request.Condition,
+                    PlateNumber = request.PlateNumber,
+                    PlateStatus = request.PlateStatus,
+                    Mileage = request.Mileage ?? 0,
+                    EngineSize = request.EngineSize,
+                    Cylinders = request.Cylinders,
+                    Transmission = request.Transmission,
+                    FuelType = request.FuelType,
+                    ImportCountry = request.ImportCountry,
+                    SeatCount = request.SeatCount,
+                    SeatMaterial = request.SeatMaterial,
+                    Currency = request.Currency ?? "USD",
+                    Notes = request.Notes
                 };
                 _context.Vehicles.Add(vehicle);
 
@@ -141,7 +171,6 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
                 // حساب الدفع الفوري (نقد/بنك)
                 Guid? cashOrBankAccountId = null;
-                string cashOrBankDesc = "";
                 if (request.PaymentMethod == PaymentMethod.Cash)
                 {
                     var cashAccount = await _context.Accounts
@@ -149,7 +178,6 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId, cancellationToken);
                     if (cashAccount == null) throw new InvalidOperationException("حساب صندوق النقدية (111001) غير موجود في هذا الفرع.");
                     cashOrBankAccountId = cashAccount.Id;
-                    cashOrBankDesc = "صندوق النقدية";
                 }
                 else if (request.PaymentMethod == PaymentMethod.Bank)
                 {
@@ -158,8 +186,10 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         .FirstOrDefaultAsync(a => a.AccountCode == "112001" && a.BranchId == branchId, cancellationToken);
                     if (bankAccount == null) throw new InvalidOperationException("حساب البنك (112001) غير موجود في هذا الفرع.");
                     cashOrBankAccountId = bankAccount.Id;
-                    cashOrBankDesc = "البنك";
                 }
+
+                // AmountPaid يُسجَّل فقط إذا تم دفع نقدي/بنكي فعلي (Cheque = آجل → 0)
+                var actualAmountPaid = (hasImmediatePayment && cashOrBankAccountId.HasValue) ? paidAmount : 0m;
 
                 // 4. إنشاء سجل الشراء
                 var totalPurchasesCount = await _context.Purchases.IgnoreQueryFilters().CountAsync(cancellationToken);
@@ -172,7 +202,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     SupplierId = supplier.Id,
                     VehicleId = vehicle.Id,
                     PurchaseCost = purchaseCost,
-                    AmountPaid = paidAmount,
+                    AmountPaid = actualAmountPaid,
                     PaymentMethod = effectiveMethod,
                     Status = "Active",
                     BranchId = branchId
@@ -253,6 +283,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         Type = PaymentType.Payment,
                         Method = request.PaymentMethod,
                         Amount = paidAmount,
+                        Currency = vehicle.Currency,
                         ReferenceNumber = payRefNumber,
                         Description = $"دفعة أولى لشراء سيارة {vehicle.Model} من المورد {supplier.Name} - فاتورة: {purchaseNumber}",
                         AccountId = cashOrBankAccountId.Value,

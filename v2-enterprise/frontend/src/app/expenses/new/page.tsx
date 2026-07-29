@@ -10,6 +10,7 @@ import { getExchangeRate } from '@/lib/api/exchange-rate'
 import { extractApiError } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { FormattedNumberInput } from '@/components/ui/formatted-number-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
@@ -85,7 +86,12 @@ export default function NewExpensePage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs text-muted-foreground">المبلغ</label>
-            <Input type="number" min="0" step="0.01" value={form.amount || ''} onChange={(e) => setForm((current) => ({ ...current, amount: Number(e.target.value) }))} required className="border-border/50 bg-secondary/30" />
+            <FormattedNumberInput
+              value={form.amount || ''}
+              onChangeValue={(val) => setForm((current) => ({ ...current, amount: Number(val) || 0 }))}
+              required
+              className="border-border/50 bg-secondary/30 text-sm font-numeric font-bold"
+            />
           </div>
           <div>
             <label className="mb-1.5 block text-xs text-muted-foreground">العملة</label>

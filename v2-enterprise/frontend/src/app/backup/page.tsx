@@ -4,7 +4,6 @@ import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, DatabaseBackup, Download, RefreshCw, RotateCcw, Upload } from 'lucide-react'
 import {
-  backupDownloadUrl,
   createBackup,
   formatBytes,
   listBackups,
@@ -13,6 +12,8 @@ import {
   uploadBackup,
   type BackupItem,
 } from '@/lib/api/backup'
+import { apiClient } from '@/lib/api/client'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -71,7 +72,32 @@ export default function BackupPage() {
   const qc = useQueryClient()
   const [confirmRestore, setConfirmRestore] = useState<BackupItem | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleDownload(filename: string) {
+    setDownloadingFile(filename)
+    try {
+      const response = await apiClient.get(`/Backups/${encodeURIComponent(filename)}/download`, {
+        responseType: 'blob'
+      })
+      const blob = new Blob([response.data], { type: 'application/octet-stream' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      toast.success('تم تحميل نسخة الاحتياط بنجاح!')
+    } catch (err) {
+      toast.error('فشل تحميل نسخة الاحتياط')
+      console.error(err)
+    } finally {
+      setDownloadingFile(null)
+    }
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['backups'],
@@ -218,13 +244,12 @@ export default function BackupPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    asChild
                     className="gap-1.5 border border-border/50 text-xs"
+                    onClick={() => handleDownload(backup.filename)}
+                    disabled={busy || downloadingFile === backup.filename}
                   >
-                    <a href={backupDownloadUrl(backup.filename)} download>
-                      <Download className="h-3.5 w-3.5" />
-                      تحميل
-                    </a>
+                    <Download className="h-3.5 w-3.5" />
+                    {downloadingFile === backup.filename ? 'جاري التحميل...' : 'تحميل'}
                   </Button>
                   <Button
                     variant="ghost"

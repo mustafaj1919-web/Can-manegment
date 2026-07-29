@@ -133,11 +133,11 @@ namespace CarShowroomManagementV2.UnitTests.Accounting
             var result = await handler.Handle(new GetTrialBalanceQuery(), CancellationToken.None);
 
             // Assert
-            result.Should().NotBeEmpty();
-            result.All(r => r.AccountId != cashErbil.Id && r.AccountId != capitalErbil.Id).Should().BeTrue("لا يجب عرض حسابات فرع أربيل المعزول");
+            result.Accounts.Should().NotBeEmpty();
+            result.Accounts.All(r => r.AccountId != cashErbil.Id && r.AccountId != capitalErbil.Id).Should().BeTrue("لا يجب عرض حسابات فرع أربيل المعزول");
             
-            var totalDebit = result.Sum(r => r.TotalDebit);
-            var totalCredit = result.Sum(r => r.TotalCredit);
+            var totalDebit = result.Accounts.Sum(r => r.TotalDebit);
+            var totalCredit = result.Accounts.Sum(r => r.TotalCredit);
             totalDebit.Should().Be(50000);
             totalCredit.Should().Be(50000);
             (totalDebit == totalCredit).Should().BeTrue("ميزان المراجعة يجب أن يكون متوازناً تماماً");
@@ -590,6 +590,86 @@ namespace CarShowroomManagementV2.UnitTests.Accounting
             result.Sales[0].DirectProfit.Should().Be(2000);
             result.Sales[0].TotalProfitMarkup.Should().Be(1000);
             result.Sales[0].RecognizedInstallmentProfit.Should().Be(100);
+        }
+
+        [Fact]
+        public async Task GetTrialBalance_ShouldCalculateOpeningPeriodClosing_AndReconcileBalancedTotals()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            var cashAcc = await SeedAccountAsync(context, "1101", "الصندوق", AccountType.Asset, _baghdadBranchId);
+            var capitalAcc = await SeedAccountAsync(context, "3101", "رأس المال", AccountType.Equity, _baghdadBranchId);
+
+            var pastDate = DateTime.UtcNow.AddMonths(-2);
+            var periodDate = DateTime.UtcNow;
+
+            // 1. قيد افتتاح قديم (قبل بداية الفترة)
+            await PostJournalEntryAsync(context, "قيد افتتاحي قديم", _baghdadBranchId, pastDate,
+                (cashAcc, 500000, 0),
+                (capitalAcc, 0, 500000)
+            );
+
+            // 2. قيد خلال الفترة الحالية
+            await PostJournalEntryAsync(context, "قيد الفترة الحالية", _baghdadBranchId, periodDate,
+                (cashAcc, 200000, 0),
+                (capitalAcc, 0, 200000)
+            );
+
+            var handler = new GetTrialBalanceQueryHandler(context, _currentUserServiceMock.Object);
+
+            // Act: استعلام للفترة الحالية (FromDate = قبل شهر)
+            var result = await handler.Handle(new GetTrialBalanceQuery
+            {
+                FromDate = DateTime.UtcNow.AddMonths(-1),
+                ToDate = DateTime.UtcNow.AddDays(1)
+            }, CancellationToken.None);
+
+            // Assert
+            result.Totals.Should().NotBeNull();
+            result.Totals.OpeningDebit.Should().Be(500000);
+            result.Totals.OpeningCredit.Should().Be(500000);
+            result.Totals.PeriodDebit.Should().Be(200000);
+            result.Totals.PeriodCredit.Should().Be(200000);
+            result.Totals.ClosingDebit.Should().Be(700000);
+            result.Totals.ClosingCredit.Should().Be(700000);
+            result.Totals.Difference.Should().Be(0);
+            result.Totals.IsBalanced.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task GetTrialBalance_WhenDraftJournalExists_ShouldExcludeDraftFromTotals()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            var cashAcc = await SeedAccountAsync(context, "1101", "الصندوق", AccountType.Asset, _baghdadBranchId);
+            var capitalAcc = await SeedAccountAsync(context, "3101", "رأس المال", AccountType.Equity, _baghdadBranchId);
+
+            // قيد مسودة غير مرحل
+            var draftEntry = new JournalEntry
+            {
+                Id = Guid.NewGuid(),
+                EntryNumber = "JV-DRAFT-99",
+                Description = "مسودة غير مرحلة",
+                EntryDate = DateTime.UtcNow,
+                IsPosted = false, // DRAFT!
+                BranchId = _baghdadBranchId,
+                CreatedBy = "test-user"
+            };
+            draftEntry.Lines.Add(new JournalLine { Id = Guid.NewGuid(), AccountId = cashAcc.Id, Debit = 999000, Credit = 0 });
+            draftEntry.Lines.Add(new JournalLine { Id = Guid.NewGuid(), AccountId = capitalAcc.Id, Debit = 0, Credit = 999000 });
+            context.JournalEntries.Add(draftEntry);
+            await context.SaveChangesAsync();
+
+            var handler = new GetTrialBalanceQueryHandler(context, _currentUserServiceMock.Object);
+
+            // Act
+            var result = await handler.Handle(new GetTrialBalanceQuery(), CancellationToken.None);
+
+            // Assert: المسودة مستبعدة تماماً
+            result.Totals.PeriodDebit.Should().Be(0);
+            result.Totals.PeriodCredit.Should().Be(0);
+            result.Totals.ClosingDebit.Should().Be(0);
+            result.Totals.ClosingCredit.Should().Be(0);
         }
     }
 }

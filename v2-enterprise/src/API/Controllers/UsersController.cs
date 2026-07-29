@@ -158,7 +158,21 @@ namespace CarShowroomManagementV2.API.Controllers
                 return BadRequest(new { success = false, message = "اسم المستخدم مستخدم بالفعل." });
             }
 
-            var defaultBranchId = request.BranchId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+            Guid defaultBranchId;
+            if (request.BranchId.HasValue)
+            {
+                defaultBranchId = request.BranchId.Value;
+            }
+            else
+            {
+                var mainBranch = await _context.Branches.FirstOrDefaultAsync(b => b.Code == "HQ-01")
+                    ?? await _context.Branches.OrderBy(b => b.Name).FirstOrDefaultAsync();
+                if (mainBranch == null)
+                {
+                    return BadRequest(new { success = false, message = "لا يوجد أي فرع في النظام، الرجاء إنشاء فرع أولاً." });
+                }
+                defaultBranchId = mainBranch.Id;
+            }
 
             var user = new User
             {

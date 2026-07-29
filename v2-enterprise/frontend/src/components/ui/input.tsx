@@ -1,23 +1,23 @@
-import * as React from 'react'
+import React from 'react'
+import { inputVariants } from '@/lib/design-system/variants'
 import { cn } from '@/lib/utils'
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  inputSize?: 'sm' | 'md' | 'lg'
+  hasError?: boolean
+}
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, ...props }, ref) => {
-  return (
-    <input
-      type={type}
-      className={cn(
-        'app-field flex h-10 w-full px-3 py-1.5 text-sm',
-        'placeholder:text-muted-foreground/60',
-        'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
-        className
-      )}
-      ref={ref}
-      {...props}
-    />
-  )
-})
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type = 'text', inputSize = 'md', hasError = false, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(inputVariants({ inputSize, hasError, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+
 Input.displayName = 'Input'
-
-export { Input }

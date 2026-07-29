@@ -13,12 +13,12 @@ class ConversationScreen extends StatefulWidget {
   final dynamic apiService;
 
   const ConversationScreen({
-    Key? key,
+    super.key,
     required this.conversationId,
     required this.vehicleTitle,
     this.isManager = false,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -105,7 +105,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
           backgroundColor: AppColors.luxBg,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(LucideIcons.chevron_right, color: AppColors.luxText),
+            icon:
+                const Icon(LucideIcons.chevron_right, color: AppColors.luxText),
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: Text(
@@ -147,19 +148,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   Widget _emptyState() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        padding: EdgeInsets.symmetric(horizontal: 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               LucideIcons.message_circle,
               color: AppColors.luxTextMuted,
               size: 32,
             ),
-            const SizedBox(height: 14),
-            const Text(
+            SizedBox(height: 14),
+            Text(
               'اكتب أول رسالة عن هذه السيارة',
               style: TextStyle(
                 color: AppColors.luxTextMuted,
@@ -215,7 +216,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               time,
               style: TextStyle(
                 color: isMine
-                    ? Colors.black.withOpacity(0.55)
+                    ? Colors.black.withValues(alpha: 0.55)
                     : AppColors.luxTextMuted,
                 fontSize: 9.5,
               ),
@@ -229,7 +230,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Widget _composer() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.luxCard,
         border: Border(top: BorderSide(color: AppColors.luxBorder)),
       ),

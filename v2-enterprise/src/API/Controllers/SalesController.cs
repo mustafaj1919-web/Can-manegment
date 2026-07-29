@@ -94,9 +94,9 @@ namespace CarShowroomManagementV2.API.Controllers
                     buyer_phone = sc.Customer != null ? sc.Customer.Phone : null,
                     selling_price = sc.SalePrice,
                     discount = sc.Discount,
-                    paid_amount = sc.DownPayment,
-                    remaining_amount = sc.RemainingBalance,
-                    currency = "IQD",
+                    paid_amount = sc.Status == "Cancelled" ? 0 : sc.DownPayment,
+                    remaining_amount = sc.Status == "Cancelled" ? 0 : sc.RemainingBalance,
+                    currency = sc.Vehicle != null ? sc.Vehicle.Currency : "IQD",
                     payment_method = sc.PaymentMethod.ToString(),
                     status = sc.Status,
                     has_installment = sc.InstallmentPlan != null,
@@ -130,15 +130,15 @@ namespace CarShowroomManagementV2.API.Controllers
                 return NotFound(new { success = false, message = "عقد البيع غير موجود." });
             }
 
-            // جلب الدفعات المقبوضة المرتبطة بحساب العميل الفرعي
+            // جلب الدفعات المقبوضة المرتبطة بحساب العميل الفرعي (باستثناء السندات الملغاة)
             var payments = await _context.Payments
-                .Where(p => p.ContraAccountId == sc.Customer!.AccountId)
+                .Where(p => p.ContraAccountId == sc.Customer!.AccountId && p.Status != "cancelled")
                 .OrderByDescending(p => p.CreatedAt)
                 .Select(p => new
                 {
                     id = p.Id,
                     amount = p.Amount,
-                    currency = "IQD",
+                    currency = p.Currency ?? (sc.Vehicle != null ? sc.Vehicle.Currency : "IQD"),
                     payment_method = p.Method.ToString(),
                     payment_date = p.CreatedAt,
                     notes = p.Description
@@ -151,7 +151,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 total_amount = sc.InstallmentPlan.TotalAmount,
                 paid_amount = sc.InstallmentPlan.Installments.Where(i => i.Status == "Paid").Sum(i => i.PaidAmount),
                 remaining_amount = sc.InstallmentPlan.TotalPlanAmount - sc.InstallmentPlan.Installments.Sum(i => i.PaidAmount),
-                currency = "IQD",
+                currency = sc.Vehicle != null ? sc.Vehicle.Currency : "IQD",
                 number_of_months = sc.InstallmentPlan.InstallmentPeriodMonths,
                 installment_amount = sc.InstallmentPlan.MonthlyInstallmentAmount,
                 installment_start_date = sc.InstallmentPlan.CreatedAt,
@@ -165,7 +165,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     amount = i.Amount,
                     paid_amount = i.PaidAmount,
                     remaining_amount = i.Amount - i.PaidAmount,
-                    currency = "IQD",
+                    currency = sc.Vehicle != null ? sc.Vehicle.Currency : "IQD",
                     status = i.Status, // Pending, PartiallyPaid, Paid, Overdue
                     payment_date = i.PaymentDate
                 }).ToList()
@@ -207,7 +207,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 discount = sc.Discount,
                 paid_amount = sc.DownPayment,
                 remaining_amount = sc.RemainingBalance,
-                currency = "IQD",
+                currency = sc.Vehicle != null ? sc.Vehicle.Currency : "IQD",
                 payment_method = sc.PaymentMethod.ToString(),
                 status = sc.Status,
                 has_installment = sc.InstallmentPlan != null,

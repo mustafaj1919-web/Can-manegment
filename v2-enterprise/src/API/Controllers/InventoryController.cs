@@ -159,6 +159,19 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, vehicleId, message = "تم تحديث بيانات السيارة بنجاح." });
         }
 
+        // 1.ج تغيير حالة السيارة يدوياً (Available / Reserved / UnderMaintenance)
+        [HttpPatch("{id}/status")]
+        public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeVehicleStatusRequest body)
+        {
+            await Mediator.Send(new ChangeVehicleStatusCommand
+            {
+                VehicleId = id,
+                NewStatus = body.NewStatus,
+                Notes     = body.Notes,
+            });
+            return Ok(new { success = true, message = "تم تغيير حالة السيارة بنجاح." });
+        }
+
         // 2. قائمة السيارات في المعرض
         [HttpGet]
         public async Task<IActionResult> GetAll(
@@ -169,7 +182,8 @@ namespace CarShowroomManagementV2.API.Controllers
             [FromQuery] int per_page = 25)
         {
             if (page < 1) page = 1;
-            if (per_page < 1 || per_page > 100) per_page = 25;
+            if (per_page < 1) per_page = 25;
+            if (per_page > 1000) per_page = 1000;
 
             var query = new GetVehiclesListQuery { Status = status, SupplierId = supplier_id };
             var all = await Mediator.Send(query);
@@ -216,6 +230,26 @@ namespace CarShowroomManagementV2.API.Controllers
             command.VehicleId = id;
             var costId = await Mediator.Send(command);
             return Ok(new { success = true, vehicleCostId = costId, message = "تمت إضافة التكلفة وتحديث القيمة الدفترية وتوليد قيد المخزون." });
+        }
+
+        // 5.1 عرض ربط أنواع مصاريف السيارات بالحسابات المحاسبية
+        [HttpGet("vehicle-cost-accounts")]
+        public async Task<IActionResult> GetVehicleCostAccountMappings()
+        {
+            var data = await Mediator.Send(new GetVehicleCostAccountMappingsQuery());
+            return Ok(new { success = true, data });
+        }
+
+        // 5.2 تحديد/تعديل الحساب المحاسبي لنوع مصروف سيارة معين
+        [Authorize(Roles = "Owner,Admin,Accountant")]
+        [HttpPut("vehicle-cost-accounts")]
+        public async Task<IActionResult> SetVehicleCostAccountMapping([FromBody] SetVehicleCostAccountMappingCommand command)
+        {
+            if (command == null)
+                return BadRequest(new { success = false, message = "بيانات الربط غير صالحة." });
+
+            await Mediator.Send(command);
+            return Ok(new { success = true, message = "تم حفظ ربط الحساب بنجاح." });
         }
 
         // 6. رفع صورة للسيارة
@@ -391,6 +425,12 @@ namespace CarShowroomManagementV2.API.Controllers
             public int? Cylinders { get; set; }
             public int? SeatCount { get; set; }
             public string? ImportCountry { get; set; }
+        }
+
+        public class ChangeVehicleStatusRequest
+        {
+            public string NewStatus { get; set; } = string.Empty;
+            public string? Notes { get; set; }
         }
     }
 }

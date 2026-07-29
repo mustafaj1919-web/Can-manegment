@@ -130,7 +130,14 @@ function mapVehicleFromBackend(v: any): Car {
 /* ─── API functions ──────────────────────────────────────────────────────── */
 
 export async function getCars(params: {
-  page?: number; per_page?: number; status?: string; search?: string; supplier_id?: string
+  page?: number;
+  per_page?: number;
+  status?: string;
+  search?: string;
+  supplier_id?: string;
+  branch_id?: string;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
 } = {}): Promise<CarsListResponse> {
   const qs = new URLSearchParams()
   qs.set('page',     String(params.page     ?? 1))
@@ -138,6 +145,9 @@ export async function getCars(params: {
   if (params.status)      qs.set('status',      params.status)
   if (params.search)      qs.set('search',      params.search)
   if (params.supplier_id) qs.set('supplier_id', params.supplier_id)
+  if (params.branch_id)   qs.set('branch_id',   params.branch_id)
+  if (params.sort_by)     qs.set('sort_by',     params.sort_by)
+  if (params.sort_dir)    qs.set('sort_dir',    params.sort_dir)
   const res = await get<any>(`/Inventory?${qs.toString()}`)
   if (res && res.success && res.data) {
     const data = res.data
@@ -469,6 +479,23 @@ export function addVehicleCost(carId: number | string, data: {
 export async function deleteVehicleCost(carId: number | string, costId: number | string): Promise<void> {
   // حذف التكلفة غير مدعوم في الخلفية بنقطة اتصال منفصلة
   return Promise.resolve()
+}
+
+export interface VehicleCostAccountMapping {
+  costType: string
+  costTypeLabel: string
+  accountId: string | null
+  accountCode: string | null
+  accountName: string | null
+}
+
+export async function getVehicleCostAccountMappings(): Promise<VehicleCostAccountMapping[]> {
+  const res = await get<any>('/Inventory/vehicle-cost-accounts')
+  return res?.data ?? []
+}
+
+export function setVehicleCostAccountMapping(costType: string, accountId: string): Promise<void> {
+  return put('/Inventory/vehicle-cost-accounts', { CostType: costType, AccountId: accountId })
 }
 
 export async function bulkUploadPhoto(

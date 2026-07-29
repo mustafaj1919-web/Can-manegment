@@ -16,8 +16,22 @@ namespace CarShowroomManagementV2.Infrastructure.Identity
 
         public string? UserId => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        public Guid BranchId => Guid.Parse("22222222-2222-2222-2222-222222222222");
+        public Guid BranchId
+        {
+            get
+            {
+                var branchClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("BranchId")?.Value;
+                return Guid.TryParse(branchClaim, out var guid) ? guid : Guid.Empty;
+            }
+        }
 
-        public bool CanSeeAllBranches => true;
+        public bool CanSeeAllBranches
+        {
+            get
+            {
+                var canSeeAllClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("CanSeeAllBranches")?.Value;
+                return canSeeAllClaim != null && canSeeAllClaim.Equals("true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
     }
 }

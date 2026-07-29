@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Landmark, RefreshCw, TrendingUp, TrendingDown, Scale, Download } from 'lucide-react'
 import { getBankMovement } from '@/lib/api/vouchers'
 import { formatMoney } from '@/lib/utils'
+import { exportXlsx } from '@/lib/export'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,24 +31,18 @@ export default function BankMovementPage() {
     retry: 1,
   })
 
-  function handleExport() {
+  async function handleExport() {
     if (!data?.rows?.length) return
-    const rows = [
-      ['التاريخ', 'المرجع', 'البيان', 'إيداع', 'سحب', 'الرصيد'],
-      ...data.rows.map(r => [
-        r.date ? new Date(r.date).toLocaleDateString('ar-IQ') : '',
-        r.journal_ref ?? '',
-        r.description ?? '',
-        r.inflow,
-        r.outflow,
-        r.balance,
-      ]),
-    ]
-    const csv  = rows.map(r => r.join('\t')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/tab-separated-values;charset=utf-8;' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a'); a.href = url; a.download = `bank-${accountCode}.tsv`; a.click()
-    URL.revokeObjectURL(url)
+    const headers = ['التاريخ', 'المرجع', 'البيان', 'إيداع', 'سحب', 'الرصيد']
+    const rows = data.rows.map(r => [
+      r.date ? new Date(r.date).toLocaleDateString('ar-IQ') : '',
+      r.journal_ref ?? '',
+      r.description ?? '',
+      r.inflow,
+      r.outflow,
+      r.balance,
+    ])
+    await exportXlsx(`bank-${accountCode}`, headers, rows)
   }
 
   const hasData = !isLoading && !isError && data

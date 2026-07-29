@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
@@ -80,7 +82,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     fuel_type = v.FuelType,
                     price = v.TargetSellingPrice,
                     status = v.Status,
-                    notes = v.Notes,
+                    notes = (string?)null,
                     condition = v.Condition,
                     images = v.Images.Select(i => new { id = i.Id, filename = i.FileName })
                 })
@@ -130,7 +132,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     fuel_type = v.FuelType,
                     price = v.TargetSellingPrice,
                     status = v.Status,
-                    notes = v.Notes,
+                    notes = (string?)null,
                     images = v.Images.Select(i => new { id = i.Id, filename = i.FileName })
                 }
             });
@@ -164,6 +166,7 @@ namespace CarShowroomManagementV2.API.Controllers
 
         // POST /api/public/leads
         [HttpPost("leads")]
+        [EnableRateLimiting("LeadPolicy")]
         public async Task<IActionResult> CreateLead([FromBody] CreateLeadRequest request)
         {
             if (string.IsNullOrEmpty(request.Name) || string.IsNullOrEmpty(request.Phone))
@@ -215,6 +218,7 @@ namespace CarShowroomManagementV2.API.Controllers
 
         // POST /api/public/visit-requests
         [HttpPost("visit-requests")]
+        [EnableRateLimiting("LeadPolicy")]
         public async Task<IActionResult> CreateVisitRequest([FromBody] CreateVisitRequest request)
         {
             if (string.IsNullOrEmpty(request.Name) || string.IsNullOrEmpty(request.Phone))
@@ -252,7 +256,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 Id = Guid.NewGuid(),
                 CustomerId = customer.Id,
                 InteractionType = "visit",
-                Notes = $"طلب حجز موعد زيارة/فحص للسيارة معرف: {request.VehicleId} بتاريخ {request.VisitDate:yyyy-MM-dd}",
+                Notes = $"طلب حجز موعد زيارة/فحص للسيارة معرف: {request.VehicleId} بتاريخ {request.VisitDate:yyyy-MM-dd}. ملاحظة: {request.Message}",
                 Outcome = "follow_up",
                 InteractionDate = DateTime.UtcNow
             };
@@ -266,17 +270,32 @@ namespace CarShowroomManagementV2.API.Controllers
 
     public class CreateLeadRequest
     {
+        [Required, StringLength(120, MinimumLength = 2)]
         public string Name { get; set; } = string.Empty;
+
+        [Required, StringLength(30, MinimumLength = 7)]
+        [RegularExpression(@"^[+\d][\d\s()\-]+$")]
         public string Phone { get; set; } = string.Empty;
+
         public Guid? VehicleId { get; set; }
+
+        [StringLength(2000)]
         public string? Message { get; set; }
     }
 
     public class CreateVisitRequest
     {
+        [Required, StringLength(120, MinimumLength = 2)]
         public string Name { get; set; } = string.Empty;
+
+        [Required, StringLength(30, MinimumLength = 7)]
+        [RegularExpression(@"^[+\d][\d\s()\-]+$")]
         public string Phone { get; set; } = string.Empty;
+
         public Guid? VehicleId { get; set; }
         public DateTime VisitDate { get; set; }
+
+        [StringLength(2000)]
+        public string? Message { get; set; }
     }
 }

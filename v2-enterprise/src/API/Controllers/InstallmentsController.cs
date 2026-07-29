@@ -29,7 +29,8 @@ namespace CarShowroomManagementV2.API.Controllers
         public async Task<IActionResult> GetInstallments(
             [FromQuery] int page = 1,
             [FromQuery] int per_page = 25,
-            [FromQuery] string? filter = null)
+            [FromQuery] string? filter = null,
+            [FromQuery] string? search = null)
         {
             if (page < 1) page = 1;
             if (per_page < 1 || per_page > 100) per_page = 25;
@@ -48,6 +49,11 @@ namespace CarShowroomManagementV2.API.Controllers
                     .ThenInclude(pu => pu!.Vehicle)
                 .Include(p => p.Installments)
                 .AsQueryable();
+
+            if (filter != "cancelled")
+            {
+                query = query.Where(p => p.Status != "Cancelled" && (p.SalesContract == null || p.SalesContract.Status != "Cancelled"));
+            }
 
             var allPlans = await query.ToListAsync();
 
@@ -94,7 +100,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     total_amount = total,
                     paid_amount = paid,
                     remaining_amount = remaining,
-                    currency = "IQD",
+                    currency = vehicle != null ? vehicle.Currency : "IQD",
                     number_of_months = p.InstallmentPeriodMonths,
                     installment_amount = p.MonthlyInstallmentAmount,
                     installment_due_day = 1,
@@ -108,9 +114,23 @@ namespace CarShowroomManagementV2.API.Controllers
                     due_today_count = dueTodayCount,
                     due_tomorrow_count = dueTomorrowCount,
                     due_in_2_days_count = dueIn2DaysCount,
-                    status = p.Status == "Completed" ? "Paid" : "Active"
+                    status = (p.Status == "Cancelled" || (sc != null && sc.Status == "Cancelled"))
+                        ? "Cancelled"
+                        : (p.Status == "Completed" ? "Paid" : "Active")
                 };
             }).ToList();
+
+            // تطبيق الفلترة بالبحث
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                itemsList = itemsList.Where(i =>
+                    (i.buyer_name != null && i.buyer_name.ToLower().Contains(s)) ||
+                    (i.invoice_number != null && i.invoice_number.ToLower().Contains(s)) ||
+                    (i.buyer_phone != null && i.buyer_phone.Contains(s)) ||
+                    (i.car_name != null && i.car_name.ToLower().Contains(s))
+                ).ToList();
+            }
 
             // تطبيق الفلترة
             if (!string.IsNullOrEmpty(filter) && filter != "all")
@@ -249,33 +269,35 @@ namespace CarShowroomManagementV2.API.Controllers
             var paid = plan.Installments.Where(i => i.Status == "Paid").Sum(i => i.PaidAmount);
             var remaining = Math.Max(0, plan.TotalPlanAmount - plan.Installments.Sum(i => i.PaidAmount));
 
-            // جلب سجل الدفعات المباشرة المرتبطة بالعميل
+            // جلب سجل الدفعات المباشرة المرتبطة بالعميل (باستثناء السندات الملغاة)
             var payments = customer != null ? await _context.Payments
-                .Where(p => p.ContraAccountId == customer.AccountId)
+                .Where(p => p.ContraAccountId == customer.AccountId && p.Status != "cancelled")
                 .OrderByDescending(p => p.CreatedAt)
                 .Select(p => new
                 {
                     id = p.Id,
                     schedule_id = (Guid?)null,
                     amount = p.Amount,
-                    currency = "IQD",
+                    currency = p.Currency ?? (vehicle != null ? vehicle.Currency : "IQD"),
                     payment_method = p.Method.ToString(),
                     payment_date = p.CreatedAt,
                     notes = p.Description
                 })
                 .ToListAsync() : new();
 
+            var isPlanCancelled = plan.Status == "Cancelled" || (sc != null && sc.Status == "Cancelled");
+
             // حساب ملخص كشف حساب العميل ماليًا
             var customerStatement = customer != null ? new
             {
                 customer_id = customer.Id,
                 customer_name = customer.FullName ?? customer.Name,
-                plans_count = await _context.InstallmentPlans.CountAsync(ip => ip.SalesContract != null && ip.SalesContract.CustomerId == customer.Id),
-                total_amount = plan.TotalPlanAmount,
+                plans_count = await _context.InstallmentPlans.CountAsync(ip => ip.SalesContract != null && ip.SalesContract.CustomerId == customer.Id && ip.Status != "Cancelled" && ip.SalesContract.Status != "Cancelled"),
+                total_amount = isPlanCancelled ? 0 : plan.TotalPlanAmount,
                 paid_amount = paid,
-                remaining_amount = remaining,
-                overdue_amount = plan.Installments.Where(i => i.Status == "Overdue" || (i.Status != "Paid" && i.DueDate < DateTime.UtcNow.Date)).Sum(i => i.Amount - i.PaidAmount),
-                currency = "IQD"
+                remaining_amount = isPlanCancelled ? 0 : remaining,
+                overdue_amount = isPlanCancelled ? 0 : plan.Installments.Where(i => i.Status == "Overdue" || (i.Status != "Paid" && i.Status != "Cancelled" && i.DueDate < DateTime.UtcNow.Date)).Sum(i => i.Amount - i.PaidAmount),
+                currency = vehicle != null ? vehicle.Currency : "IQD"
             } : null;
 
             var detail = new
@@ -293,12 +315,14 @@ namespace CarShowroomManagementV2.API.Controllers
                 total_amount = plan.TotalPlanAmount,
                 paid_amount = paid,
                 remaining_amount = remaining,
-                currency = "IQD",
+                currency = vehicle != null ? vehicle.Currency : "IQD",
                 number_of_months = plan.InstallmentPeriodMonths,
                 installment_amount = plan.MonthlyInstallmentAmount,
                 installment_start_date = plan.CreatedAt,
                 installment_due_day = 1,
-                status = plan.Status == "Completed" ? "Paid" : "Active",
+                status = (plan.Status == "Cancelled" || (sc != null && sc.Status == "Cancelled"))
+                    ? "Cancelled"
+                    : (plan.Status == "Completed" ? "Paid" : "Active"),
                 schedules = plan.Installments.OrderBy(i => i.InstallmentNumber).Select(i => new
                 {
                     id = i.Id,
@@ -307,7 +331,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     amount = i.Amount,
                     paid_amount = i.PaidAmount,
                     remaining_amount = i.Amount - i.PaidAmount,
-                    currency = "IQD",
+                    currency = vehicle != null ? vehicle.Currency : "IQD",
                     status = i.Status,
                     payment_date = i.PaymentDate
                 }).ToList(),
@@ -316,6 +340,27 @@ namespace CarShowroomManagementV2.API.Controllers
             };
 
             return Ok(detail);
+        }
+
+        // 2.5. حذف خطة تقسيط كلياً بالمعرف
+        [HttpDelete("{planId}")]
+        public async Task<IActionResult> DeleteInstallmentPlan(Guid planId)
+        {
+            var plan = await _context.InstallmentPlans
+                .IgnoreQueryFilters()
+                .Include(p => p.Installments)
+                .FirstOrDefaultAsync(p => p.Id == planId);
+
+            if (plan == null)
+            {
+                return NotFound(new { success = false, message = "خطة التقسيط غير موجودة." });
+            }
+
+            _context.Installments.RemoveRange(plan.Installments);
+            _context.InstallmentPlans.Remove(plan);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "تم حذف خطة التقسيط وجميع أقساطها بالكامل بنجاح." });
         }
 
         // 3. سداد دفعة قسط محدد ماليًا عبر معرّف القسط
@@ -341,24 +386,15 @@ namespace CarShowroomManagementV2.API.Controllers
                 InstallmentId = scheduleId,
                 Amount = payload.Amount,
                 PaymentMethod = isCash ? PaymentMethod.Cash : PaymentMethod.Bank,
-                DebitAccountCode = isCash ? "111001" : "112001"
+                AccountId = payload.AccountId,
+                DebitAccountCode = isCash ? "111001" : "112001",
+                IdempotencyKey = payload.IdempotencyKey,
+                Notes = payload.Notes
             };
 
-            var paymentId = await Mediator.Send(command);
+            var result = await Mediator.Send(command);
 
-            var installment = await _context.Installments
-                .Include(i => i.InstallmentPlan)
-                .FirstOrDefaultAsync(i => i.Id == scheduleId);
-
-            return Ok(new
-            {
-                schedule_id = scheduleId,
-                status = installment?.Status ?? "Paid",
-                paid_amount = payload.Amount,
-                remaining_amount = installment != null ? Math.Max(0, installment.Amount - installment.PaidAmount) : 0,
-                plan_status = installment?.InstallmentPlan?.Status ?? "Active",
-                plan_remaining = installment?.InstallmentPlan != null ? Math.Max(0, installment.InstallmentPlan.TotalPlanAmount - installment.InstallmentPlan.Installments.Sum(i => i.PaidAmount)) : 0
-            });
+            return Ok(result);
         }
 
         // 5. جلب جدول أقساط عقد بيع معين
@@ -415,6 +451,8 @@ namespace CarShowroomManagementV2.API.Controllers
     {
         public decimal Amount { get; set; }
         public string? PaymentMethod { get; set; } = "Cash";
+        public Guid? AccountId { get; set; }
+        public string? IdempotencyKey { get; set; }
         public string? Notes { get; set; }
     }
 }

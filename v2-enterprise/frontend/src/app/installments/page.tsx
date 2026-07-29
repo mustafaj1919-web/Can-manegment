@@ -16,7 +16,9 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
-  Loader2
+  Loader2,
+  Printer,
+  FileText
 } from 'lucide-react'
 import { cn, formatDate, formatMoney } from '@/lib/utils'
 import { getInstallments, getInstallmentPlan, payInstallmentSchedule, type InstallmentFilter } from '@/lib/api/installments'
@@ -318,7 +320,7 @@ function QuickPayRow({ planId, currency, onCancel, onSuccess }: {
         <Button
           type="button"
           size="sm"
-          disabled={mutation.isPending || !amount || parseFloat(amount) <= 0 || parseFloat(amount) > unpaidSchedule.remaining_amount}
+          disabled={mutation.isPending || !amount || parseFloat(amount) <= 0}
           onClick={() => mutation.mutate()}
           className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 font-semibold"
         >
@@ -338,6 +340,7 @@ function QuickPayRow({ planId, currency, onCancel, onSuccess }: {
 
 export default function InstallmentsPage() {
   const [filter, setFilter] = useState<InstallmentFilter>('all')
+  const [search, setSearch] = useState('')
   const [view, setView]     = useState<'list' | 'calendar'>('list')
   const [page,   setPage]   = useState(1)
   const [riskFilter, setRiskFilter] = useState<'all' | 'on_time' | 'late_week' | 'late_month'>('all')
@@ -352,8 +355,8 @@ export default function InstallmentsPage() {
   const currentMonth = currentDate.getMonth()
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['installments', page, filter, view],
-    queryFn: () => getInstallments({ page, per_page: perPage, filter }),
+    queryKey: ['installments', page, filter, search, view],
+    queryFn: () => getInstallments({ page, per_page: perPage, filter, search }),
     staleTime: 30_000,
     retry: 1,
   })
@@ -362,7 +365,7 @@ export default function InstallmentsPage() {
   const summary    = data?.summary
   const total      = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const isFiltered = filter !== 'all' || riskFilter !== 'all'
+  const isFiltered = filter !== 'all' || riskFilter !== 'all' || search.trim() !== ''
 
   // Risk count computations
   const onTimeCount = summary ? (summary.active_plans - summary.overdue_count) : 0
@@ -475,6 +478,11 @@ export default function InstallmentsPage() {
       </div>
 
       <FilterBar
+        search={{
+          value: search,
+          onChange: v => { setSearch(v); setPage(1) },
+          placeholder: 'ابحث باسم صاحب القسط، رقم العقد، رقم الهاتف، أو السيارة...',
+        }}
         selects={[
           {
             value: filter,
@@ -484,7 +492,7 @@ export default function InstallmentsPage() {
           },
         ]}
         hasActiveFilters={isFiltered}
-        onReset={() => { setFilter('all'); setRiskFilter('all'); setPage(1) }}
+        onReset={() => { setFilter('all'); setRiskFilter('all'); setSearch(''); setPage(1) }}
         onRefresh={() => refetch()}
       />
 
@@ -622,6 +630,18 @@ export default function InstallmentsPage() {
                           <span>سداد سريع</span>
                         </Button>
                       )}
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-8 text-xs gap-1 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold"
+                      >
+                        <Link href={`/installments/${plan.id}/receipt`} title="طباعة وصل سداد القسط (A5)">
+                          <Printer className="h-3.5 w-3.5" />
+                          <span>وصل السداد</span>
+                        </Link>
+                      </Button>
                       {plan.buyer_phone && (() => {
                         const msg = [
                           `مرحباً ${plan.buyer_name ?? ''}،`,

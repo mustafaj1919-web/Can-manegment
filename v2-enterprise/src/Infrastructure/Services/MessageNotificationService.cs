@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using CarShowroomManagementV2.Application.Common.Interfaces;
+using System.Net.Http;
+using System.Linq;
 
 namespace CarShowroomManagementV2.Infrastructure.Services;
 
@@ -46,6 +48,81 @@ public class MessageNotificationService : IMessageNotificationService
 
         // Add to simulator file
         await AppendToHistoryAsync(phone, message, "whatsapp");
+
+        // Try to load notifications settings from storage/notification_settings.json
+        var settingsPath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "notification_settings.json");
+        string? whatsAppToken = null;
+        string? phoneNumberId = null;
+
+        if (File.Exists(settingsPath))
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(settingsPath);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("WhatsAppToken", out var tokenProp))
+                    whatsAppToken = tokenProp.GetString();
+                if (doc.RootElement.TryGetProperty("WhatsAppPhoneNumberId", out var idProp))
+                    phoneNumberId = idProp.GetString();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to read WhatsApp token/ID from settings file.");
+            }
+        }
+
+        if (!string.IsNullOrEmpty(whatsAppToken) && !string.IsNullOrEmpty(phoneNumberId))
+        {
+            try
+            {
+                // Format the telephone number (only digits, strip leading zero if present, prefix with country code)
+                var cleanedPhone = new string(phone.Where(char.IsDigit).ToArray());
+                if (cleanedPhone.StartsWith("0"))
+                {
+                    cleanedPhone = "964" + cleanedPhone.Substring(1);
+                }
+                else if (!cleanedPhone.StartsWith("964") && cleanedPhone.Length == 10)
+                {
+                    cleanedPhone = "964" + cleanedPhone;
+                }
+
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", whatsAppToken);
+
+                var payload = new
+                {
+                    messaging_product = "whatsapp",
+                    recipient_type = "individual",
+                    to = cleanedPhone,
+                    type = "text",
+                    text = new { body = message }
+                };
+
+                var jsonPayload = JsonSerializer.Serialize(payload);
+                using var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync(
+                    $"https://graph.facebook.com/v18.0/{phoneNumberId}/messages", 
+                    content
+                );
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("WhatsApp message sent successfully to {Phone}", cleanedPhone);
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Failed to send WhatsApp message. Status: {Status}, Error: {Error}", response.StatusCode, errorContent);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while calling Meta WhatsApp Cloud API.");
+                return false;
+            }
+        }
 
         return true;
     }

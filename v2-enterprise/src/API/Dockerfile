@@ -30,14 +30,14 @@ ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV COMPlus_EnableDiagnostics=0
 
 # إنشاء مستخدم أمني غير مسؤول لتشغيل الحاوية بأمان
+# تثبيت su-exec لتبديل المستخدم بأمان بعد إصلاح صلاحيات الـ volumes
 RUN addgroup -g 10001 -S appgroup && \
-    adduser -u 10001 -S appuser -G appgroup
+    adduser -u 10001 -S appuser -G appgroup && \
+    apk add --no-cache su-exec postgresql16-client
 
-# إنشاء مجلدات وتعديل الصلاحيات — يجب أن يشمل storage قبل تثبيت الـ volume
-RUN mkdir -p /app/logs /app/storage/vehicles /app/backups && \
+# إنشاء جميع مجلدات التخزين مع الصلاحيات الصحيحة
+RUN mkdir -p /app/logs /app/storage/vehicles /app/storage/private/customers /app/storage/customers /app/backups /app/backups/archive && \
     chown -R appuser:appgroup /app
-
-USER appuser
 
 COPY --chown=appuser:appgroup --from=publish /app/publish .
 
@@ -45,4 +45,8 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "CarShowroomManagementV2.API.dll"]
+# الـ entrypoint يصلح صلاحيات الـ volumes (root بالافتراضي) ثم يشغل التطبيق كـ appuser
+COPY src/API/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

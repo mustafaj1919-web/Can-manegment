@@ -71,6 +71,7 @@ module.exports = {
         arabic:  ['var(--font-tajawal)', 'sans-serif'],
         numeric: ['var(--font-inter)', 'sans-serif'],
         mono:    ['var(--font-mono)', 'monospace'],
+        receipt: ['var(--font-receipt)', 'var(--font-tajawal)', 'sans-serif'],
       },
 
       fontSize: {

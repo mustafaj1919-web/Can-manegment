@@ -4,12 +4,19 @@ import { AppShell } from '../components/layout/AppShell'
 import { CommandPalette } from '../components/shared/CommandPalette'
 import { ShortcutsPanel } from '../components/shared/ShortcutsPanel'
 import { InstallPrompt } from '../components/pwa/InstallPrompt'
-import { Tajawal, Inter, JetBrains_Mono } from 'next/font/google'
+import { Tajawal, Inter, JetBrains_Mono, IBM_Plex_Sans_Arabic } from 'next/font/google'
 
 const tajawal = Tajawal({
   subsets: ['arabic'],
   weight: ['300', '400', '500', '700', '800', '900'],
   variable: '--font-tajawal',
+  display: 'swap',
+})
+
+const plexSansArabic = IBM_Plex_Sans_Arabic({
+  subsets: ['arabic'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-receipt',
   display: 'swap',
 })
 
@@ -56,7 +63,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="ar" dir="rtl" className={`${tajawal.variable} ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="ar" dir="rtl" className={`${tajawal.variable} ${inter.variable} ${jetbrainsMono.variable} ${plexSansArabic.variable}`} suppressHydrationWarning>
       <head>
         {/* يشتغل قبل React لتجنب وميض الثيم وخطأ hydration */}
         <script
@@ -72,6 +79,9 @@ export default function RootLayout({ children }) {
           <AppShell>{children}</AppShell>
           <InstallPrompt />
         </Providers>
+        {/* Dedicated print target: on @media print, everything else on the page is hidden
+            and only content portaled into this node is rendered. See ReceiptPrintPortal. */}
+        <div id="print-root" />
       </body>
     </html>
   )

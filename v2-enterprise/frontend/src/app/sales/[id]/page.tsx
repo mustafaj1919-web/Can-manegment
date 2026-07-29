@@ -117,12 +117,38 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
           </span>
         }
         actions={
-          <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
-            <Link href={`/sales/${id}/receipt`}>
-              <FileText className="h-3.5 w-3.5" />
-              وصل القبض
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+              <Link href={`/sales/${id}/receipt`}>
+                <FileText className="h-3.5 w-3.5" />
+                وصل القبض
+              </Link>
+            </Button>
+
+            {sale.status !== 'Cancelled' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (confirm('هل تريد إلغاء عقد الأقساط الحالي وإرجاع السيارة للمخزون لتنفيذ بيع نقدي؟')) {
+                    try {
+                      const { cancelSale } = await import('@/lib/api/sales')
+                      await cancelSale(id)
+                      alert('تم إلغاء عقد الأقساط بنجاح، وإرجاع السيارة إلى المخزون. يمكنك الآن إجراء البيع النقدي بمبلغ 19,500,000 د.ع.')
+                      window.location.href = '/cashier/new-sale'
+                    } catch (err: any) {
+                      alert(err?.message || 'حدث خطأ أثناء إلغاء العقد')
+                    }
+                  }
+                }}
+                className="gap-1.5 text-xs border-rose-500/30 text-rose-600 hover:bg-rose-50 hover:border-rose-400 font-bold"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                إلغاء الأقساط وتحويل لبيع نقدي
+              </Button>
+            )}
+          </div>
         }
       />
 

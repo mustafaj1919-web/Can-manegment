@@ -28,6 +28,7 @@ export default function CashierReceipts() {
   
   // Print receipt modal state
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null)
+  const [selectedReceiptType, setSelectedReceiptType] = useState<'payment' | 'installment-payment-a5'>('payment')
   const [showPrintModal, setShowPrintModal] = useState(false)
 
   // Fetch today's vouchers of type 'receipt'
@@ -62,16 +63,45 @@ export default function CashierReceipts() {
     return matchesSearch && matchesMethod && matchesDate
   })
 
+  // The general ledger Payment/voucher record has no foreign key back to the
+  // InstallmentPlan/Installment it may have originated from (see Payment.cs — it only
+  // knows Account/ContraAccount/Amount/Description for double-entry bookkeeping). So an
+  // installment-originated voucher can only be recognized here from its description,
+  // which PayInstallmentCommand always seeds with "سداد القسط رقم ..." unless the
+  // cashier overrode it with custom notes. This is a heuristic, not a real link — the
+  // A5 receipt rendered from this page will therefore show payment/customer info but
+  // not vehicle/contract/progress detail (that only lives on the InstallmentPlan, which
+  // this list never fetches). Full parity would need a ReferenceType/ReferenceId column
+  // on Payment; out of scope for this pass.
+  const isInstallmentVoucher = (receipt: any) => /قسط/.test(receipt.description || '')
+
   const handleViewReceipt = (receipt: any) => {
-    setSelectedReceipt({
-      id: receipt.id,
-      buyer_name: receipt.credit_account_name || 'العميل',
-      amount: receipt.amount,
-      payment_method: receipt.debit_account_code === '111001' ? 'Cash' : 'Bank',
-      payment_date: receipt.voucher_date,
-      notes: receipt.description,
-      currency: receipt.currency ?? 'IQD',
-    })
+    if (isInstallmentVoucher(receipt)) {
+      setSelectedReceiptType('installment-payment-a5')
+      setSelectedReceipt({
+        payment: {
+          id: receipt.id,
+          amount: receipt.amount,
+          currency: receipt.currency ?? 'IQD',
+          payment_method: receipt.debit_account_code === '111001' ? 'Cash' : 'Bank',
+          payment_date: receipt.voucher_date,
+          reference_number: receipt.voucher_number,
+          notes: receipt.description,
+        },
+        customer: { name: receipt.credit_account_name || 'العميل' },
+      })
+    } else {
+      setSelectedReceiptType('payment')
+      setSelectedReceipt({
+        id: receipt.id,
+        buyer_name: receipt.credit_account_name || 'العميل',
+        amount: receipt.amount,
+        payment_method: receipt.debit_account_code === '111001' ? 'Cash' : 'Bank',
+        payment_date: receipt.voucher_date,
+        notes: receipt.description,
+        currency: receipt.currency ?? 'IQD',
+      })
+    }
     setShowPrintModal(true)
   }
 
@@ -196,7 +226,7 @@ export default function CashierReceipts() {
       <PrintReceiptModal
         open={showPrintModal}
         onOpenChange={setShowPrintModal}
-        type="payment"
+        type={selectedReceiptType}
         data={selectedReceipt}
       />
     </div>

@@ -45,8 +45,8 @@ namespace CarShowroomManagementV2.API.Controllers
             var all = await q.OrderByDescending(i => i.InteractionDate).ToListAsync();
             var custNames = await _context.Customers.ToDictionaryAsync(c => c.Id, c => c.Name);
             var empNames = await _context.Employees.ToDictionaryAsync(e => e.Id, e => e.FullName);
-            string CN(Guid id) => custNames.TryGetValue(id, out var n) ? n : null;
-            string EN(Guid? id) => id.HasValue && empNames.TryGetValue(id.Value, out var n) ? n : null;
+            string? CN(Guid id) => custNames.TryGetValue(id, out var n) ? n : null;
+            string? EN(Guid? id) => id.HasValue && empNames.TryGetValue(id.Value, out var n) ? n : null;
 
             var total = all.Count;
             var items = all.Skip((page - 1) * per).Take(per).Select(i => MapInteraction(i, CN(i.CustomerId), EN(i.EmployeeId))).ToList();

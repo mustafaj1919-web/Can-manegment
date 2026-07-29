@@ -247,6 +247,7 @@ namespace CarShowroomManagementV2.API.Controllers
         public string TwilioAuthToken { get; set; } = string.Empty;
         public string TwilioFromNumber { get; set; } = string.Empty;
         public string WhatsAppToken { get; set; } = string.Empty;
+        public string WhatsAppPhoneNumberId { get; set; } = string.Empty;
 
         public string DueTodayTemplate { get; set; } = "عزيزي العميل {Name}، نود تذكيركم بموعد استحقاق القسط رقم {InstallmentNumber} بمبلغ {Amount} {Currency} المستحق اليوم {DueDate} للسيارة {CarModel}. شكراً لكم، معرض الأصدقاء.";
         public string DueSoonTemplate { get; set; } = "تذكير: عزيزي العميل {Name}، يستحق القسط رقم {InstallmentNumber} بمبلغ {Amount} {Currency} في غضون 3 أيام بتاريخ {DueDate} للسيارة {CarModel}. معرض الأصدقاء.";

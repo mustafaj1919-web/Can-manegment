@@ -95,18 +95,32 @@ export interface CreatePurchasePayload {
   purchase_date: string
   number_of_months?: number | null
   installment_start_date?: string | null
+  
+  // المواصفات الاختيارية
+  trim?: string | null
+  condition?: string | null
+  plate_status?: string | null
+  engine_size?: string | null
+  cylinders?: number | string | null
+  transmission?: string | null
+  fuel_type?: string | null
+  import_country?: string | null
+  seat_count?: number | string | null
+  seat_material?: string | null
+  notes?: string | null
 }
 
 export async function getPurchases(params: PurchasesListParams = {}): Promise<PurchasesListResponse> {
-  const qs = new URLSearchParams()
-  qs.set('page',     String(params.page     ?? 1))
-  qs.set('per_page', String(params.per_page ?? 25))
-  if (params.search)    qs.set('search',    params.search)
-  if (params.status)    qs.set('status',    params.status)
-  if (params.date_from) qs.set('date_from', params.date_from.length === 10 ? params.date_from + 'T00:00:00Z' : params.date_from)
-  if (params.date_to)   qs.set('date_to',   params.date_to.length   === 10 ? params.date_to   + 'T23:59:59Z' : params.date_to)
-  if (params.method)    qs.set('method',    params.method)
-  const res = await get<any>(`/Purchases?${qs.toString()}`)
+  const query = new URLSearchParams()
+  if (params.page) query.append('page', String(params.page))
+  if (params.per_page) query.append('per_page', String(params.per_page))
+  if (params.search) query.append('search', params.search)
+  if (params.status) query.append('status', params.status)
+  if (params.date_from) query.append('date_from', params.date_from)
+  if (params.date_to) query.append('date_to', params.date_to)
+  if (params.method) query.append('method', params.method)
+
+  const res = await get<any>(`/Purchases?${query.toString()}`)
   if (res && res.success && res.data) {
     const data = res.data
     if (Array.isArray(data)) {
@@ -142,6 +156,22 @@ export async function createPurchase(payload: CreatePurchasePayload): Promise<{ 
     TargetSellingPrice: payload.purchase_price,
     InstallmentPeriodMonths: payload.number_of_months ?? 0,
     InstallmentStartDate: payload.installment_start_date ?? null,
+    
+    // إرسال الحقول الاختيارية والمواصفات
+    Trim: payload.trim || null,
+    Condition: payload.condition || null,
+    PlateNumber: payload.plate_number || null,
+    PlateStatus: payload.plate_status || null,
+    Mileage: payload.mileage ?? 0,
+    EngineSize: payload.engine_size || null,
+    Cylinders: payload.cylinders ? Number(payload.cylinders) : null,
+    Transmission: payload.transmission || null,
+    FuelType: payload.fuel_type || null,
+    ImportCountry: payload.import_country || null,
+    SeatCount: payload.seat_count ? Number(payload.seat_count) : null,
+    SeatMaterial: payload.seat_material || null,
+    Currency: payload.currency,
+    Notes: payload.notes || null,
   }
   const res = await post<any>('/Purchases', body)
   return {

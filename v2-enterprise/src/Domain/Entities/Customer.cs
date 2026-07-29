@@ -20,7 +20,12 @@ namespace CarShowroomManagementV2.Domain.Entities
         public string CustomerType { get; set; } = "Individual"; // Individual or Company
         public string? VatNumber { get; set; } // الرقم الضريبي للعميل (للشركات)
         public string? Notes { get; set; }
-        public string? PhotoUrl { get; set; }  // filename only, stored in /app/storage/customers/
+        public string? PhotoUrl { get; set; }
+
+        // تقييم الائتمان — يُحدَّث يدوياً أو تلقائياً بناءً على سجل الدفع
+        public int CreditRating { get; set; } = 5;       // 1 (خطر) → 10 (ممتاز)
+        public bool IsBlacklisted { get; set; } = false;
+        public string? BlacklistReason { get; set; }
 
         // ربط الحساب المحاسبي (Subledger)
         public Guid AccountId { get; set; }

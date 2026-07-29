@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Settings, User, Lock, Sun, Moon, Building2,
   Phone, MapPin, Save, Check, Eye, EyeOff,
-  Globe, Shield, Info, ChevronLeft,
+  Globe, Shield, Info, ChevronLeft, Wallet,
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useBranchStore } from '@/lib/stores/branch-store'
@@ -14,6 +14,9 @@ import { post } from '@/lib/api/client'
 import { SHOWROOM } from '@/lib/showroom-config'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getVehicleCostAccountMappings, setVehicleCostAccountMapping } from '@/lib/api/inventory'
+import { getChartOfAccounts } from '@/lib/api/accounting'
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -163,6 +166,61 @@ function ChangePasswordForm({ userId }: { userId: string }) {
   )
 }
 
+/* ─── Vehicle Cost Accounts Mapping ──────────────────────────────────────── */
+
+function VehicleCostAccountsSection() {
+  const qc = useQueryClient()
+
+  const { data: mappings } = useQuery({
+    queryKey: ['vehicle-cost-accounts'],
+    queryFn: getVehicleCostAccountMappings,
+    staleTime: 30_000,
+  })
+
+  const { data: coa } = useQuery({
+    queryKey: ['chart-of-accounts'],
+    queryFn: getChartOfAccounts,
+    staleTime: 60_000,
+  })
+
+  // نعرض فقط حسابات المصروفات القابلة لاستقبال قيود مباشرة (وليس الحسابات الرئيسية/التجميعية)
+  const accounts = (coa?.flat ?? []).filter(a => a.type === 'Expense' && a.code.length >= 6)
+
+  const mutation = useMutation({
+    mutationFn: ({ costType, accountId }: { costType: string; accountId: string }) =>
+      setVehicleCostAccountMapping(costType, accountId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['vehicle-cost-accounts'] }),
+  })
+
+  return (
+    <SectionCard title="ربط حسابات مصاريف السيارات" icon={Wallet}>
+      <p className="text-[11px] text-muted-foreground">
+        حدد الحساب المحاسبي الذي يتحمّل كل نوع من مصاريف السيارات الإضافية عند إضافته من صفحة تفاصيل السيارة.
+        تُسجَّل هذه المصاريف كحسابات مصروفات مستقلة، بينما يبقى حساب مخزون السيارات محتفظاً بسعر الشراء الأساسي فقط.
+      </p>
+      {mappings?.map(m => (
+        <SettingRow key={m.costType} label={m.costTypeLabel}>
+          <Select
+            value={m.accountId ?? undefined}
+            onValueChange={(v) => mutation.mutate({ costType: m.costType, accountId: v })}
+          >
+            <SelectTrigger className="h-8 w-64 text-[11px]">
+              <SelectValue placeholder="اختر حساب من شجرة الحسابات..." />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.map(a => (
+                <SelectItem key={String(a.accountId)} value={String(a.accountId)}>
+                  {a.code} — {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      ))}
+    </SectionCard>
+  )
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function SettingsPage() {
@@ -222,6 +280,9 @@ export default function SettingsPage() {
             </div>
           </SettingRow>
         </SectionCard>
+
+        {/* ── Vehicle Cost Accounts ── */}
+        <VehicleCostAccountsSection />
 
         {/* ── Showroom Info ── */}
         <SectionCard title="معلومات المعرض" icon={Building2}>

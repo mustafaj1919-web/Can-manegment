@@ -114,16 +114,53 @@ export function PrintableContract({
         @media print {
           @page {
             size: A4;
-            margin: 14mm;
+            margin: 12mm;
           }
-          body {
+
+          /* Hide app chrome */
+          aside, header, nav, footer,
+          [class*="toolbar"], [class*="Topbar"], [class*="topnav"],
+          [class*="sidebar"], [class*="Sidebar"],
+          [data-radix-scroll-area-viewport],
+          .print\\:hidden,
+          .fixed { display: none !important; }
+
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
             background: white !important;
           }
+
+          /* Reset AppShell wrappers */
+          .app-shell-root,
+          .app-shell-root > div,
+          main,
+          .page-container,
+          .page-container > * {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+            min-height: 0 !important;
+            transform: none !important;
+            opacity: 1 !important;
+            box-shadow: none !important;
+          }
+
+          /* Print exact colors for the contract document */
+          .contract-page, .contract-page * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
           .contract-page {
             color: #0f172a !important;
-          }
-          .print\\:hidden {
-            display: none !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
           }
         }
       `}</style>

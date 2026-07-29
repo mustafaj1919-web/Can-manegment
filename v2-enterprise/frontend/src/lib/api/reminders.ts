@@ -6,6 +6,7 @@ export interface ReminderSettings {
   twilioAuthToken: string
   twilioFromNumber: string
   whatsAppToken: string
+  whatsAppPhoneNumberId?: string
   dueTodayTemplate: string
   dueSoonTemplate: string
   overdueTemplate: string

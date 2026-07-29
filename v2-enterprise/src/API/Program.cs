@@ -22,6 +22,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using CarShowroomManagementV2.Infrastructure.Identity;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.HttpOverrides;
 
 // السماح لـ Npgsql بكتابة قيم DateTime (Kind=Unspecified القادمة من تواريخ الواجهة)
 // إلى أعمدة timestamptz دون رفضها. يجب ضبطه قبل أول استخدام لـ Npgsql.
@@ -58,24 +59,51 @@ builder.Services.AddCors(options =>
 // 4. Rate Limiting — حماية نقطة تسجيل الدخول من هجمات Brute Force
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("LoginPolicy", limiter =>
-    {
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.PermitLimit = 10;
-        limiter.QueueLimit = 0;
-        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-    });
+    options.AddPolicy("LoginPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
 
     // حد عام للـ API: 300 طلب/دقيقة لكل IP
-    options.AddFixedWindowLimiter("GlobalPolicy", limiter =>
-    {
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.PermitLimit = 300;
-        limiter.QueueLimit = 0;
-        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-    });
+    options.AddPolicy("GlobalPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 300,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
+
+    options.AddPolicy("LeadPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 5,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
 
     options.RejectionStatusCode = 429;
+});
+
+// Production traffic reaches the API only through the local Docker proxies.
+// Honor their X-Forwarded-* headers so rate limits are partitioned by visitor IP.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // 5. إعداد المصادقة باستخدام JWT Bearer
@@ -171,6 +199,7 @@ using (var scope = app.Services.CreateScope())
 
 // 6. ضبط خط أنابيب معالجة طلبات الـ HTTP (Middleware Pipeline)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
@@ -190,8 +219,17 @@ app.UseStaticFiles(new StaticFileOptions
     ServeUnknownFileTypes = false,
 });
 
-app.UseRateLimiter();
+var websiteMediaPath = Path.Combine(Directory.GetCurrentDirectory(), "storage", "website");
+Directory.CreateDirectory(websiteMediaPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(websiteMediaPath),
+    RequestPath = "/static/uploads/website",
+    ServeUnknownFileTypes = false,
+});
+
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -321,7 +359,15 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
         new Permission { Name = "view_accounting", Description = "عرض الحسابات والقيود اليومية" },
         new Permission { Name = "manage_accounting", Description = "إدارة الحسابات، القيود وإغلاق الصندوق" },
         new Permission { Name = "view_reports", Description = "عرض التقارير المالية والإدارية" },
-        new Permission { Name = "manage_settings", Description = "إدارة إعدادات النظام والنسخ الاحتياطي" }
+        new Permission { Name = "manage_settings", Description = "إدارة إعدادات النظام والنسخ الاحتياطي" },
+        
+        // CMS Permissions
+        new Permission { Name = "view_website_content", Description = "عرض محتوى الموقع" },
+        new Permission { Name = "manage_website_content", Description = "إدارة محتوى صفحات الموقع" },
+        new Permission { Name = "manage_website_news", Description = "إدارة أخبار ومدونات الموقع" },
+        new Permission { Name = "manage_website_media", Description = "إدارة مكتبة الوسائط للموقع" },
+        new Permission { Name = "publish_website_content", Description = "نشر أو أرشفة محتوى الموقع" },
+        new Permission { Name = "manage_website_settings", Description = "إدارة إعدادات وبيانات الموقع" }
     };
 
     foreach (var p in defaultPermissions)
@@ -340,39 +386,43 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
 
     foreach (var role in dbRoles)
     {
-        var hasAnyPermissions = await context.RolePermissions.AnyAsync(rp => rp.RoleId == role.Id);
-        if (!hasAnyPermissions)
+        var allowedPermNames = new List<string> { "view_dashboard" };
+
+        if (role.Name == "Owner" || role.Name == "Admin")
         {
-            var allowedPermNames = new List<string> { "view_dashboard" };
+            allowedPermNames = dbPermissions.Select(p => p.Name).ToList();
+        }
+        else if (role.Name == "Accountant")
+        {
+            allowedPermNames.AddRange(new[] {
+                "view_inventory", "view_sales", "manage_sales",
+                "view_purchases", "manage_purchases", "view_installments", "manage_installments",
+                "view_accounting", "manage_accounting", "view_reports"
+            });
+        }
+        else if (role.Name == "Sales")
+        {
+            allowedPermNames.AddRange(new[] {
+                "view_inventory", "view_sales", "manage_sales",
+                "view_installments", "manage_installments", "view_reports"
+            });
+        }
+        else if (role.Name == "Viewer")
+        {
+            allowedPermNames.AddRange(new[] {
+                "view_inventory", "view_sales", "view_purchases",
+                "view_installments", "view_accounting", "view_reports"
+            });
+        }
 
-            if (role.Name == "Owner" || role.Name == "Admin")
-            {
-                allowedPermNames = dbPermissions.Select(p => p.Name).ToList();
-            }
-            else if (role.Name == "Accountant")
-            {
-                allowedPermNames.AddRange(new[] {
-                    "view_inventory", "view_sales", "manage_sales",
-                    "view_purchases", "manage_purchases", "view_installments", "manage_installments",
-                    "view_accounting", "manage_accounting", "view_reports"
-                });
-            }
-            else if (role.Name == "Sales")
-            {
-                allowedPermNames.AddRange(new[] {
-                    "view_inventory", "view_sales", "manage_sales",
-                    "view_installments", "manage_installments", "view_reports"
-                });
-            }
-            else if (role.Name == "Viewer")
-            {
-                allowedPermNames.AddRange(new[] {
-                    "view_inventory", "view_sales", "view_purchases",
-                    "view_installments", "view_accounting", "view_reports"
-                });
-            }
+        var currentRolePerms = await context.RolePermissions
+            .Where(rp => rp.RoleId == role.Id && rp.Permission != null)
+            .Select(rp => rp.Permission!.Name)
+            .ToListAsync();
 
-            foreach (var permName in allowedPermNames)
+        foreach (var permName in allowedPermNames)
+        {
+            if (!currentRolePerms.Contains(permName))
             {
                 var targetPerm = dbPermissions.FirstOrDefault(p => p.Name == permName);
                 if (targetPerm != null)
@@ -806,4 +856,165 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
     {
         Log.Warning(ex, "تعذر إنشاء جداول Conversations وMessages.");
     }
+
+    // ─── Soft Delete — إضافة أعمدة الحذف الناعم لجميع الجداول القابلة للحذف ────────
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Customers""      ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Customers""      ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Customers""      ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Vehicles""       ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Vehicles""       ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Vehicles""       ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Employees""      ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Employees""      ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Employees""      ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Suppliers""      ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Suppliers""      ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Suppliers""      ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""SalesContracts"" ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Expenses""       ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Expenses""       ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Expenses""       ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Accounts""                  ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Accounts""                  ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Accounts""                  ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""JournalEntries""            ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""JournalEntries""            ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""JournalEntries""            ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Payments""                  ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Payments""                  ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Payments""                  ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""InstallmentPlans""          ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""InstallmentPlans""          ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""InstallmentPlans""          ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Installments""              ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Installments""              ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Installments""              ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""CrmInteractions""           ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""CrmInteractions""           ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""CrmInteractions""           ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Deals""                     ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""Deals""                     ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""Deals""                     ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""FiscalYears""               ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""FiscalYears""               ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""FiscalYears""               ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""RecurringJournalTemplates"" ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""RecurringJournalTemplates"" ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""RecurringJournalTemplates"" ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""EmployeeCommissions""       ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""EmployeeCommissions""       ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""EmployeeCommissions""       ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""EmployeeTargets""           ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
+            ALTER TABLE ""EmployeeTargets""           ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
+            ALTER TABLE ""EmployeeTargets""           ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+        ");
+        Log.Information("تم إضافة أعمدة الحذف الناعم (Soft Delete) بنجاح.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إضافة أعمدة الحذف الناعم.");
+    }
+
+    // ─── تقييم الائتمان — Customer Credit Rating ─────────────────────────────────
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""CreditRating""    integer NOT NULL DEFAULT 5;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""IsBlacklisted""   boolean NOT NULL DEFAULT false;
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""BlacklistReason"" text;
+        ");
+        Log.Information("تم إضافة أعمدة تقييم الائتمان بنجاح.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إضافة أعمدة تقييم الائتمان.");
+    }
+
+    // ─── VehicleStatusHistory — سجل تاريخ تغيير حالة السيارات ───────────────────
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""VehicleStatusHistories"" (
+                ""Id""         uuid                     PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""VehicleId""  uuid                     NOT NULL REFERENCES ""Vehicles""(""Id"") ON DELETE CASCADE,
+                ""OldStatus""  text,
+                ""NewStatus""  text                     NOT NULL DEFAULT '',
+                ""ChangedBy""  text,
+                ""ChangedAt""  timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""Notes""      text,
+                ""BranchId""   uuid                     NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_VehicleStatusHistories_VehicleId"" ON ""VehicleStatusHistories"" (""VehicleId"");
+            CREATE INDEX IF NOT EXISTS ""IX_VehicleStatusHistories_ChangedAt""  ON ""VehicleStatusHistories"" (""ChangedAt"");
+        ");
+        Log.Information("تم إنشاء جدول VehicleStatusHistories بنجاح.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جدول VehicleStatusHistories.");
+    }
+
+    // ─── VehicleCostAccountMappings — ربط نوع مصروف السيارة بحساب محاسبي ─────────
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""VehicleCostAccountMappings"" (
+                ""Id""             uuid                     PRIMARY KEY DEFAULT gen_random_uuid(),
+                ""CostType""       text                     NOT NULL,
+                ""AccountId""      uuid                     NOT NULL REFERENCES ""Accounts""(""Id"") ON DELETE RESTRICT,
+                ""BranchId""       uuid                     NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+                ""CreatedAt""      timestamp with time zone NOT NULL DEFAULT NOW(),
+                ""CreatedBy""      text,
+                ""LastModifiedAt"" timestamp with time zone,
+                ""LastModifiedBy"" text,
+                ""IsDeleted""      boolean                  NOT NULL DEFAULT false,
+                ""DeletedAt""      timestamp with time zone,
+                ""DeletedBy""      text,
+                UNIQUE (""CostType"", ""BranchId"")
+            );
+        ");
+        Log.Information("تم إنشاء جدول VehicleCostAccountMappings بنجاح.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء جدول VehicleCostAccountMappings.");
+    }
+
+    // ─── Performance Indexes — فهارس الأداء ──────────────────────────────────────
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE INDEX IF NOT EXISTS ""IX_Customers_Phone""         ON ""Customers""      (""Phone"");
+            CREATE INDEX IF NOT EXISTS ""IX_Customers_Name""          ON ""Customers""      (""Name"");
+            CREATE INDEX IF NOT EXISTS ""IX_Customers_IsDeleted""     ON ""Customers""      (""IsDeleted"") WHERE ""IsDeleted"" = false;
+            CREATE INDEX IF NOT EXISTS ""IX_Customers_IsBlacklisted"" ON ""Customers""      (""IsBlacklisted"") WHERE ""IsBlacklisted"" = true;
+            CREATE INDEX IF NOT EXISTS ""IX_Vehicles_Status""         ON ""Vehicles""       (""Status"");
+            CREATE INDEX IF NOT EXISTS ""IX_Vehicles_PlateNumber""    ON ""Vehicles""       (""PlateNumber"");
+            CREATE INDEX IF NOT EXISTS ""IX_Vehicles_IsDeleted""      ON ""Vehicles""       (""IsDeleted"") WHERE ""IsDeleted"" = false;
+            CREATE INDEX IF NOT EXISTS ""IX_Vehicles_Brand_Model_Year"" ON ""Vehicles""     (""Brand"", ""Model"", ""Year"");
+            CREATE INDEX IF NOT EXISTS ""IX_Installments_DueDate_Status"" ON ""Installments"" (""DueDate"", ""Status"");
+            CREATE INDEX IF NOT EXISTS ""IX_Installments_Status""     ON ""Installments""   (""Status"");
+            CREATE INDEX IF NOT EXISTS ""IX_Payments_CreatedAt""      ON ""Payments""       (""CreatedAt"");
+            CREATE INDEX IF NOT EXISTS ""IX_SalesContracts_SaleDate"" ON ""SalesContracts"" (""SaleDate"");
+            CREATE INDEX IF NOT EXISTS ""IX_Employees_IsDeleted""     ON ""Employees""      (""IsDeleted"") WHERE ""IsDeleted"" = false;
+            CREATE INDEX IF NOT EXISTS ""IX_Suppliers_IsDeleted""     ON ""Suppliers""      (""IsDeleted"") WHERE ""IsDeleted"" = false;
+        ");
+        Log.Information("تم إنشاء فهارس الأداء بنجاح.");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "تعذر إنشاء فهارس الأداء.");
+    }
+
+    // Reporting views (vw_OverdueInstallments, vw_VehicleSummary, vw_CustomerSummary) are
+    // now owned by the AddReportingViews EF migration (applied above via MigrateAsync),
+    // not created here — see that migration for the view SQL and the TotalCost fix.
 }

@@ -33,6 +33,10 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
         public string AccountCode { get; set; } = string.Empty;
         public Guid BranchId { get; set; }
         public DateTime? CreatedAt { get; set; }
+
+        public int SalesCount { get; set; }
+        public int PurchasesCount { get; set; }
+        public int DocumentsCount { get; set; }
     }
 
     public class GetCustomersListQueryHandler : IRequestHandler<GetCustomersListQuery, List<CustomerDto>>
@@ -46,7 +50,18 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
 
         public async Task<List<CustomerDto>> Handle(GetCustomersListQuery request, CancellationToken cancellationToken)
         {
-            return await _context.Customers
+            var salesCounts = await _context.SalesContracts
+                .Where(s => s.Status != "Cancelled")
+                .GroupBy(s => s.CustomerId)
+                .Select(g => new { CustomerId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.CustomerId, x => x.Count, cancellationToken);
+
+            var docCounts = await _context.CustomerDocuments
+                .GroupBy(d => d.CustomerId)
+                .Select(g => new { CustomerId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.CustomerId, x => x.Count, cancellationToken);
+
+            var customers = await _context.Customers
                 .Include(c => c.Account)
                 .Select(c => new CustomerDto
                 {
@@ -70,6 +85,15 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                     CreatedAt = c.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            foreach (var c in customers)
+            {
+                c.SalesCount = salesCounts.TryGetValue(c.Id, out var sCount) ? sCount : 0;
+                c.DocumentsCount = docCounts.TryGetValue(c.Id, out var dCount) ? dCount : 0;
+                c.PurchasesCount = 0;
+            }
+
+            return customers;
         }
     }
 }

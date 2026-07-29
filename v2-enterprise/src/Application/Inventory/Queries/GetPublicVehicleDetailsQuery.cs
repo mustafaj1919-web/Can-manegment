@@ -39,7 +39,7 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
                 .AsNoTracking()
                 .Include(item => item.Images)
                 .FirstOrDefaultAsync(
-                    item => item.Id == request.VehicleId && !item.IsSold && item.Status == "Available",
+                    item => item.Id == request.VehicleId && !item.IsDeleted && !item.IsSold && item.Status == "Available",
                     cancellationToken);
 
             if (vehicle is null)

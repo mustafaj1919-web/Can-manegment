@@ -41,6 +41,20 @@ namespace CarShowroomManagementV2.Application.Common.Interfaces
         DbSet<AppUser> AppUsers { get; }
         DbSet<Conversation> Conversations { get; }
         DbSet<Message> Messages { get; }
+        DbSet<VehicleStatusHistory> VehicleStatusHistories { get; }
+        DbSet<VehicleCostAccountMapping> VehicleCostAccountMappings { get; }
+        
+        // CMS entities
+        DbSet<WebsiteSetting> WebsiteSettings { get; }
+        DbSet<WebsiteArticle> WebsiteArticles { get; }
+        DbSet<WebsiteService> WebsiteServices { get; }
+        DbSet<WebsiteTestimonial> WebsiteTestimonials { get; }
+        DbSet<WebsitePage> WebsitePages { get; }
+        DbSet<WebsiteMedia> WebsiteMedias { get; }
+
+        // Document Control & Idempotency
+        DbSet<IdempotencyRecord> IdempotencyRecords { get; }
+        DbSet<ReceiptArchiveRecord> ReceiptArchiveRecords { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

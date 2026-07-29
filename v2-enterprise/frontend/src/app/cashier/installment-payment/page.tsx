@@ -74,18 +74,25 @@ export default function InstallmentPaymentPage() {
       payInstallmentSchedule(scheduleId, payload),
     onSuccess: (res) => {
       toast.success('تم تسجيل دفعة السداد وتوليد السند المحاسبي بنجاح')
-      
-      // Open print modal
+
+      // Raw shape consumed by adaptInstallmentReceiptData (mirrors the same mapping
+      // already proven in InstallmentPaymentWorkflow.tsx's receipt step) so the cashier
+      // "collect installment" flow prints the same official A5 receipt as the
+      // installment-detail payment workflow, not the old generic 80mm cash voucher.
       setPrintData({
-        id: res.schedule_id,
-        paymentId: res.schedule_id,
-        buyer_name: planDetail?.buyer_name,
-        amount: res.paid_amount,
-        payment_method: paymentMethod,
-        payment_date: new Date(),
-        notes: notes || `سداد قسط عقد بيع سيارة ${planDetail?.car_name ?? ''}`,
-        plan_remaining: res.plan_remaining,
-        currency: 'IQD',
+        payment: {
+          id: res.schedule_id,
+          amount: res.paid_amount,
+          currency: 'IQD',
+          payment_method: paymentMethod,
+          payment_date: new Date().toISOString(),
+          notes: notes || `سداد قسط عقد بيع سيارة ${planDetail?.car_name ?? ''}`,
+        },
+        schedule: selectedSchedule,
+        plan: planDetail,
+        customer: { name: planDetail?.buyer_name, phone: planDetail?.buyer_phone },
+        car: { name: planDetail?.car_name },
+        branch_name: planDetail?.branch?.name,
       })
       setShowPrintModal(true)
 
@@ -395,7 +402,7 @@ export default function InstallmentPaymentPage() {
       <PrintReceiptModal
         open={showPrintModal}
         onOpenChange={setShowPrintModal}
-        type="payment"
+        type="installment-payment-a5"
         data={printData}
       />
     </div>

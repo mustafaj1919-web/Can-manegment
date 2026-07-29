@@ -40,5 +40,6 @@ namespace CarShowroomManagementV2.Domain.Entities
         // علاقات التنقل
         public virtual ICollection<VehicleImage> Images { get; set; } = new List<VehicleImage>();
         public virtual ICollection<VehicleCost> DetailedCosts { get; set; } = new List<VehicleCost>();
+        public virtual ICollection<VehicleStatusHistory> StatusHistory { get; set; } = new List<VehicleStatusHistory>();
     }
 }

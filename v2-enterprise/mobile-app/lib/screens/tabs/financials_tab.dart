@@ -9,9 +9,9 @@ class FinancialsTab extends StatelessWidget {
   final dynamic apiService;
 
   const FinancialsTab({
-    Key? key,
+    super.key,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   String _formatPrice(double value) {
     final formatter = NumberFormat('#,###');
@@ -23,10 +23,20 @@ class FinancialsTab extends StatelessWidget {
     try {
       final date = DateTime.parse(dateStr);
       final months = [
-        'كانون', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-        'تموز', 'آب', 'أيلول', 'تشرين', 'تشرين', 'كانون'
+        'كانون الثاني',
+        'شباط',
+        'آذار',
+        'نيسان',
+        'أيار',
+        'حزيران',
+        'تموز',
+        'آب',
+        'أيلول',
+        'تشرين الأول',
+        'تشرين الثاني',
+        'كانون الأول'
       ];
-      return '${months[date.month - 1]} ${date.day}';
+      return '${date.day} ${months[date.month - 1]}';
     } catch (_) {
       return '';
     }
@@ -55,7 +65,9 @@ class FinancialsTab extends StatelessWidget {
               shape: BoxShape.circle,
               color: isActive ? const Color(0xFF1E293B) : Colors.white,
               border: Border.all(
-                color: isActive ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                color: isActive
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0),
                 width: 1.5,
               ),
             ),
@@ -98,7 +110,7 @@ class FinancialsTab extends StatelessWidget {
               ),
             ),
           ),
-          Container(
+          SizedBox(
             width: 24,
             child: Stack(
               alignment: Alignment.topCenter,
@@ -146,7 +158,9 @@ class FinancialsTab extends StatelessWidget {
     required InstallmentsProvider provider,
   }) {
     return GestureDetector(
-      onTap: isPaid ? null : () => _showSettlePaymentSheet(context, inst, provider),
+      onTap: isPaid
+          ? null
+          : () => _showSettlePaymentSheet(context, inst, provider),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -154,7 +168,7 @@ class FinancialsTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -167,7 +181,9 @@ class FinancialsTab extends StatelessWidget {
               height: 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isPaid ? const Color(0xFF10B981).withOpacity(0.15) : Colors.white24,
+                color: isPaid
+                    ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                    : Colors.white24,
               ),
               child: Icon(
                 isPaid ? LucideIcons.circle_check : LucideIcons.credit_card,
@@ -191,9 +207,15 @@ class FinancialsTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isPaid ? 'تم السداد بنجاح 🎉' : (isOverdue ? 'قسط متأخر ⚠️' : 'بانتظار التسديد (اضغط للدفع)'),
+                    isPaid
+                        ? 'تم السداد بنجاح 🎉'
+                        : (isOverdue
+                            ? 'قسط متأخر ⚠️'
+                            : 'بانتظار التسديد (اضغط للدفع)'),
                     style: TextStyle(
-                      color: isPaid ? const Color(0xFF10B981) : (isOverdue ? Colors.red.shade400 : Colors.white70),
+                      color: isPaid
+                          ? const Color(0xFF10B981)
+                          : (isOverdue ? Colors.red.shade400 : Colors.white70),
                       fontSize: 10,
                       fontFamily: 'Cairo',
                     ),
@@ -233,10 +255,10 @@ class FinancialsTab extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.6),
+        color: Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF94A3B8).withOpacity(0.5),
+          color: const Color(0xFF94A3B8).withValues(alpha: 0.5),
           width: 1.5,
         ),
       ),
@@ -279,7 +301,8 @@ class FinancialsTab extends StatelessWidget {
     );
   }
 
-  void _showSettlePaymentSheet(BuildContext context, Map<String, dynamic> installment, InstallmentsProvider provider) {
+  void _showSettlePaymentSheet(BuildContext context,
+      Map<String, dynamic> installment, InstallmentsProvider provider) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -300,7 +323,8 @@ class FinancialsTab extends StatelessWidget {
     return Consumer<InstallmentsProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && !provider.isLoaded) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary));
         }
 
         final installments = provider.installmentsList;
@@ -320,8 +344,18 @@ class FinancialsTab extends StatelessWidget {
           try {
             final date = DateTime.parse(nextUnpaid['due_date']);
             final months = [
-              'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
-              'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
+              'كانون الثاني',
+              'شباط',
+              'آذار',
+              'نيسان',
+              'أيار',
+              'حزيران',
+              'تموز',
+              'آب',
+              'أيلول',
+              'تشرين الأول',
+              'تشرين الثاني',
+              'كانون الأول'
             ];
             activeMonthYear = '${months[date.month - 1]} ${date.year}';
           } catch (_) {}
@@ -332,8 +366,16 @@ class FinancialsTab extends StatelessWidget {
           final baseDate = nextUnpaid != null && nextUnpaid['due_date'] != null
               ? DateTime.parse(nextUnpaid['due_date'])
               : DateTime.now();
-          final daysOfWeekArabic = ['اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت', 'أحد'];
-          
+          final daysOfWeekArabic = [
+            'اثنين',
+            'ثلاثاء',
+            'أربعاء',
+            'خميس',
+            'جمعة',
+            'سبت',
+            'أحد'
+          ];
+
           for (int i = -3; i <= 3; i++) {
             final date = baseDate.add(Duration(days: i));
             final dayName = daysOfWeekArabic[date.weekday - 1];
@@ -343,13 +385,13 @@ class FinancialsTab extends StatelessWidget {
           }
         } catch (_) {
           weekCircles = [
-            _buildWeekDayCircle('أحد', '15', false),
-            _buildWeekDayCircle('سبت', '14', false),
-            _buildWeekDayCircle('جمعة', '13', false),
-            _buildWeekDayCircle('خميس', '12', true),
-            _buildWeekDayCircle('أربعاء', '11', false),
-            _buildWeekDayCircle('ثلاثاء', '10', false),
             _buildWeekDayCircle('اثنين', '9', false),
+            _buildWeekDayCircle('ثلاثاء', '10', false),
+            _buildWeekDayCircle('أربعاء', '11', false),
+            _buildWeekDayCircle('خميس', '12', true),
+            _buildWeekDayCircle('جمعة', '13', false),
+            _buildWeekDayCircle('سبت', '14', false),
+            _buildWeekDayCircle('أحد', '15', false),
           ];
         }
 
@@ -358,7 +400,8 @@ class FinancialsTab extends StatelessWidget {
           color: const Color(0xFF2563EB),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(left: 20, right: 20, top: 24, bottom: 120),
+            padding: const EdgeInsets.only(
+                left: 20, right: 20, top: 24, bottom: 120),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -367,9 +410,11 @@ class FinancialsTab extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(LucideIcons.chevron_left, color: Colors.grey.shade700, size: 22),
+                        Icon(LucideIcons.chevron_left,
+                            color: Colors.grey.shade700, size: 22),
                         const SizedBox(width: 16),
-                        Icon(LucideIcons.chevron_right, color: Colors.grey.shade700, size: 22),
+                        Icon(LucideIcons.chevron_right,
+                            color: Colors.grey.shade700, size: 22),
                       ],
                     ),
                     const Text(
@@ -407,7 +452,8 @@ class FinancialsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(32),
@@ -437,7 +483,9 @@ class FinancialsTab extends StatelessWidget {
                             padding: EdgeInsets.symmetric(vertical: 40),
                             child: Text(
                               'لا توجد أقساط مسجلة على هذا العقد',
-                              style: TextStyle(color: Color(0xFF64748B), fontFamily: 'Cairo'),
+                              style: TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontFamily: 'Cairo'),
                             ),
                           ),
                         )
@@ -457,10 +505,14 @@ class FinancialsTab extends StatelessWidget {
                             }
 
                             final inst = installments[index];
-                            final isPaid = inst['status'] == 'Paid' || inst['status'] == 'paid';
-                            final isOverdue = inst['status'] == 'Overdue' || inst['status'] == 'overdue';
-                            final double instAmount = (inst['amount'] as num?)?.toDouble() ?? 0.0;
-                            final String dateLabel = _getTimelineDateArabic(inst['due_date']);
+                            final isPaid = inst['status'] == 'Paid' ||
+                                inst['status'] == 'paid';
+                            final isOverdue = inst['status'] == 'Overdue' ||
+                                inst['status'] == 'overdue';
+                            final double instAmount =
+                                (inst['amount'] as num?)?.toDouble() ?? 0.0;
+                            final String dateLabel =
+                                _getTimelineDateArabic(inst['due_date']);
 
                             return _buildTimelineItem(
                               dateLabel: dateLabel,
@@ -494,10 +546,10 @@ class SettlePaymentSheet extends StatefulWidget {
   final Function(int installmentNumber, double amount) onPaymentSuccess;
 
   const SettlePaymentSheet({
-    Key? key,
+    super.key,
     required this.installment,
     required this.onPaymentSuccess,
-  }) : super(key: key);
+  });
 
   @override
   State<SettlePaymentSheet> createState() => _SettlePaymentSheetState();
@@ -514,7 +566,8 @@ class _SettlePaymentSheetState extends State<SettlePaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final double amount = (widget.installment['amount'] as num?)?.toDouble() ?? 0.0;
+    final double amount =
+        (widget.installment['amount'] as num?)?.toDouble() ?? 0.0;
     final int number = widget.installment['installment_number'] ?? 0;
 
     return Container(
@@ -798,35 +851,41 @@ class _SettlePaymentSheetState extends State<SettlePaymentSheet> {
           color: isSelected ? const Color(0xFFF1F5F9) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+            color:
+                isSelected ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
             width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           children: [
-            Icon(
-              isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-              color: isSelected ? const Color(0xFF1E293B) : Colors.grey.shade400,
-              size: 20,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 18),
             ),
-            const Spacer(),
+            const SizedBox(width: 12),
             Text(
               title,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? const Color(0xFF1E293B) : const Color(0xFF475569),
+                color: isSelected
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFF475569),
                 fontFamily: 'Cairo',
               ),
             ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 18),
+            const Spacer(),
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color:
+                  isSelected ? const Color(0xFF1E293B) : Colors.grey.shade400,
+              size: 20,
             ),
           ],
         ),

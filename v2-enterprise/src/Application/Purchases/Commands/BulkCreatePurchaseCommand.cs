@@ -141,16 +141,14 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 // If fully paid immediately → use chosen method; otherwise → Cheque (credit/payable to supplier)
                 var effectiveMethod = paidAmount >= purchaseCost ? request.PaymentMethod : PaymentMethod.Cheque;
 
-                // لأقساط: حساب الدفع الفوري (نقد/بنك)
+                // لأقساط: حساب الدفع الفوري (نقد/بنك فقط — Cheque = آجل، لا دفع فوري)
                 Guid? cashOrBankAccountId = null;
-                string cashOrBankDesc = "";
                 if (request.PaymentMethod == PaymentMethod.Cash)
                 {
                     var cashAccount = await _context.Accounts.IgnoreQueryFilters()
                         .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId, cancellationToken);
                     if (cashAccount == null) throw new InvalidOperationException("حساب صندوق النقدية (111001) غير موجود.");
                     cashOrBankAccountId = cashAccount.Id;
-                    cashOrBankDesc = "صندوق النقدية";
                 }
                 else if (request.PaymentMethod == PaymentMethod.Bank)
                 {
@@ -158,8 +156,10 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         .FirstOrDefaultAsync(a => a.AccountCode == "112001" && a.BranchId == branchId, cancellationToken);
                     if (bankAccount == null) throw new InvalidOperationException("حساب البنك (112001) غير موجود.");
                     cashOrBankAccountId = bankAccount.Id;
-                    cashOrBankDesc = "البنك";
                 }
+
+                // AmountPaid يُسجَّل فقط إذا تم دفع نقدي/بنكي فعلي (Cheque = آجل → 0)
+                var actualAmountPaid = (hasImmediatePayment && cashOrBankAccountId.HasValue) ? paidAmount : 0m;
 
                 foreach (var vin in request.ChassisNumbers)
                 {
@@ -229,7 +229,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         SupplierId = supplier.Id,
                         VehicleId = vehicle.Id,
                         PurchaseCost = purchaseCost,
-                        AmountPaid = paidAmount,
+                        AmountPaid = actualAmountPaid,
                         PaymentMethod = effectiveMethod,
                         Status = "Active",
                         BranchId = branchId
@@ -296,6 +296,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                             Type = PaymentType.Payment,
                             Method = request.PaymentMethod,
                             Amount = paidAmount,
+                            Currency = vehicle.Currency,
                             ReferenceNumber = payRefNumber,
                             Description = $"دفعة أولى لشراء {request.Model} من المورد {supplier.Name} - شاصي: {vin}",
                             AccountId = cashOrBankAccountId.Value,

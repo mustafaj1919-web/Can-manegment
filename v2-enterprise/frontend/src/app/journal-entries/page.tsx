@@ -1,685 +1,239 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  AlertCircle, BookOpen, Calendar, ChevronDown, ChevronUp,
-  Download, Filter, RefreshCw, Search, X, RotateCcw, Plus, Check, Loader2,
-} from 'lucide-react'
-import { formatMoney } from '@/lib/utils'
-import {
-  getJournalEntries, reverseJournalEntry, getChartOfAccounts, createJournalEntry,
-  type JournalEntryItem, type ChartAccountNode, type AccountClassification
-} from '@/lib/api/accounting'
-import { getExchangeRate } from '@/lib/api/exchange-rate'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { Skeleton } from '@/components/ui/skeleton'
+import { getJournalEntries, reverseJournalEntry, getChartOfAccounts, JournalEntryItem } from '@/lib/api/accounting'
 import { exportXlsx } from '@/lib/export'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
-const REF_TYPE_OPTS = [
-  { value: 'all',      label: 'كل أنواع العمليات' },
-  { value: 'sale',     label: 'بيع' },
-  { value: 'purchase', label: 'شراء' },
-  { value: 'payment',  label: 'دفعة' },
-  { value: 'expense',  label: 'مصروف' },
-  { value: 'income',   label: 'إيراد' },
-]
-
-const REF_LABELS: Record<string, string> = {
-  sale: 'بيع', purchase: 'شراء', payment: 'دفعة',
-  expense: 'مصروف', income: 'إيراد',
-}
-
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  posted:   { label: 'منشور',  cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  draft:    { label: 'مسودة',  cls: 'bg-slate-500/10  text-muted-foreground  border-slate-500/20'  },
-  reversed: { label: 'معكوس', cls: 'bg-rose-500/10   text-rose-400   border-rose-500/20'   },
-}
-
-function hasFilters(search: string, refType: string, dateFrom: string, dateTo: string, accountCode: string) {
-  return search || refType !== 'all' || dateFrom || dateTo || accountCode
-}
+import { JournalEntriesPageHeader } from '@/components/accounting/journal-entries/JournalEntriesPageHeader'
+import { JournalEntriesSummaryStrip } from '@/components/accounting/journal-entries/JournalEntriesSummaryStrip'
+import { JournalEntriesToolbar, TableDensity } from '@/components/accounting/journal-entries/JournalEntriesToolbar'
+import { JournalEntriesTable } from '@/components/accounting/journal-entries/JournalEntriesTable'
+import { JournalEntriesDrawer } from '@/components/accounting/journal-entries/JournalEntriesDrawer'
+import { NewJournalEntryModal } from '@/components/accounting/journal-entries/NewJournalEntryModal'
 
 export default function JournalEntriesPage() {
-  const [search,      setSearch]      = useState('')
-  const [refType,     setRefType]     = useState('all')
-  const [dateFrom,    setDateFrom]    = useState('')
-  const [dateTo,      setDateTo]      = useState('')
-  const [accountCode, setAccountCode] = useState('')
-  const [page,        setPage]        = useState(1)
-  const [expanded,    setExpanded]    = useState<Set<number>>(new Set())
-  const [exporting,   setExporting]   = useState(false)
-  const [reversing,   setReversing]   = useState<number | null>(null)
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const perPage = 30
+  // State Declarations
+  const [searchQuery, setSearchQuery] = useState('')
+  const [refTypeFilter, setRefTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(30)
 
-  const qc = useQueryClient()
+  const [density, setDensity] = useState<TableDensity>('standard')
+  const [columnsVisibility, setColumnsVisibility] = useState<Record<string, boolean>>({
+    ref_type: true,
+    lines_count: true,
+    status: true,
+  })
 
-  const params = {
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntryItem | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [newModalOpen, setNewModalOpen] = useState(false)
+  const [lastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('ar-IQ'))
+
+  const queryClient = useQueryClient()
+
+  // Query Params
+  const params = useMemo(() => ({
     page,
-    per_page:     perPage,
-    search:       search.trim()       || undefined,
-    ref_type:     refType !== 'all'   ? refType     : undefined,
-    date_from:    dateFrom            || undefined,
-    date_to:      dateTo              || undefined,
-    account_code: accountCode.trim()  || undefined,
-  }
+    per_page: perPage,
+    search: searchQuery.trim() || undefined,
+    ref_type: refTypeFilter !== 'all' ? refTypeFilter : undefined,
+    date_from: startDate || undefined,
+    date_to: endDate || undefined,
+  }), [page, perPage, searchQuery, refTypeFilter, startDate, endDate])
 
+  // Data Queries
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['journal-entries', params],
-    queryFn:  () => getJournalEntries(params),
+    queryFn: () => getJournalEntries(params),
     staleTime: 30_000,
-    retry: 1,
   })
 
-  const reverseMutation = useMutation({
-    mutationFn: (id: number) => reverseJournalEntry(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['journal-entries'] })
-      setReversing(null)
-    },
-    onError: (err: any) => {
-      alert(err?.response?.data?.error ?? 'حدث خطأ أثناء عكس القيد')
-      setReversing(null)
-    },
-  })
-
-  const items      = data?.items ?? []
-  const total      = data?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const activeFilters = hasFilters(search, refType, dateFrom, dateTo, accountCode)
-
-  function resetFilters() {
-    setSearch(''); setRefType('all'); setDateFrom('')
-    setDateTo(''); setAccountCode(''); setPage(1)
-  }
-
-  function toggleExpand(id: number) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  function handleReverse(e: React.MouseEvent, entry: JournalEntryItem) {
-    e.stopPropagation()
-    if (reversing) return
-    if (!confirm(`هل تريد عكس القيد ${entry.reference_number ?? '#' + entry.id}؟\nسيُنشأ قيد عكسي جديد.`)) return
-    setReversing(entry.id)
-    reverseMutation.mutate(entry.id)
-  }
-
-  const handleExport = useCallback(async () => {
-    setExporting(true)
-    try {
-      const all = await getJournalEntries({ ...params, page: 1, per_page: 2000 })
-      const headers = ['رقم القيد', 'الرقم المرجعي', 'الحالة', 'التاريخ', 'الوصف', 'نوع العملية', 'عدد السطور', 'إجمالي مدين', 'إجمالي دائن', 'متوازن']
-      const rows = all.items.map((e: JournalEntryItem) => [
-        e.id,
-        e.reference_number ?? '',
-        e.status ?? 'posted',
-        e.entry_date ?? '',
-        e.description ?? '',
-        REF_LABELS[e.reference_type ?? ''] ?? (e.reference_type ?? ''),
-        e.line_count,
-        e.total_debit,
-        e.total_credit,
-        e.is_balanced ? 'نعم' : 'لا',
-      ])
-      await exportXlsx('القيود-اليومية', headers, rows)
-    } finally {
-      setExporting(false)
-    }
-  }, [params])
-
-  return (
-    <div className="space-y-5" dir="rtl">
-
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10">
-            <BookOpen className="h-5 w-5 text-indigo-300" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">القيود اليومية</h1>
-            <p className="text-xs text-muted-foreground">
-              {isLoading ? 'جاري التحميل...' : `${total.toLocaleString('ar-EG')} قيد`}
-              {activeFilters && <span className="text-indigo-400"> (مفلترة)</span>}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-            <RefreshCw className="h-3.5 w-3.5" />تحديث
-          </Button>
-          <Button variant="outline" size="sm"
-            onClick={handleExport} disabled={exporting || isLoading || total === 0}
-            className="h-9 gap-2 border-border/50 bg-secondary/30 text-xs hover:bg-secondary/40">
-            <Download className="h-3.5 w-3.5" />
-            {exporting ? 'جاري التصدير...' : 'تصدير Excel'}
-          </Button>
-          <Button size="sm" onClick={() => setShowAddDialog(true)}
-            className="h-9 gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold">
-            <Plus className="h-3.5 w-3.5" />
-            قيد جديد
-          </Button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="glass rounded-xl p-4 space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-            <Input
-              placeholder="بحث في الوصف..."
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
-              className="ps-9 bg-secondary/30 border-border/50 h-9 text-sm"
-            />
-          </div>
-          <Select value={refType} onValueChange={v => { setRefType(v); setPage(1) }}>
-            <SelectTrigger className="w-[180px] h-9 bg-secondary/30 border-border/50 text-sm">
-              <Filter className="h-3.5 w-3.5 me-1.5 shrink-0 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {REF_TYPE_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <div className="relative w-[150px]">
-            <Input
-              placeholder="رمز حساب (مثل 111001)"
-              value={accountCode}
-              onChange={e => { setAccountCode(e.target.value); setPage(1) }}
-              className="bg-secondary/30 border-border/50 h-9 text-sm font-mono"
-              maxLength={6}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="flex items-center gap-2 flex-1">
-            <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground whitespace-nowrap">من:</span>
-            <Input type="date" value={dateFrom}
-              onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-              className="h-8 bg-secondary/30 border-border/50 text-xs flex-1 min-w-[130px]" />
-          </div>
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">إلى:</span>
-            <Input type="date" value={dateTo}
-              onChange={e => { setDateTo(e.target.value); setPage(1) }}
-              className="h-8 bg-secondary/30 border-border/50 text-xs flex-1 min-w-[130px]" />
-          </div>
-          {activeFilters && (
-            <Button variant="ghost" size="sm" onClick={resetFilters}
-              className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-              <X className="h-3 w-3" />مسح الفلاتر
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => refetch()}
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-            <RefreshCw className="h-3 w-3" />تحديث
-          </Button>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className="glass overflow-hidden rounded-lg">
-        {isLoading ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 rounded-lg" />
-            ))}
-          </div>
-        ) : isError ? (
-          <div className="py-16 text-center">
-            <AlertCircle className="mx-auto mb-3 h-8 w-8 text-rose-400/60" />
-            <p className="text-sm text-muted-foreground">تعذر تحميل القيود اليومية</p>
-            <Button variant="ghost" size="sm" onClick={() => refetch()} className="mt-3 text-xs">إعادة المحاولة</Button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="py-16 text-center">
-            <BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground/25" />
-            <p className="font-medium text-foreground/70">
-              {activeFilters ? 'لا توجد قيود تطابق الفلترة' : 'لا توجد قيود يومية'}
-            </p>
-            <p className="text-xs text-muted-foreground/50 mt-1">
-              {activeFilters ? 'جرّب تغيير معايير البحث أو مسح الفلاتر' : 'القيود تُنشأ تلقائياً عند تسجيل العمليات'}
-            </p>
-            {activeFilters && (
-              <Button variant="ghost" size="sm" onClick={resetFilters} className="mt-3 text-xs gap-1.5">
-                <X className="h-3 w-3" />مسح الفلاتر
-              </Button>
-            )}
-          </div>
-        ) : (
-          <>
-            {/* Table header */}
-            <div className="hidden sm:grid grid-cols-[90px_100px_80px_1fr_90px_100px_100px_60px] border-b border-border/50 bg-secondary/10 px-4 py-2.5">
-              {['المرجع', 'التاريخ', 'الحالة', 'الوصف', 'نوع العملية', 'مدين', 'دائن', ''].map(h => (
-                <span key={h} className="text-[10px] font-medium text-muted-foreground">{h}</span>
-              ))}
-            </div>
-
-            {items.map((entry, i) => {
-              const badge = STATUS_BADGE[entry.status ?? 'posted'] ?? STATUS_BADGE.posted
-              const canReverse = (entry.status ?? 'posted') === 'posted' && !entry.reversal_of_id
-              return (
-                <motion.div key={entry.id}
-                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.02 }}
-                  className="border-b border-border/20 last:border-0">
-
-                  <div
-                    className="grid grid-cols-[1fr_auto] sm:grid-cols-[90px_100px_80px_1fr_90px_100px_100px_60px] items-center gap-2 px-4 py-3 hover:bg-secondary/10 cursor-pointer"
-                    onClick={() => toggleExpand(entry.id)}
-                  >
-                    <span className="font-mono text-xs text-indigo-300/80">{entry.reference_number ?? `#${entry.id}`}</span>
-                    <span className="hidden sm:block text-xs text-muted-foreground">{entry.entry_date ?? '—'}</span>
-                    <span className="hidden sm:flex">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    </span>
-                    <span className="text-xs text-foreground/90 truncate">{entry.description ?? '—'}</span>
-                    <span className="hidden sm:block">
-                      {entry.reference_type ? (
-                        <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] text-indigo-300">
-                          {REF_LABELS[entry.reference_type] ?? entry.reference_type}
-                        </span>
-                      ) : <span className="text-[10px] text-muted-foreground/40">—</span>}
-                    </span>
-                    <span className="hidden sm:block font-numeric text-xs text-emerald-400">{formatMoney(entry.total_debit, 'IQD')}</span>
-                    <span className="hidden sm:block font-numeric text-xs text-rose-400">{formatMoney(entry.total_credit, 'IQD')}</span>
-                    <div className="flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()}>
-                      {!entry.is_balanced && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="غير متوازن" />
-                      )}
-                      {canReverse && (
-                        <button
-                          onClick={e => handleReverse(e, entry)}
-                          disabled={reversing === entry.id}
-                          title="عكس القيد"
-                          className="p-1 rounded-md text-muted-foreground/50 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-40"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                        </button>
-                      )}
-                      <button onClick={e => { e.stopPropagation(); toggleExpand(entry.id) }}>
-                        {expanded.has(entry.id)
-                          ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                          : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expanded lines */}
-                  <AnimatePresence initial={false}>
-                    {expanded.has(entry.id) && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.18 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="bg-secondary/30 border-t border-border/30 px-6 pb-3 pt-2">
-                          <div className="grid grid-cols-[120px_1fr_100px_100px] text-[10px] text-muted-foreground mb-1.5 px-1">
-                            <span>رمز الحساب</span><span>اسم الحساب</span>
-                            <span className="text-end">مدين</span><span className="text-end">دائن</span>
-                          </div>
-                          {entry.lines.map((line, li) => (
-                            <div key={li} className="grid grid-cols-[120px_1fr_100px_100px] items-center py-1 px-1 rounded hover:bg-secondary/20 text-xs">
-                              <span className="font-numeric text-cyan-300 text-[11px]">{line.account_code ?? '—'}</span>
-                              <span className="text-foreground/80 truncate">{line.account_name ?? '—'}</span>
-                              <span className="font-numeric text-end text-emerald-400/80">
-                                {line.debit > 0 ? formatMoney(line.debit, 'IQD') : '—'}
-                              </span>
-                              <span className="font-numeric text-end text-rose-400/80">
-                                {line.credit > 0 ? formatMoney(line.credit, 'IQD') : '—'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              )
-            })}
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-border/50 px-5 py-3">
-                <span className="text-xs text-muted-foreground">صفحة {page} من {totalPages} · {total.toLocaleString('ar-EG')} قيد</span>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>السابق</Button>
-                  <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>التالي</Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <AnimatePresence>
-        {showAddDialog && (
-          <AddJournalEntryDialog
-            onClose={() => setShowAddDialog(false)}
-            onSuccess={() => {
-              setShowAddDialog(false)
-              refetch()
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-    </div>
-  )
-}
-
-/* ─── Add Journal Entry Dialog ─────────────────────────────────────────── */
-
-interface JournalLineInput {
-  accountId: string
-  debit: string
-  credit: string
-  description: string
-  currency: string
-  exchangeRate: string
-}
-
-import { AccountCombobox } from '@/components/ui/AccountCombobox'
-
-function flatLeafAccounts(nodes: ChartAccountNode[]): ChartAccountNode[] {
-  const result: ChartAccountNode[] = []
-  function walk(n: ChartAccountNode) {
-    if (!n.children || n.children.length === 0) result.push(n)
-    else n.children.forEach(walk)
-  }
-  nodes.forEach(walk)
-  return result
-}
-
-function AddJournalEntryDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
-  const [description, setDescription] = useState('')
-  const [lines, setLines] = useState<JournalLineInput[]>([
-    { accountId: '', debit: '', credit: '', description: '', currency: 'IQD', exchangeRate: '1500' },
-    { accountId: '', debit: '', credit: '', description: '', currency: 'IQD', exchangeRate: '1500' },
-  ])
-
-  const { data: rateData } = useQuery({
-    queryKey: ['exchange-rate-je-flat'],
-    queryFn: getExchangeRate,
+  const coaQuery = useQuery({
+    queryKey: ['chart-of-accounts'],
+    queryFn: () => getChartOfAccounts(),
     staleTime: 60_000,
   })
 
-  const currentSystemRate = rateData?.rate ? String(rateData.rate) : '1500'
-
-  const { data: coaData } = useQuery({
-    queryKey: ['chart-of-accounts-flat'],
-    queryFn: getChartOfAccounts,
-    staleTime: 300_000,
-  })
-
-  const leafAccounts = coaData ? flatLeafAccounts(coaData.items) : []
-
-  const mutation = useMutation({
-    mutationFn: createJournalEntry,
+  // Reverse Entry Mutation
+  const reverseMutation = useMutation({
+    mutationFn: (item: JournalEntryItem) => reverseJournalEntry(Number(item.id)),
     onSuccess: () => {
-      toast.success('تم تسجيل وترحيل القيد المحاسبي بنجاح!')
-      onSuccess()
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] })
+      queryClient.invalidateQueries({ queryKey: ['chart-of-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['general-ledger'] })
+      queryClient.invalidateQueries({ queryKey: ['trial-balance'] })
+      toast.success('تمت عملية عكس القيد المحاسبي بنجاح وترحيل القيد العكسي')
+      setDrawerOpen(false)
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.message ?? 'حدث خطأ أثناء حفظ القيد المحاسبي.')
-    }
+      toast.error(err?.response?.data?.message || err?.message || 'تعذر عكس القيد المحاسبي')
+    },
   })
 
-  const addLine = () => {
-    setLines(prev => [...prev, { accountId: '', debit: '', credit: '', description: '', currency: 'IQD', exchangeRate: currentSystemRate }])
+  const items = data?.items ?? []
+  const totalEntries = data?.total ?? items.length
+
+  // Calculate Aggregates
+  const draftEntries = items.filter(i => i.status === 'draft').length
+  const postedEntries = items.filter(i => i.status === 'posted').length
+  const reversedEntries = items.filter(i => i.status === 'reversed').length
+  const totalDebit = items.reduce((s, i) => s + (i.total_debit || 0), 0)
+  const totalCredit = items.reduce((s, i) => s + (i.total_credit || 0), 0)
+
+  const accountsList = (coaQuery.data?.flat || []).map(a => ({ code: a.code, name: a.name, id: (a as any).id || a.code }))
+
+  // Active Filter Count
+  const activeFilterCount = (refTypeFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (startDate ? 1 : 0) +
+    (endDate ? 1 : 0) +
+    (searchQuery.trim() ? 1 : 0)
+
+  const handleResetFilters = () => {
+    setSearchQuery('')
+    setRefTypeFilter('all')
+    setStatusFilter('all')
+    setStartDate('')
+    setEndDate('')
+    setPage(1)
   }
 
-  const removeLine = (idx: number) => {
-    if (lines.length <= 2) return
-    setLines(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const updateLine = (idx: number, field: keyof JournalLineInput, val: string) => {
-    setLines(prev => prev.map((l, i) => {
-      if (i !== idx) return l
-      const updated = { ...l, [field]: val }
-      if (field === 'debit' && val !== '') updated.credit = ''
-      if (field === 'credit' && val !== '') updated.debit = ''
-      if (field === 'currency' && val === 'USD') updated.exchangeRate = currentSystemRate
-      return updated
+  const handleColumnVisibilityToggle = (key: string) => {
+    setColumnsVisibility(prev => ({
+      ...prev,
+      [key]: prev[key] === false ? true : false,
     }))
   }
 
-  const getIqdValue = (l: JournalLineInput) => {
-    const rateVal = l.currency === 'USD' ? (parseFloat(l.exchangeRate) || 1500) : 1.0
-    const debitVal = parseFloat(l.debit) || 0
-    const creditVal = parseFloat(l.credit) || 0
-    return {
-      debit: l.currency === 'USD' ? Math.round(debitVal * rateVal) : debitVal,
-      credit: l.currency === 'USD' ? Math.round(creditVal * rateVal) : creditVal,
+  const handleSelectRow = (item: JournalEntryItem) => {
+    setSelectedEntry(item)
+    setDrawerOpen(true)
+  }
+
+  const handleReverseEntry = (item: JournalEntryItem) => {
+    if (confirm(`هل أنت تأكد من عكس القيد المحاسبي رقم (${item.reference_number})؟`)) {
+      reverseMutation.mutate(item)
     }
   }
 
-  const totalDebit = lines.reduce((sum, l) => sum + getIqdValue(l).debit, 0)
-  const totalCredit = lines.reduce((sum, l) => sum + getIqdValue(l).credit, 0)
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 1 && totalDebit > 0
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!description.trim()) {
-      toast.error('البيان الإجمالي مطلوب')
-      return
-    }
-    if (lines.some(l => !l.accountId)) {
-      toast.error('يرجى تحديد الحساب لجميع السطور')
-      return
-    }
-    if (lines.some(l => !l.debit && !l.credit)) {
-      toast.error('كل سطر يجب أن يحتوي على قيمة مدين أو دائن')
-      return
-    }
-    if (!isBalanced) {
-      toast.error('القيد غير متوازن بالدينار: إجمالي المدين يجب أن يساوي إجمالي الدائن')
+  // Export Excel
+  const handleExportExcel = async () => {
+    if (items.length === 0) {
+      toast.error('لا توجد قيود يومية لتصديرها')
       return
     }
 
-    mutation.mutate({
-      entryDate,
-      description,
-      lines: lines.map(l => {
-        const rateVal = l.currency === 'USD' ? (parseFloat(l.exchangeRate) || 1500) : 1.0
-        const lineDebit = parseFloat(l.debit) || 0
-        const lineCredit = parseFloat(l.credit) || 0
-        const isUsd = l.currency === 'USD'
+    const headers = [
+      'التاريخ', 'رقم القيد', 'نوع القيد', 'البيان والوصف', 'المرجع',
+      'عدد البنود', 'إجمالي المدين', 'إجمالي الدائن', 'الحالة'
+    ]
 
-        const lineDesc = isUsd
-          ? (l.description ? `[$${(lineDebit || lineCredit).toLocaleString()} @ ${rateVal}] ${l.description}` : `[$${(lineDebit || lineCredit).toLocaleString()} @ ${rateVal}]`)
-          : l.description
+    const exportData = items.map(i => [
+      i.entry_date ? new Date(i.entry_date).toLocaleDateString('ar-IQ') : '—',
+      i.reference_number,
+      (i as any).ref_type || i.reference_type || 'قيد عام',
+      i.description || '',
+      (i as any).ref_id || i.reference_number || '',
+      i.lines?.length || i.line_count || 0,
+      i.total_debit,
+      i.total_credit,
+      i.status === 'posted' ? 'مرحل' : i.status === 'reversed' ? 'معكوس' : 'مسودة'
+    ])
 
-        return {
-          accountId: l.accountId,
-          debit: isUsd ? Math.round(lineDebit * rateVal) : lineDebit,
-          credit: isUsd ? Math.round(lineCredit * rateVal) : lineCredit,
-          description: lineDesc || undefined
-        }
-      })
-    })
+    await exportXlsx(`سجل_القيود_اليومية_${new Date().toISOString().split('T')[0]}`, headers, exportData)
+    toast.success('تم تصدير سجل القيود اليومية بنجاح!')
+  }
+
+  const handlePrint = () => {
+    window.print()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="glass w-full max-w-4xl rounded-xl border border-border/50 p-6 shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-bold text-foreground">إنشاء سند قيد محاسبي جديد</h3>
-          <button onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary/40"><X className="h-4 w-4" /></button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 pr-1" dir="rtl">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-xs text-muted-foreground">البيان الإجمالي للقيد *</label>
-              <Input
-                placeholder="تسجيل قيد تسوية، إثبات، استهلاك..."
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                required
-                className="h-9 bg-secondary/30 border-border/50 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">تاريخ القيد *</label>
-              <Input
-                type="date"
-                value={entryDate}
-                onChange={e => setEntryDate(e.target.value)}
-                required
-                className="h-9 bg-secondary/30 border-border/50 text-sm"
-              />
-            </div>
-          </div>
+    <div
+      data-layout="full-width"
+      className="w-full max-w-none px-4 sm:px-6 lg:px-8 py-4 space-y-4 text-right dir-rtl bg-[#F8FAFC] min-h-screen"
+      dir="rtl"
+    >
+      
+      {/* 1. Page Header */}
+      <JournalEntriesPageHeader
+        onNewEntry={() => setNewModalOpen(true)}
+        onExportExcel={handleExportExcel}
+        onExportPdf={handleExportExcel}
+        onPrint={handlePrint}
+        onRefresh={() => refetch()}
+        isRefreshing={isLoading}
+        lastSyncTime={lastSyncTime}
+      />
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-center pb-1 border-b border-border/30">
-              <span className="text-xs font-bold text-muted-foreground">بنود القيد (سطور اليومية)</span>
-              <Button type="button" variant="outline" size="sm" onClick={addLine} className="h-7 text-xs gap-1 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400">
-                <Plus className="h-3 w-3" />
-                إضافة سطر
-              </Button>
-            </div>
+      {/* 2. Summary Strip */}
+      <JournalEntriesSummaryStrip
+        totalEntries={totalEntries}
+        draftEntries={draftEntries}
+        postedEntries={postedEntries}
+        reversedEntries={reversedEntries}
+        totalDebit={totalDebit}
+        totalCredit={totalCredit}
+        isLoading={isLoading}
+      />
 
-            <div className="space-y-2.5">
-              {lines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-[1.8fr_0.8fr_0.8fr_0.9fr_0.9fr_1.5fr_auto] gap-2 items-start bg-secondary/10 p-2.5 rounded-lg border border-border/20">
-                  <div>
-                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">الحساب</label>
-                    <AccountCombobox
-                      value={line.accountId}
-                      accounts={leafAccounts.map(a => ({ code: a.code ?? '', name: a.name ?? '', id: a.accountId ?? '' }))}
-                      onChange={v => updateLine(idx, 'accountId', v)}
-                      valueKey="id"
-                    />
-                  </div>
-                  <div>
-                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">العملة</label>
-                    <Select value={line.currency} onValueChange={v => updateLine(idx, 'currency', v)}>
-                      <SelectTrigger className="h-9 bg-secondary/30 border-border/50 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="IQD">د.ع</SelectItem>
-                        <SelectItem value="USD">$ دولار</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">سعر الصرف</label>
-                    <Input
-                      type="number"
-                      placeholder="1500"
-                      disabled={line.currency === 'IQD'}
-                      value={line.currency === 'IQD' ? '1' : line.exchangeRate}
-                      onChange={e => updateLine(idx, 'exchangeRate', e.target.value)}
-                      className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">مدين</label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={line.debit}
-                      onChange={e => updateLine(idx, 'debit', e.target.value)}
-                      className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-emerald-400"
-                    />
-                    {line.currency === 'USD' && line.debit && (
-                      <span className="text-[10px] text-emerald-400/80 block mt-0.5 font-numeric text-left">
-                        ≈ {Math.round(parseFloat(line.debit) * (parseFloat(line.exchangeRate) || 1500)).toLocaleString()} د.ع
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">دائن</label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={line.credit}
-                      onChange={e => updateLine(idx, 'credit', e.target.value)}
-                      className="h-9 bg-secondary/30 border-border/50 text-xs font-numeric text-rose-400"
-                    />
-                    {line.currency === 'USD' && line.credit && (
-                      <span className="text-[10px] text-rose-400/80 block mt-0.5 font-numeric text-left">
-                        ≈ {Math.round(parseFloat(line.credit) * (parseFloat(line.exchangeRate) || 1500)).toLocaleString()} د.ع
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <label className="md:hidden text-[10px] text-muted-foreground mb-1 block">البيان الخاص للسطر (اختياري)</label>
-                    <Input
-                      placeholder="ملاحظة السطر..."
-                      value={line.description}
-                      onChange={e => updateLine(idx, 'description', e.target.value)}
-                      className="h-9 bg-secondary/30 border-border/50 text-xs"
-                    />
-                  </div>
-                  <div className="pt-0.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={lines.length <= 2}
-                      onClick={() => removeLine(idx)}
-                      className="h-8 w-8 rounded-lg hover:bg-rose-500/10 hover:text-rose-400 text-muted-foreground/60 transition-colors flex items-center justify-center"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* 3. Toolbar & Filters */}
+      <JournalEntriesToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        refTypeFilter={refTypeFilter}
+        onRefTypeChange={setRefTypeFilter}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        startDate={startDate}
+        onStartDateChange={setStartDate}
+        endDate={endDate}
+        onEndDateChange={setEndDate}
+        onResetFilters={handleResetFilters}
+        onRefresh={() => refetch()}
+        density={density}
+        onDensityChange={setDensity}
+        columnsVisibility={columnsVisibility}
+        onColumnVisibilityToggle={handleColumnVisibilityToggle}
+        activeFilterCount={activeFilterCount}
+      />
 
-          <div className="flex flex-wrap items-center justify-between p-3 rounded-lg border border-border/40 bg-secondary/20">
-            <div className="flex gap-4 text-xs font-semibold">
-              <div>
-                <span className="text-muted-foreground">إجمالي المدين (دينار): </span>
-                <span className="font-numeric text-emerald-400">{formatMoney(totalDebit, 'IQD')}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">إجمالي الدائن (دينار): </span>
-                <span className="font-numeric text-rose-400">{formatMoney(totalCredit, 'IQD')}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-bold font-numeric">
-              {isBalanced ? (
-                <span className="text-emerald-400 flex items-center gap-1"><Check className="h-4 w-4" /> القيد متوازن بالدينار</span>
-              ) : (
-                <span className="text-amber-400 flex items-center gap-1"><AlertCircle className="h-4 w-4" /> القيد غير متوازن ({formatMoney(Math.abs(totalDebit - totalCredit), 'IQD')})</span>
-              )}
-            </div>
-          </div>
+      {/* 4. Enterprise Table */}
+      <JournalEntriesTable
+        items={items}
+        onSelectRow={handleSelectRow}
+        selectedEntryId={selectedEntry?.id}
+        onReverseEntry={handleReverseEntry}
+        isReversing={reverseMutation.isPending}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        density={density}
+        columnsVisibility={columnsVisibility}
+      />
 
-          <div className="flex gap-2 pt-2">
-            <Button type="submit" disabled={mutation.isPending || !isBalanced} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white gap-2 h-9 text-sm font-bold">
-              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              ترحيل وحفظ سند القيد
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={onClose} className="border border-border/50">إلغاء</Button>
-          </div>
-        </form>
-      </motion.div>
+      {/* 5. Right-Side Drawer (540px) */}
+      <JournalEntriesDrawer
+        item={selectedEntry}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onReverse={handleReverseEntry}
+      />
+
+      {/* 6. New Journal Entry Workspace Modal */}
+      <NewJournalEntryModal
+        open={newModalOpen}
+        onClose={() => setNewModalOpen(false)}
+        onSuccess={() => refetch()}
+        accountsList={accountsList}
+      />
+
     </div>
   )
 }

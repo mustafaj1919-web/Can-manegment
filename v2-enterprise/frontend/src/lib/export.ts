@@ -46,13 +46,39 @@ export function exportCsv(
 export async function exportXlsx(
   filename: string,
   headers: string[],
-  rows: (string | number)[][]
+  rows: (string | number | boolean | Date | null | undefined)[][]
 ): Promise<void> {
   const { default: writeXlsxFile } = await import('write-excel-file/browser')
+  
   const sheetData = [
-    headers.map((h) => ({ value: h, fontWeight: 'bold' as const })),
-    ...rows.map((row) => row.map((cell) => ({ value: cell }))),
+    headers.map((h) => ({ value: h, fontWeight: 'bold' as const, type: String })),
+    ...rows.map((row) =>
+      row.map((cell) => {
+        let val: any = cell
+        if (val === null || val === undefined) {
+          val = ''
+        }
+        
+        let type: any = String
+        if (typeof val === 'number') {
+          type = Number
+        } else if (typeof val === 'boolean') {
+          type = Boolean
+        } else if (val instanceof Date) {
+          type = Date
+        } else {
+          let strVal = String(val)
+          if (/^[=+\-@]/.test(strVal)) {
+            strVal = `'` + strVal
+          }
+          val = strVal
+        }
+        
+        return { value: val, type }
+      })
+    ),
   ]
+  
   // write-excel-file uses wrapper types (String, Number) but accepts primitives at runtime.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (writeXlsxFile as any)(sheetData, { fileName: `${filename}.xlsx` })

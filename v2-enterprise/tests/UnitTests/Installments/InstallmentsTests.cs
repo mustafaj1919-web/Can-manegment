@@ -239,10 +239,10 @@ namespace CarShowroomManagementV2.UnitTests.Installments
                 DebitAccountCode = "111001"
             };
 
-            var paymentId = await payHandler.Handle(paymentCommand, CancellationToken.None);
+            var result = await payHandler.Handle(paymentCommand, CancellationToken.None);
 
             // Assert
-            paymentId.Should().NotBeEmpty();
+            result.PaymentId.Should().NotBeEmpty();
 
             // 1. التحقق من حالة القسط
             var dbInstallment = await context.Installments.FindAsync(installment.Id);
@@ -255,7 +255,7 @@ namespace CarShowroomManagementV2.UnitTests.Installments
 
             // 3. التحقق من قيد سند القبض والاعتراف بالأرباح
             var journalEntry = await context.JournalEntries.Include(je => je.Lines).ThenInclude(l => l.Account)
-                .FirstOrDefaultAsync(je => je.ReferenceType == "Payment" && je.ReferenceId == paymentId);
+                .FirstOrDefaultAsync(je => je.ReferenceType == "Payment" && je.ReferenceId == result.PaymentId);
             
             journalEntry.Should().NotBeNull();
             journalEntry!.IsBalanced.Should().BeTrue();

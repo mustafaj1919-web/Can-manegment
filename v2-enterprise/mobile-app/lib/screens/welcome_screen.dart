@@ -8,9 +8,9 @@ class WelcomeScreen extends StatefulWidget {
   final VoidCallback onLoginPressed;
 
   const WelcomeScreen({
-    Key? key,
+    super.key,
     required this.onLoginPressed,
-  }) : super(key: key);
+  });
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -22,7 +22,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late AnimationController _floatController;
   late AnimationController _pulseController;
   late AnimationController _entryController;
-  
+
   int _currentCarIndex = 0;
   double _pageOffset = 0.0;
   late Timer _autoPlayTimer;
@@ -49,7 +49,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void initState() {
     super.initState();
-    
+
     _pageController = PageController(viewportFraction: 0.85);
     _pageController.addListener(() {
       setState(() {
@@ -122,7 +122,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     height: 320,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: currentGlowColor.withOpacity(0.08),
+                      color: currentGlowColor.withValues(alpha: 0.08),
                     ),
                   ),
                 ),
@@ -135,7 +135,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     height: 260,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: currentGlowColor.withOpacity(0.05),
+                      color: currentGlowColor.withValues(alpha: 0.05),
                     ),
                   ),
                 ),
@@ -159,14 +159,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         child: AnimatedBuilder(
                           animation: _pulseController,
                           builder: (context, child) {
-                            final double blurGlow = 10.0 + (_pulseController.value * 12.0);
+                            final double blurGlow =
+                                10.0 + (_pulseController.value * 12.0);
                             return Container(
                               height: 52,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: currentGlowColor.withOpacity(0.12),
+                                    color: currentGlowColor.withValues(
+                                        alpha: 0.12),
                                     blurRadius: blurGlow,
                                     spreadRadius: 2,
                                   ),
@@ -201,7 +203,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         itemBuilder: (context, index) {
                           // Compute parallax card scale and translation offsets
                           double difference = index - _pageOffset;
-                          double percent = (1 - (difference.abs() * 0.18)).clamp(0.0, 1.0);
+                          double percent =
+                              (1 - (difference.abs() * 0.18)).clamp(0.0, 1.0);
                           double rotation = difference * 0.08;
 
                           return Center(
@@ -216,18 +219,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     AnimatedBuilder(
                                       animation: _floatController,
                                       builder: (context, child) {
-                                        final double floatOffset =
-                                            sin(_floatController.value * 2 * pi) * 6.0;
+                                        final double floatOffset = sin(
+                                                _floatController.value *
+                                                    2 *
+                                                    pi) *
+                                            6.0;
                                         return Transform.translate(
                                           offset: Offset(0, floatOffset),
                                           child: Container(
                                             width: 250,
                                             height: 180,
                                             decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(24),
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: _glowColors[index].withOpacity(0.14),
+                                                  color: _glowColors[index]
+                                                      .withValues(alpha: 0.14),
                                                   blurRadius: 40,
                                                   spreadRadius: 4,
                                                   offset: const Offset(0, 8),
@@ -235,7 +243,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                               ],
                                             ),
                                             child: ClipRRect(
-                                              borderRadius: BorderRadius.circular(24),
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
                                               child: Image.asset(
                                                 _carImages[index],
                                                 fit: BoxFit.contain,
@@ -272,134 +281,144 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
               // 2. Bottom Section - Premium Glassmorphic Bottom Panel
               SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.0, 0.4),
-                    end: Offset.zero,
-                  ).animate(CurvedAnimation(
-                    parent: _entryController,
-                    curve: Curves.easeOutBack,
-                  )),
-                  child: FadeTransition(
-                    opacity: _entryController,
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppColors.luxCard.withOpacity(0.78), // frosted glass container
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.07),
-                              width: 1,
+                position: Tween<Offset>(
+                  begin: const Offset(0.0, 0.4),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _entryController,
+                  curve: Curves.easeOutBack,
+                )),
+                child: FadeTransition(
+                  opacity: _entryController,
+                  child: ClipRRect(
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(35)),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.luxCard.withValues(
+                              alpha: 0.78), // frosted glass container
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(35)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.07),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              blurRadius: 30,
+                              offset: const Offset(0, -10),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.4),
-                                blurRadius: 30,
-                                offset: const Offset(0, -10),
-                              ),
-                            ],
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              // Swipable Carousel Dot Indicators
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: List.generate(_carImages.length, (index) {
-                                  final isSelected = _currentCarIndex == index;
-                                  return AnimatedContainer(
-                                    duration: const Duration(milliseconds: 300),
-                                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                                    height: 6,
-                                    width: isSelected ? 20 : 6,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppColors.cyanAccent
-                                          : Colors.white.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(3),
-                                    ),
-                                  );
-                                }),
-                              ),
-                              const SizedBox(height: 20),
-
-                              // Headline
-                              const Text(
-                                'ارتقِ بتجربة قيادتك اليوم',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontFamily: 'Cairo',
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-
-                              // Sub-Description
-                              Text(
-                                'تصفح أرقى موديلات السيارات المتوفرة لدى شركة الاصدقاء، وتابع أقساطك ودفعاتك المالية بكل أمان وسلاسة من منصة واحدة متكاملة.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade400,
-                                  height: 1.6,
-                                  fontFamily: 'Cairo',
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-
-                              // Primary Sign-In CTA button with Gradient
-                              Container(
-                                width: double.infinity,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(25),
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF00E5FF), Color(0xFF0284C7)],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 28, vertical: 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Swipable Carousel Dot Indicators
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children:
+                                  List.generate(_carImages.length, (index) {
+                                final isSelected = _currentCarIndex == index;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  margin:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  height: 6,
+                                  width: isSelected ? 20 : 6,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.cyanAccent
+                                        : Colors.white.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(3),
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.cyanAccent.withOpacity(0.25),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 4),
-                                    ),
+                                );
+                              }),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Headline
+                            const Text(
+                              'ارتقِ بتجربة قيادتك اليوم',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+
+                            // Sub-Description
+                            Text(
+                              'تصفح أرقى موديلات السيارات المتوفرة لدى شركة الاصدقاء، وتابع أقساطك ودفعاتك المالية بكل أمان وسلاسة من منصة واحدة متكاملة.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade400,
+                                height: 1.6,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Primary Sign-In CTA button with Gradient
+                            Container(
+                              width: double.infinity,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(25),
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF00E5FF),
+                                    Color(0xFF0284C7)
                                   ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                                child: ElevatedButton(
-                                  onPressed: widget.onLoginPressed,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(25),
-                                    ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.cyanAccent
+                                        .withValues(alpha: 0.25),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  child: const Text(
-                                    'تسجيل الدخول',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Cairo',
-                                    ),
+                                ],
+                              ),
+                              child: ElevatedButton(
+                                onPressed: widget.onLoginPressed,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'تسجيل الدخول',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Cairo',
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                         ),
                       ),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ],

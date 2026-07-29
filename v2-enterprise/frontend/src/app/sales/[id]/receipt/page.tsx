@@ -48,13 +48,13 @@ export default function SaleReceiptPage() {
   const employees = employeesData?.items ?? []
 
   /* Current selection: use the snapshot stored on the sale, or first employee */
-  const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null)
+  const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null)
 
   /* After sale loads, initialise selector from snapshot */
-  const effectiveRepId = selectedEmpId ?? sale?.sales_rep_id ?? null
+  const effectiveRepId: string | null = selectedEmpId ?? (sale?.sales_rep_id != null ? String(sale.sales_rep_id) : null)
 
   const repMutation = useMutation({
-    mutationFn: (empId: number | null) => setSaleRep(saleId, empId),
+    mutationFn: (empId: string | null) => setSaleRep(saleId, empId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sale-receipt', saleId] })
       setSavedOk(true)
@@ -89,7 +89,7 @@ export default function SaleReceiptPage() {
   }
 
   /* Build a merged sale that reflects the current UI rep selection */
-  const selectedEmp = employees.find(e => e.id === effectiveRepId) ?? null
+  const selectedEmp = employees.find(e => String(e.id) === effectiveRepId) ?? null
   const saleWithRep = {
     ...sale,
     sales_rep_id:       selectedEmp?.id        ?? sale.sales_rep_id,
@@ -120,7 +120,7 @@ export default function SaleReceiptPage() {
             value={effectiveRepId ?? ''}
             onChange={(e) => {
               const val = e.target.value
-              setSelectedEmpId(val ? Number(val) : null)
+              setSelectedEmpId(val || null)
             }}
             className="receipt-rep-select"
             aria-label="اختر ممثل البائع"

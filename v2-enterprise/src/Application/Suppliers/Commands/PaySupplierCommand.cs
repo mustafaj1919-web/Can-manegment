@@ -15,8 +15,10 @@ namespace CarShowroomManagementV2.Application.Suppliers.Commands
     {
         public Guid SupplierId { get; set; }
         public decimal Amount { get; set; }
+        public string Currency { get; set; } = "IQD"; // عملة المبلغ المدفوع فعلياً (IQD أو USD)
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
         public string CreditAccountCode { get; set; } = "111001"; // الافتراضي الصندوق 111001
+        public string? Notes { get; set; }
     }
 
     public class PaySupplierCommandValidator : AbstractValidator<PaySupplierCommand>
@@ -26,6 +28,7 @@ namespace CarShowroomManagementV2.Application.Suppliers.Commands
             RuleFor(x => x.SupplierId).NotEmpty().WithMessage("المورد مطلوب.");
             RuleFor(x => x.Amount).GreaterThan(0).WithMessage("قيمة الصرف يجب أن تكون أكبر من صفر.");
             RuleFor(x => x.CreditAccountCode).NotEmpty().WithMessage("حساب الصرف مطلوب.");
+            RuleFor(x => x.Currency).Must(c => c == "IQD" || c == "USD").WithMessage("العملة يجب أن تكون IQD أو USD.");
         }
     }
 
@@ -91,8 +94,11 @@ namespace CarShowroomManagementV2.Application.Suppliers.Commands
                     Type = PaymentType.Payment, // سند صرف
                     Method = request.PaymentMethod,
                     Amount = request.Amount,
+                    Currency = request.Currency,
                     ReferenceNumber = referenceNumber,
-                    Description = $"صرف دفعة مالية لصالح المورد {supplier.Name}",
+                    Description = !string.IsNullOrWhiteSpace(request.Notes)
+                        ? request.Notes!
+                        : $"صرف دفعة مالية لصالح المورد {supplier.Name}",
                     AccountId = creditAccount.Id, // حساب الصندوق أو البنك الصارف
                     ContraAccountId = supplier.AccountId, // حساب المورد المساعد المقابل
                     BranchId = branchId

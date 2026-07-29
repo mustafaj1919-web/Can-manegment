@@ -122,12 +122,16 @@ export async function getInstallments(params: {
   page?: number
   per_page?: number
   filter?: InstallmentFilter
+  search?: string
 } = {}): Promise<InstallmentListResponse> {
   const qs = new URLSearchParams()
   qs.set('page',     String(params.page     ?? 1))
   qs.set('per_page', String(params.per_page ?? 25))
   if (params.filter && params.filter !== 'all') {
     qs.set('filter', params.filter)
+  }
+  if (params.search && params.search.trim()) {
+    qs.set('search', params.search.trim())
   }
   return get<InstallmentListResponse>(`/Installments?${qs.toString()}`)
 }

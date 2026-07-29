@@ -56,7 +56,7 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
             var query = _context.Vehicles
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .Where(vehicle => !vehicle.IsSold && vehicle.Status == "Available");
+                .Where(vehicle => !vehicle.IsDeleted && !vehicle.IsSold && vehicle.Status == "Available");
 
             if (!string.IsNullOrWhiteSpace(request.Search))
             {

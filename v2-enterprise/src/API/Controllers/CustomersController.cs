@@ -72,9 +72,35 @@ namespace CarShowroomManagementV2.API.Controllers
             }
 
             var total = all.Count;
-            var data = all.Skip((page - 1) * per_page).Take(per_page).ToList();
+            var data = all.Skip((page - 1) * per_page).Take(per_page).Select(c => new
+            {
+                id = c.Id,
+                name = c.Name,
+                full_name = c.FullName,
+                phone = c.Phone,
+                address = c.Address,
+                id_type = c.IdType,
+                id_number = c.IdNumber,
+                id_issue_date = c.IdIssueDate,
+                id_expiry_date = c.IdExpiryDate,
+                nationality = c.Nationality,
+                date_of_birth = c.DateOfBirth,
+                customer_type = c.CustomerType,
+                notes = c.Notes,
+                photo_url = !string.IsNullOrEmpty(c.PhotoUrl) ? $"/api/Customers/{c.Id}/photo" : null,
+                account_id = c.AccountId,
+                account_code = c.AccountCode,
+                branch_id = c.BranchId,
+                created_at = c.CreatedAt,
+                sales_count = c.SalesCount,
+                purchases_count = c.PurchasesCount,
+                documents_count = c.DocumentsCount,
+                salesCount = c.SalesCount,
+                purchasesCount = c.PurchasesCount,
+                documentsCount = c.DocumentsCount
+            }).ToList();
 
-            return Ok(new { success = true, total, page, per_page, data });
+            return Ok(new { success = true, total, page, per_page, items = data, data });
         }
 
         // 2.ب جلب عميل واحد بمعرّفه

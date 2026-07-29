@@ -23,7 +23,127 @@ namespace CarShowroomManagementV2.API.Controllers
             _currentUserService = currentUserService;
         }
 
-        // 1. إنشاء سند قبض أو صرف مالي (بحسابات بالمعرّف مباشرة)
+        // 1. جلب حسابات الاستلام المتاحة للفرع وطريقة الدفع
+        [HttpGet("eligible-accounts")]
+        public async Task<IActionResult> GetEligibleAccounts([FromQuery] string? paymentMethod = "Cash")
+        {
+            var branchId = _currentUserService.BranchId;
+            var isCash = string.Equals(paymentMethod, "Cash", StringComparison.OrdinalIgnoreCase);
+
+            var query = _context.Accounts
+                .Where(a => a.BranchId == branchId && a.IsActive);
+
+            if (isCash)
+            {
+                query = query.Where(a => a.AccountCode.StartsWith("111"));
+            }
+            else
+            {
+                query = query.Where(a => a.AccountCode.StartsWith("112"));
+            }
+
+            var accounts = await query.OrderBy(a => a.AccountCode).Select(a => new
+            {
+                id = a.Id,
+                code = a.AccountCode,
+                name = a.Name,
+                accountType = isCash ? "Cashbox" : "Bank",
+                currency = "IQD",
+                isDefault = isCash ? a.AccountCode == "111001" : a.AccountCode == "112001"
+            }).ToListAsync();
+
+            return Ok(new { success = true, items = accounts });
+        }
+
+        // 2. أرشفة وصل السند المالي
+        [HttpPost("{paymentId}/archive")]
+        public async Task<IActionResult> ArchiveReceipt(Guid paymentId, [FromBody] ArchiveReceiptCommand command)
+        {
+            command.PaymentId = paymentId;
+            var result = await Mediator.Send(command);
+            return Ok(result);
+        }
+
+        // 3. استرجاع حالة السند المالي بمفتاح التكرار الصريح
+        [HttpGet("recovery/by-idempotency-key/{key}")]
+        public async Task<IActionResult> GetPaymentRecoveryByIdempotencyKey(string key)
+        {
+            var branchId = _currentUserService.BranchId;
+
+            var idempotency = await _context.IdempotencyRecords
+                .FirstOrDefaultAsync(r => r.BranchId == branchId && r.IdempotencyKey == key);
+
+            if (idempotency == null)
+            {
+                return Ok(new { exists = false, status = "NotFound" });
+            }
+
+            if (!idempotency.PaymentId.HasValue)
+            {
+                return Ok(new { exists = true, status = idempotency.Status, paymentId = (Guid?)null });
+            }
+
+            var payment = await _context.Payments
+                .FirstOrDefaultAsync(p => p.Id == idempotency.PaymentId.Value && p.BranchId == branchId);
+
+            if (payment == null)
+            {
+                return NotFound(new { success = false, message = "السند المالي غير موجود." });
+            }
+
+            var archive = await _context.ReceiptArchiveRecords
+                .FirstOrDefaultAsync(r => r.PaymentId == payment.Id);
+
+            return Ok(new
+            {
+                exists = true,
+                paymentId = payment.Id,
+                receiptNumber = payment.ReferenceNumber,
+                financialStatus = payment.Status,
+                accountingStatus = payment.JournalEntryId.HasValue ? "Posted" : "Pending",
+                receiptStatus = "Ready",
+                archiveStatus = archive?.ArchiveStatus ?? "Pending",
+                archiveMethod = archive?.ArchiveMethod ?? null,
+                postedAmount = payment.Amount,
+                currency = payment.Currency,
+                createdAt = payment.CreatedAt
+            });
+        }
+
+        // 4. استرجاع حالة السند المالي بالمعرف المباشر
+        [HttpGet("{paymentId}/status")]
+        public async Task<IActionResult> GetPaymentStatus(Guid paymentId)
+        {
+            var branchId = _currentUserService.BranchId;
+
+            var payment = await _context.Payments
+                .FirstOrDefaultAsync(p => p.Id == paymentId && p.BranchId == branchId);
+
+            if (payment == null)
+            {
+                return NotFound(new { success = false, message = "السند المالي غير موجود." });
+            }
+
+            var archive = await _context.ReceiptArchiveRecords
+                .FirstOrDefaultAsync(r => r.PaymentId == payment.Id);
+
+            return Ok(new
+            {
+                exists = true,
+                paymentId = payment.Id,
+                receiptNumber = payment.ReferenceNumber,
+                financialStatus = payment.Status,
+                accountingStatus = payment.JournalEntryId.HasValue ? "Posted" : "Pending",
+                receiptStatus = "Ready",
+                archiveStatus = archive?.ArchiveStatus ?? "Pending",
+                archiveMethod = archive?.ArchiveMethod ?? null,
+                postedAmount = payment.Amount,
+                currency = payment.Currency,
+                createdAt = payment.CreatedAt
+            });
+        }
+
+        // 4. إنشاء سند قبض أو صرف مالي (بحسابات بالمعرّف مباشرة)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreatePaymentCommand command)
         {
@@ -179,7 +299,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 credit_account_code = creditAcc?.AccountCode,
                 credit_account_name = creditAcc?.Name,
                 amount = p.Amount,
-                currency = "IQD",
+                currency = p.Currency ?? "IQD",
                 description = p.Description,
                 status = p.Status,
                 journal_entry_id = p.JournalEntryId,

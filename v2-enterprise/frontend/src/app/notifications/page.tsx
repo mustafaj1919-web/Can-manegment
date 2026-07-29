@@ -445,16 +445,28 @@ export default function NotificationsPage() {
                     </div>
 
                     {localSettings.smsProvider === 'WhatsApp' && (
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-bold text-muted-foreground">رمز الوصول (WhatsApp API Token)</label>
-                        <input
-                          type="password"
-                          placeholder="أدخل رمز الوصول الخاص بالواتساب"
-                          value={localSettings.whatsAppToken}
-                          onChange={(e) => setLocalSettings({ ...localSettings, whatsAppToken: e.target.value })}
-                          className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </div>
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[11px] font-bold text-muted-foreground">رمز الوصول (WhatsApp API Token)</label>
+                          <input
+                            type="password"
+                            placeholder="أدخل رمز الوصول الخاص بالواتساب"
+                            value={localSettings.whatsAppToken}
+                            onChange={(e) => setLocalSettings({ ...localSettings, whatsAppToken: e.target.value })}
+                            className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[11px] font-bold text-muted-foreground">معرف رقم الهاتف (WhatsApp Phone Number ID)</label>
+                          <input
+                            type="text"
+                            placeholder="أدخل Phone Number ID من بوابة مطوري فيسبوك"
+                            value={localSettings.whatsAppPhoneNumberId || ''}
+                            onChange={(e) => setLocalSettings({ ...localSettings, whatsAppPhoneNumberId: e.target.value })}
+                            className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </>
                     )}
 
                     {localSettings.smsProvider === 'Twilio' && (

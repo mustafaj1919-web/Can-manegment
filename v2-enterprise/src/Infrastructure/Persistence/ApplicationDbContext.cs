@@ -53,10 +53,32 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
         public DbSet<AppUser> AppUsers => Set<AppUser>();
         public DbSet<Conversation> Conversations => Set<Conversation>();
         public DbSet<Message> Messages => Set<Message>();
+        public DbSet<VehicleStatusHistory> VehicleStatusHistories => Set<VehicleStatusHistory>();
+        public DbSet<VehicleCostAccountMapping> VehicleCostAccountMappings => Set<VehicleCostAccountMapping>();
+
+        // CMS DbSets
+        public DbSet<WebsiteSetting> WebsiteSettings => Set<WebsiteSetting>();
+        public DbSet<WebsiteArticle> WebsiteArticles => Set<WebsiteArticle>();
+        public DbSet<WebsiteService> WebsiteServices => Set<WebsiteService>();
+        public DbSet<WebsiteTestimonial> WebsiteTestimonials => Set<WebsiteTestimonial>();
+        public DbSet<WebsitePage> WebsitePages => Set<WebsitePage>();
+        public DbSet<WebsiteMedia> WebsiteMedias => Set<WebsiteMedia>();
+
+        // Document Control & Idempotency DbSets
+        public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+        public DbSet<ReceiptArchiveRecord> ReceiptArchiveRecords => Set<ReceiptArchiveRecord>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<WebsiteArticle>()
+                .HasIndex(a => a.Slug)
+                .IsUnique();
+
+            modelBuilder.Entity<WebsitePage>()
+                .HasIndex(p => p.PageKey)
+                .IsUnique();
 
             // تحديد دقة الأعمدة المالية (numeric 18,4) لتجنب أخطاء التقريب
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -253,20 +275,26 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
             modelBuilder.Entity<JournalEntry>()
                 .HasQueryFilter(j => _currentUserService.CanSeeAllBranches || j.BranchId == _currentUserService.BranchId);
 
+            // ─── Global Query Filters ───────────────────────────────────────────────────
+            // دمج فلتر الفرع مع Soft Delete للجداول التي يُطبَّق عليها الحذف الناعم
             modelBuilder.Entity<Vehicle>()
-                .HasQueryFilter(v => _currentUserService.CanSeeAllBranches || v.BranchId == _currentUserService.BranchId);
+                .HasQueryFilter(v => !v.IsDeleted && (_currentUserService.CanSeeAllBranches || v.BranchId == _currentUserService.BranchId));
 
+            modelBuilder.Entity<Customer>()
+                .HasQueryFilter(c => !c.IsDeleted && (_currentUserService.CanSeeAllBranches || c.BranchId == _currentUserService.BranchId));
+
+            modelBuilder.Entity<Employee>()
+                .HasQueryFilter(e => !e.IsDeleted && (_currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId));
+
+            modelBuilder.Entity<Supplier>()
+                .HasQueryFilter(s => !s.IsDeleted && (_currentUserService.CanSeeAllBranches || s.BranchId == _currentUserService.BranchId));
+
+            // السجلات المالية — فلتر الفرع فقط، بدون Soft Delete (لا تُحذف السجلات المالية)
             modelBuilder.Entity<Payment>()
                 .HasQueryFilter(p => _currentUserService.CanSeeAllBranches || p.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<AuditLog>()
                 .HasQueryFilter(al => _currentUserService.CanSeeAllBranches || al.BranchId == _currentUserService.BranchId);
-
-            modelBuilder.Entity<Customer>()
-                .HasQueryFilter(c => _currentUserService.CanSeeAllBranches || c.BranchId == _currentUserService.BranchId);
-
-            modelBuilder.Entity<Supplier>()
-                .HasQueryFilter(s => _currentUserService.CanSeeAllBranches || s.BranchId == _currentUserService.BranchId);
 
             modelBuilder.Entity<SalesContract>()
                 .HasQueryFilter(sc => _currentUserService.CanSeeAllBranches || sc.BranchId == _currentUserService.BranchId);
@@ -283,9 +311,6 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
             modelBuilder.Entity<Expense>()
                 .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
 
-            modelBuilder.Entity<Employee>()
-                .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
-
             modelBuilder.Entity<CrmInteraction>()
                 .HasQueryFilter(e => _currentUserService.CanSeeAllBranches || e.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<Deal>()
@@ -298,6 +323,55 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasQueryFilter(f => _currentUserService.CanSeeAllBranches || f.BranchId == _currentUserService.BranchId);
             modelBuilder.Entity<RecurringJournalTemplate>()
                 .HasQueryFilter(r => _currentUserService.CanSeeAllBranches || r.BranchId == _currentUserService.BranchId);
+            modelBuilder.Entity<VehicleCostAccountMapping>()
+                .HasQueryFilter(m => _currentUserService.CanSeeAllBranches || m.BranchId == _currentUserService.BranchId);
+
+            // Document Control & Idempotency Configurations
+            modelBuilder.Entity<IdempotencyRecord>()
+                .HasIndex(r => new { r.BranchId, r.OperationType, r.IdempotencyKey })
+                .IsUnique();
+
+            modelBuilder.Entity<ReceiptArchiveRecord>()
+                .HasIndex(r => r.PaymentId)
+                .IsUnique();
+
+            modelBuilder.Entity<IdempotencyRecord>()
+                .HasQueryFilter(r => _currentUserService.CanSeeAllBranches || r.BranchId == _currentUserService.BranchId);
+
+            modelBuilder.Entity<ReceiptArchiveRecord>()
+                .HasQueryFilter(r => _currentUserService.CanSeeAllBranches || r.BranchId == _currentUserService.BranchId);
+
+            // ─── VehicleStatusHistory ───────────────────────────────────────────────────
+            modelBuilder.Entity<VehicleStatusHistory>()
+                .HasOne(h => h.Vehicle)
+                .WithMany(v => v.StatusHistory)
+                .HasForeignKey(h => h.VehicleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VehicleStatusHistory>()
+                .HasIndex(h => h.VehicleId);
+            modelBuilder.Entity<VehicleStatusHistory>()
+                .HasIndex(h => h.ChangedAt);
+
+            // ─── Performance Indexes ────────────────────────────────────────────────────
+            modelBuilder.Entity<Customer>().HasIndex(c => c.Phone);
+            modelBuilder.Entity<Customer>().HasIndex(c => c.Name);
+            modelBuilder.Entity<Customer>().HasIndex(c => c.IsDeleted);
+            modelBuilder.Entity<Customer>().HasIndex(c => c.IsBlacklisted);
+
+            modelBuilder.Entity<Vehicle>().HasIndex(v => v.Status);
+            modelBuilder.Entity<Vehicle>().HasIndex(v => v.PlateNumber);
+            modelBuilder.Entity<Vehicle>().HasIndex(v => v.IsDeleted);
+            modelBuilder.Entity<Vehicle>().HasIndex(v => new { v.Brand, v.Model, v.Year });
+
+            modelBuilder.Entity<Installment>().HasIndex(i => new { i.DueDate, i.Status });
+            modelBuilder.Entity<Installment>().HasIndex(i => i.Status);
+
+            modelBuilder.Entity<Payment>().HasIndex(p => p.CreatedAt);
+
+            modelBuilder.Entity<SalesContract>().HasIndex(sc => sc.SaleDate);
+            modelBuilder.Entity<Employee>().HasIndex(e => e.IsDeleted);
+            modelBuilder.Entity<Supplier>().HasIndex(s => s.IsDeleted);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -371,6 +445,32 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                     }
                 }
             }
+
+            // 5. تسجيل تاريخ تغيير حالة السيارة تلقائياً
+            var vehicleStatusChanges = new List<VehicleStatusHistory>();
+            foreach (var entry in ChangeTracker.Entries<Vehicle>())
+            {
+                if (entry.State == EntityState.Modified)
+                {
+                    var originalStatus = entry.OriginalValues.GetValue<string>("Status");
+                    var currentStatus  = entry.CurrentValues.GetValue<string>("Status");
+                    if (originalStatus != currentStatus)
+                    {
+                        vehicleStatusChanges.Add(new VehicleStatusHistory
+                        {
+                            VehicleId  = entry.Entity.Id,
+                            OldStatus  = originalStatus,
+                            NewStatus  = currentStatus,
+                            ChangedBy  = _currentUserService.UserId,
+                            ChangedAt  = DateTime.UtcNow,
+                            BranchId   = entry.Entity.BranchId,
+                        });
+                    }
+                }
+            }
+
+            if (vehicleStatusChanges.Count > 0)
+                VehicleStatusHistories.AddRange(vehicleStatusChanges);
 
             return base.SaveChangesAsync(cancellationToken);
         }

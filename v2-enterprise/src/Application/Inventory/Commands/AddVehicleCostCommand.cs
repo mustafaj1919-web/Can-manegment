@@ -56,20 +56,23 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
             }
 
             // 2. التحقق من وجود الحسابات المحاسبية
-            // حساب المخزون: 1201
-            var debitAccount = await _context.Accounts
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(a => a.AccountCode == "1201", cancellationToken);
+            // حساب المصروف: يُحدَّد حسب نوع التكلفة من ربط الحسابات (الإعدادات)
+            var costType = request.CostType.ToLower();
+            var costMapping = await _context.VehicleCostAccountMappings
+                .Include(m => m.Account)
+                .FirstOrDefaultAsync(m => m.CostType == costType && m.BranchId == branchId, cancellationToken);
+
+            if (costMapping?.Account == null)
+            {
+                throw new InvalidOperationException($"لم يتم تحديد حساب محاسبي لنوع المصروف ({request.CostType}). الرجاء ربطه بحساب من صفحة الإعدادات أولاً.");
+            }
+
+            var debitAccount = costMapping.Account;
 
             // الحساب الدائن (الصندوق/البنك أو المورد)
             var creditAccount = await _context.Accounts
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(a => a.AccountCode == request.CreditAccountCode, cancellationToken);
-
-            if (debitAccount == null)
-            {
-                throw new InvalidOperationException("حساب مخزون السيارات (1201) غير موجود في شجرة الحسابات.");
-            }
 
             if (creditAccount == null)
             {
@@ -89,12 +92,11 @@ namespace CarShowroomManagementV2.Application.Inventory.Commands
                 // 3. زيادة قيمة السيارة الدفترية وتحديث حقول التكلفة
                 vehicle.BookValue += request.Amount;
 
-                var type = request.CostType.ToLower();
-                if (type == "clearance" || type == "customs" || type == "customduties")
+                if (costType == "clearance" || costType == "customs" || costType == "customduties")
                 {
                     vehicle.CustomDuties += request.Amount;
                 }
-                else if (type == "maintenance" || type == "preparation")
+                else if (costType == "maintenance" || costType == "preparation")
                 {
                     vehicle.MaintenanceCost += request.Amount;
                 }

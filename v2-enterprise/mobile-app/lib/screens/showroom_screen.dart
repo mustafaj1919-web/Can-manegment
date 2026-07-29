@@ -17,9 +17,9 @@ class ShowroomScreen extends StatefulWidget {
   final ApiService apiService;
 
   const ShowroomScreen({
-    Key? key,
+    super.key,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   @override
   State<ShowroomScreen> createState() => _ShowroomScreenState();
@@ -110,7 +110,8 @@ class _ShowroomScreenState extends State<ShowroomScreen> {
                   ),
                   const SizedBox(height: 16),
                   ListTile(
-                    leading: const Icon(Icons.phone, color: AppColors.luxAccent),
+                    leading:
+                        const Icon(Icons.phone, color: AppColors.luxAccent),
                     title: const Text('اتصال مباشر بالشركة',
                         style: TextStyle(
                             color: AppColors.luxText, fontFamily: 'Cairo')),
@@ -152,7 +153,7 @@ class _ShowroomScreenState extends State<ShowroomScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.luxAccent.withOpacity(0.35),
+              color: AppColors.luxAccent.withValues(alpha: 0.35),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -243,7 +244,7 @@ class _ShowroomScreenState extends State<ShowroomScreen> {
             border: Border.all(color: AppColors.luxBorder, width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha: 0.4),
                 blurRadius: 22,
                 offset: const Offset(0, 10),
               ),

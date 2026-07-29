@@ -110,13 +110,17 @@ export async function deleteSupplier(id: string): Promise<{ success: boolean }> 
   return del<any>(`/Suppliers/${id}`)
 }
 
-export async function paySupplier(id: string, payload: { amount: number; paymentMethod: string; creditAccountCode?: string; notes?: string }): Promise<{ success: boolean; paymentId: string }> {
+export async function paySupplier(id: string, payload: { amount: number; currency?: 'USD' | 'IQD'; paymentMethod: string; creditAccountCode?: string; notes?: string }): Promise<{ success: boolean; paymentId: string }> {
   const methodMap: Record<string, number> = { Cash: 1, Bank: 2, Cheque: 3 }
+  const currency = payload.currency ?? 'IQD'
+  // حساب البنك بالدولار (112002) لا يوجد له مقابل نقدي — الدفع بالدولار يكون تحويل بنكي فقط
+  const defaultAccount = currency === 'USD' ? '112002' : (payload.paymentMethod === 'Bank' ? '112001' : '111001')
   const body = {
     SupplierId: id,
     Amount: payload.amount,
+    Currency: currency,
     PaymentMethod: methodMap[payload.paymentMethod] ?? 1,
-    CreditAccountCode: payload.creditAccountCode ?? (payload.paymentMethod === 'Bank' ? '112001' : '111001'),
+    CreditAccountCode: payload.creditAccountCode ?? defaultAccount,
     Notes: payload.notes ?? null,
   }
   return post<any>(`/Suppliers/${id}/pay`, body)
@@ -179,6 +183,7 @@ export interface SupplierLedgerEntry {
   credit: number
   running_balance: number
   reference_type: string
+  currency: 'USD' | 'IQD'
 }
 
 export interface SupplierLedger {

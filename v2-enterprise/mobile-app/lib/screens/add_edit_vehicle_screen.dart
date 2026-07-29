@@ -9,11 +9,11 @@ class AddEditVehicleScreen extends StatefulWidget {
   final VoidCallback onSaved;
 
   const AddEditVehicleScreen({
-    Key? key,
+    super.key,
     this.car,
     required this.apiService,
     required this.onSaved,
-  }) : super(key: key);
+  });
 
   @override
   State<AddEditVehicleScreen> createState() => _AddEditVehicleScreenState();

@@ -17,6 +17,8 @@ import {
   uploadCustomerPhoto,
   DOC_TYPE_LABEL, DOCUMENT_SLOTS,
 } from '@/lib/api/customers'
+import { openAuthDocument } from '@/components/shared/AuthImage'
+import { useAuthStore } from '@/lib/stores/auth-store'
 import type { StatementSaleItem, StatementSchedule, CustomerDocumentType } from '@/lib/api/customers'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -120,6 +122,7 @@ function StatCard({ label, value, sub, icon: Icon, cls }: { label: string; value
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = use(params)
   const id = rawId
+  const token = useAuthStore(s => s.token)
   const qc = useQueryClient()
   const [tab, setTab] = useState('overview')
   const [expandedSale, setExpandedSale] = useState<number | null>(null)
@@ -591,7 +594,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                       const ext = (doc.original_filename ?? doc.filename ?? '').split('.').pop()?.toLowerCase() ?? ''
                       const isImg = ['jpg', 'jpeg', 'png', 'webp'].includes(ext)
                       const isPdf = ext === 'pdf'
-                      const viewUrl = getDocumentUrl(doc.filename)
+                      const viewUrl = getDocumentUrl(id, doc.filename)
                       return (
                         <div key={doc.id} className="group rounded-xl border border-border/40 bg-bg-surface p-4 hover:border-primary/30 hover:bg-primary/[0.02] transition-colors">
                           <div className="flex items-start gap-3">
@@ -618,15 +621,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                             </div>
                           </div>
                           <div className="mt-3 flex gap-2">
-                            <a
-                              href={viewUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => openAuthDocument(viewUrl, token)}
                               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/40 bg-secondary/30 px-3 py-1.5 text-[11px] font-semibold text-foreground hover:bg-secondary/60 transition-colors"
                             >
                               {isImg ? <Eye className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
                               {isImg ? 'عرض' : 'تحميل'}
-                            </a>
+                            </button>
                             <button
                               type="button"
                               aria-label="حذف المستند"

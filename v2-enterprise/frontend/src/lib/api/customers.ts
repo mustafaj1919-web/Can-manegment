@@ -115,13 +115,22 @@ function mapCustomerFromBackend(c: any): Customer {
 /* ─── API functions ──────────────────────────────────────────────────────── */
 
 export async function getCustomers(params: {
-  page?: number; per_page?: number; search?: string; customer_type?: string
+  page?: number;
+  per_page?: number;
+  search?: string;
+  customer_type?: string;
+  branch_id?: string;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
 } = {}): Promise<CustomersListResponse> {
   const qs = new URLSearchParams()
   qs.set('page',     String(params.page     ?? 1))
   qs.set('per_page', String(params.per_page ?? 25))
   if (params.search)        qs.set('search',        params.search)
   if (params.customer_type) qs.set('customer_type', params.customer_type)
+  if (params.branch_id)     qs.set('branch_id',     params.branch_id)
+  if (params.sort_by)       qs.set('sort_by',       params.sort_by)
+  if (params.sort_dir)      qs.set('sort_dir',      params.sort_dir)
   const res = await get<any>(`/Customers?${qs.toString()}`)
   if (res && res.success && res.data) {
     const data = res.data
@@ -311,8 +320,8 @@ export async function deleteCustomerDocument(customerId: number | string, docId:
   await apiClient.delete(`/Customers/${customerId}/documents/${docId}`)
 }
 
-export function getDocumentUrl(filename: string): string {
-  return `/api/Customers/documents/${filename}`
+export function getDocumentUrl(customerId: number | string, filename: string): string {
+  return `/api/Customers/${customerId}/documents/${filename}`
 }
 
 export async function uploadCustomerDocument(

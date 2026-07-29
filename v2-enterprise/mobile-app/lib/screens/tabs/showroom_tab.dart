@@ -18,13 +18,13 @@ class ShowroomTab extends StatefulWidget {
   final dynamic apiService;
 
   const ShowroomTab({
-    Key? key,
+    super.key,
     required this.isManager,
     required this.customerName,
     this.customerEmail,
     this.customerPhotoUrl,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   @override
   State<ShowroomTab> createState() => _ShowroomTabState();
@@ -157,9 +157,9 @@ class _ShowroomTabState extends State<ShowroomTab> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.luxBorder),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(LucideIcons.map_pin, color: AppColors.luxAccent, size: 14),
           SizedBox(width: 4),
           Text(
@@ -177,10 +177,10 @@ class _ShowroomTabState extends State<ShowroomTab> {
   }
 
   Widget _accountAvatar() {
-    final provider = widget.customerPhotoUrl == null ||
-            widget.customerPhotoUrl!.isEmpty
-        ? const AssetImage('assets/images/app_logo.png') as ImageProvider
-        : NetworkImage(widget.customerPhotoUrl!);
+    final provider =
+        widget.customerPhotoUrl == null || widget.customerPhotoUrl!.isEmpty
+            ? const AssetImage('assets/images/app_logo.png') as ImageProvider
+            : NetworkImage(widget.customerPhotoUrl!);
 
     return Container(
       width: 50,
@@ -192,7 +192,7 @@ class _ShowroomTabState extends State<ShowroomTab> {
         border: Border.all(color: AppColors.luxBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -221,7 +221,7 @@ class _ShowroomTabState extends State<ShowroomTab> {
           border: Border.all(color: AppColors.luxBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.28),
+              color: Colors.black.withValues(alpha: 0.28),
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),
@@ -242,7 +242,7 @@ class _ShowroomTabState extends State<ShowroomTab> {
         border: Border.all(color: AppColors.luxBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -328,11 +328,14 @@ class _ShowroomTabState extends State<ShowroomTab> {
                     height: 44,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: selected ? AppColors.luxAccentSoft : AppColors.luxCard,
+                      color: selected
+                          ? AppColors.luxAccentSoft
+                          : AppColors.luxCard,
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                        color:
-                            selected ? AppColors.luxAccent : AppColors.luxBorder,
+                        color: selected
+                            ? AppColors.luxAccent
+                            : AppColors.luxBorder,
                         width: selected ? 1.4 : 1,
                       ),
                     ),
@@ -498,7 +501,7 @@ class _ShowroomTabState extends State<ShowroomTab> {
                       stops: const [0.35, 1.0],
                       colors: [
                         Colors.transparent,
-                        Colors.black.withOpacity(0.78),
+                        Colors.black.withValues(alpha: 0.78),
                       ],
                     ),
                   ),
@@ -520,16 +523,15 @@ class _ShowroomTabState extends State<ShowroomTab> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.35),
+                        color: Colors.black.withValues(alpha: 0.35),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                         ),
                       ),
                       child: Icon(
                         LucideIcons.heart,
-                        color:
-                            isFavorite ? AppColors.luxAccent : Colors.white,
+                        color: isFavorite ? AppColors.luxAccent : Colors.white,
                         size: 18,
                       ),
                     ),
@@ -609,8 +611,9 @@ class _ShowroomTabState extends State<ShowroomTab> {
                           : AppColors.luxCard,
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                        color:
-                            selected ? AppColors.luxAccent : AppColors.luxBorder,
+                        color: selected
+                            ? AppColors.luxAccent
+                            : AppColors.luxBorder,
                         width: selected ? 1.4 : 1,
                       ),
                     ),

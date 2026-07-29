@@ -15,6 +15,7 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
     {
         public DateTime EntryDate { get; set; } = DateTime.UtcNow;
         public string Description { get; set; } = string.Empty;
+        public bool IsPosted { get; set; } = false; // Default: Draft entry
         public List<JournalLineDto> Lines { get; set; } = new List<JournalLineDto>();
     }
 
@@ -68,15 +69,26 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
 
         public async Task<Guid> Handle(CreateJournalEntryCommand request, CancellationToken cancellationToken)
         {
-            // التحقق من وجود الحسابات وفعاليتها في نفس الفرع أو عامة
+            // التحقق من وجود الحسابات وفعاليتها وعدم كونها حسابات رئيسية/تجميعية
             var accountIds = request.Lines.Select(l => l.AccountId).Distinct().ToList();
-            var accountsExist = await _context.Accounts
+            var validAccounts = await _context.Accounts
                 .Where(a => accountIds.Contains(a.Id) && a.IsActive)
-                .CountAsync(cancellationToken);
+                .ToListAsync(cancellationToken);
 
-            if (accountsExist != accountIds.Count)
+            if (validAccounts.Count != accountIds.Count)
             {
                 throw new Exception("أحد الحسابات المحاسبية المحددة غير موجود أو غير نشط.");
+            }
+
+            // منع الترحيل للحسابات الرئيسية التي تمتلك حسابات فرعية
+            var parentAccountIds = await _context.Accounts
+                .Where(a => accountIds.Contains(a.Id) && _context.Accounts.Any(c => c.ParentAccountId == a.Id))
+                .Select(a => a.Id)
+                .ToListAsync(cancellationToken);
+
+            if (parentAccountIds.Any())
+            {
+                throw new Exception("لا يمكن الترحيل لحساب رئيسي/تجميعي. يرجى اختيار حساب تفصيلي فرعي للترحيل.");
             }
 
             // توليد رقم تسلسلي فريد للقيد المالي
@@ -89,7 +101,7 @@ namespace CarShowroomManagementV2.Application.Accounting.Commands
                 EntryNumber = entryNumber,
                 EntryDate = request.EntryDate,
                 Description = request.Description,
-                IsPosted = true, // ترحيل مباشر للسرعة والأمان
+                IsPosted = request.IsPosted,
                 BranchId = _currentUserService.BranchId,
                 CreatedBy = _currentUserService.UserId
             };

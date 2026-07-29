@@ -124,7 +124,7 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
             var salesContracts = await _context.SalesContracts
                 .Include(sc => sc.Vehicle)
                 .Include(sc => sc.InstallmentPlan)
-                    .ThenInclude(ip => ip.Installments)
+                    .ThenInclude(ip => ip!.Installments)
                 .Where(sc => sc.CustomerId == customer.Id && sc.SaleDate >= startDate && sc.SaleDate <= endDate)
                 .ToListAsync(cancellationToken);
 

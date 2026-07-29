@@ -16,6 +16,8 @@ import { useBranchStore } from '@/lib/stores/branch-store'
 import { getNotifications } from '@/lib/api/dashboard'
 import { cn } from '@/lib/utils'
 import { useInstallmentAlerts } from '@/hooks/useInstallmentAlerts'
+import ChatLauncher from '@/components/ai/ChatLauncher'
+import ChatPanel from '@/components/ai/ChatPanel'
 
 // Dynamic FAB action configurations
 const FAB_ACTIONS: Record<string, { label: string; href: string; icon: React.ElementType }> = {
@@ -38,6 +40,7 @@ const EXTRA_MOBILE_LINKS = [
   { href: '/expenses', label: 'المصاريف', icon: ReceiptText },
   { href: '/accounting', label: 'المحاسبة', icon: Calculator },
   { href: '/reports', label: 'التقارير', icon: FileText },
+  { href: '/website', label: 'إدارة الموقع', icon: Settings },
   { href: '/settings', label: 'الإعدادات', icon: Settings },
 ]
 
@@ -50,6 +53,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { setBranches, setActiveBranch } = useBranchStore()
 
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+
+  // Listen to open-ai-chat custom event to open the chat panel
+  useEffect(() => {
+    const handleOpenAiChat = () => {
+      setAiOpen(true)
+    }
+    window.addEventListener('open-ai-chat', handleOpenAiChat)
+    return () => window.removeEventListener('open-ai-chat', handleOpenAiChat)
+  }, [])
 
   // Query notifications for alerts badge count
   const { data: notifData } = useQuery({
@@ -361,6 +374,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </>
         )}
       </AnimatePresence>
+
+      {/* ─── 6. AI ASSISTANT ─── */}
+      <ChatLauncher isOpen={aiOpen} onClick={() => setAiOpen(!aiOpen)} />
+      <ChatPanel isOpen={aiOpen} onClose={() => setAiOpen(false)} />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getBranchComparison } from '@/lib/api/reports'
 import { formatMoney } from '@/lib/utils'
+import { exportXlsx } from '@/lib/export'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,21 +33,15 @@ export default function BranchComparisonPage() {
     retry: 1,
   })
 
-  function handleExport() {
+  async function handleExport() {
     if (!data?.branches?.length) return
-    const rows: string[][] = [
-      ['الفرع', 'مبيعات', 'مشتريات', 'عملاء', 'سيارات متاحة', 'سيارات مباعة', 'إيرادات', 'مشتريات', 'مصاريف', 'صافي الربح'],
-      ...data.branches.map(b => [
-        b.branch_name, String(b.sales_count), String(b.purchases_count),
-        String(b.customers_count), String(b.available_cars), String(b.sold_cars),
-        String(b.total_revenue), String(b.total_purchases), String(b.total_expenses), String(b.net_profit),
-      ]),
-    ]
-    const csv = rows.map(r => r.join('\t')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/tab-separated-values;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'branch-comparison.tsv'; a.click()
-    URL.revokeObjectURL(url)
+    const headers = ['الفرع', 'مبيعات', 'مشتريات', 'عملاء', 'سيارات متاحة', 'سيارات مباعة', 'إيرادات', 'مشتريات', 'مصاريف', 'صافي الربح']
+    const rows = data.branches.map(b => [
+      b.branch_name, b.sales_count, b.purchases_count,
+      b.customers_count, b.available_cars, b.sold_cars,
+      b.total_revenue, b.total_purchases, b.total_expenses, b.net_profit,
+    ])
+    await exportXlsx('branch-comparison', headers, rows)
   }
 
   const totals = data?.totals

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle, CalendarDays, CheckCircle2, Loader2, ScanLine, Layers, FileText,
   Plus, X, Check, Image as ImageIcon, Upload, ChevronDown, ChevronRight, Camera, Sparkles
@@ -237,6 +237,7 @@ function VehicleDetailRow({
 
 function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [sellerId, setSellerId] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
@@ -366,6 +367,12 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
       setUploading(false)
       if (uploadedCount > 0) toast.success(`تم رفع صور ${uploadedCount} سيارة`)
     }
+
+    // إبطال كاش الكيانات والمخزون والمشتريات فوراً لتظهر التحديثات بدون ريفريش
+    queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    queryClient.invalidateQueries({ queryKey: ['inventory-counts'] })
+    queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    queryClient.invalidateQueries({ queryKey: ['kpi-dashboard'] })
 
     if (res?.errors?.length > 0) {
       toast.warning(`تم تسجيل ${res.created_count} سيارة. أخطاء: ${res.errors.join('، ')}`)
@@ -641,6 +648,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
 
 function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [sellerId, setSellerId] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
@@ -708,6 +716,12 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
   const mutation = useMutation({
     mutationFn: createPurchase,
     onSuccess: (res) => {
+      // إبطال كاش الكيانات والمخزون والمشتريات فوراً لتظهر التحديثات بدون ريفريش
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+      queryClient.invalidateQueries({ queryKey: ['kpi-dashboard'] })
+
       toast.success(`تم إنشاء فاتورة الشراء ${res.invoice_number}`)
       router.push(`/purchases/${res.id}`)
     },
@@ -748,6 +762,13 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
       purchase_date: purchaseDate,
       number_of_months: numMonths ? parseInt(numMonths) : null,
       installment_start_date: startDate || null,
+      trim: trim || null,
+      transmission: transmission || null,
+      fuel_type: fuelType || null,
+      engine_size: engineSize || null,
+      cylinders: cylinders ? Number(cylinders) : null,
+      seat_count: seatCount ? Number(seatCount) : null,
+      import_country: importCountry || null,
     })
   }
 

@@ -171,6 +171,18 @@ namespace CarShowroomManagementV2.API.Controllers
             var entry = await _context.JournalEntries.Include(j => j.Lines).FirstOrDefaultAsync(j => j.Id == id);
             if (entry == null) return NotFound(new { success = false, message = "القيد غير موجود." });
 
+            if (entry.ReferenceType == "JournalReversal" || entry.ReferenceType == "PaymentReversal" || entry.EntryNumber.StartsWith("REV"))
+            {
+                return BadRequest(new { success = false, message = "لا يمكن عكس قيد عكسي." });
+            }
+
+            var alreadyReversed = await _context.JournalEntries
+                .AnyAsync(j => j.ReferenceId == entry.Id && (j.ReferenceType == "JournalReversal" || j.ReferenceType == "PaymentReversal"));
+            if (alreadyReversed)
+            {
+                return BadRequest(new { success = false, message = "تم عكس هذا القيد المحاسبي سابقاً ولا يمكن عكسه مرة أخرى." });
+            }
+
             var count = await _context.JournalEntries.IgnoreQueryFilters().CountAsync();
             var reversal = new JournalEntry
             {
@@ -203,6 +215,12 @@ namespace CarShowroomManagementV2.API.Controllers
         {
             var entry = await _context.JournalEntries.FirstOrDefaultAsync(j => j.Id == id);
             if (entry == null) return NotFound(new { success = false, message = "القيد غير موجود." });
+
+            if (entry.IsPosted)
+            {
+                return BadRequest(new { success = false, message = "القيد مرحل بالفعل ولا يمكن ترحيله مرة أخرى." });
+            }
+
             entry.IsPosted = true;
             await _context.SaveChangesAsync();
             return Ok(new { success = true, id = entry.Id, status = "posted", message = "تم ترحيل القيد." });
@@ -253,7 +271,8 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new
             {
                 success = true,
-                data = result
+                data = result.Accounts,
+                totals = result.Totals
             });
         }
 

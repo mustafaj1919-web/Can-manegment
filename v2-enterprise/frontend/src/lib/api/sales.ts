@@ -211,6 +211,7 @@ export async function createSale(payload: CreateSalePayload): Promise<{ id: numb
     DownPayment: payload.paid_amount ?? 0,
     PaymentMethod: mapPaymentMethod(payload.payment_method),
     InstallmentPeriodMonths: payload.number_of_months ?? 0,
+    CustomMonthlyInstallmentAmount: (payload as any).custom_monthly_installment_amount ?? null,
     ProfitRatePercentage: (payload as any).profit_rate ?? 0,
     InstallmentStartDate: (payload as any).installment_start_date ?? null,
     CustomerVatNumber: payload.customer_vat_number ?? null,

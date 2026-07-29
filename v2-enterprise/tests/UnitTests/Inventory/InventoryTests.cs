@@ -121,6 +121,14 @@ namespace CarShowroomManagementV2.UnitTests.Inventory
             var inventoryAccount = new Account { Id = Guid.NewGuid(), AccountCode = "1201", Name = "Cars Inventory", Type = AccountType.Asset, BranchId = _testBranchId };
             var cashAccount = new Account { Id = Guid.NewGuid(), AccountCode = "1101", Name = "Cash", Type = AccountType.Asset, BranchId = _testBranchId };
             context.Accounts.AddRange(inventoryAccount, cashAccount);
+            context.VehicleCostAccountMappings.Add(new VehicleCostAccountMapping
+            {
+                Id = Guid.NewGuid(),
+                CostType = "maintenance",
+                AccountId = inventoryAccount.Id,
+                Account = inventoryAccount,
+                BranchId = _testBranchId
+            });
 
             var vehicle = new Vehicle
             {

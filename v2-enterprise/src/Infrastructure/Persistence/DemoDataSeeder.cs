@@ -82,11 +82,12 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
 
         public static async Task SeedAsync(ApplicationDbContext context)
         {
-            // Idempotency guard — check for first demo vehicle
-            var alreadySeeded = await context.Database.ExecuteSqlRawAsync(
-                $"SELECT 1 FROM \"Vehicles\" WHERE \"Id\" = '{V1}' LIMIT 1") >= 0
-                && await context.Vehicles.IgnoreQueryFilters()
-                    .AnyAsync(v => v.Id == Guid.Parse(V1));
+            // Idempotency guard — skip entirely once the first demo vehicle exists.
+            // (Previously this also checked ExecuteSqlRawAsync(...) >= 0 for a SELECT,
+            // which always returns -1 since SELECT doesn't affect rows — that made the
+            // guard permanently false, so the full seed script re-ran on every startup.)
+            var alreadySeeded = await context.Vehicles.IgnoreQueryFilters()
+                .AnyAsync(v => v.Id == Guid.Parse(V1));
 
             if (alreadySeeded)
             {
@@ -218,7 +219,19 @@ VALUES
    'New','55-E-33210','Registered',8000,'3.0',6,
    'Automatic','Gasoline','Germany',7,'IQD',
    45000000,3500000,600000,49100000,58000000,false,'Available',now_ts-INTERVAL '3 days',admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+-- ChassisNumber is globally unique (IX_Vehicles_ChassisNumber) — conflict on that, not
+-- Id, so a re-run never fails even if a demo vehicle was previously seeded under a
+-- different Id (e.g. by an older version of this seeder).
+ON CONFLICT (""ChassisNumber"") DO NOTHING;
+
+-- Resolve each variable to whatever row actually exists for its ChassisNumber (the one
+-- just inserted, or a pre-existing one under a different Id) so every later statement
+-- that references v1..v5 stays consistent with the real data.
+SELECT ""Id"" INTO v1 FROM ""Vehicles"" WHERE ""ChassisNumber""='DEMO-VIN-CAM-001';
+SELECT ""Id"" INTO v2 FROM ""Vehicles"" WHERE ""ChassisNumber""='DEMO-VIN-KIA-002';
+SELECT ""Id"" INTO v3 FROM ""Vehicles"" WHERE ""ChassisNumber""='DEMO-VIN-HYN-003';
+SELECT ""Id"" INTO v4 FROM ""Vehicles"" WHERE ""ChassisNumber""='DEMO-VIN-COR-004';
+SELECT ""Id"" INTO v5 FROM ""Vehicles"" WHERE ""ChassisNumber""='DEMO-VIN-BMW-005';
 
 -- Update existing demo vehicles with spec fields (in case they were seeded before specs were added)
 UPDATE ""Vehicles"" SET
@@ -263,24 +276,35 @@ VALUES
   (c2,'Ahmed Hassan','Ahmed Hassan','07701234567','Baghdad',NULL,'12345678',
    NULL,NULL,'iraqi',NULL,'Individual',NULL,ac2,
    now_ts-INTERVAL '15 days',admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+-- IX_Customers_IdNumber_BranchId is the real natural key here, not Id.
+ON CONFLICT (""IdNumber"",""BranchId"") DO NOTHING;
+
+SELECT ""Id"" INTO c2 FROM ""Customers"" WHERE ""IdNumber""='12345678' AND ""BranchId""=branch_id;
 
 -- ── Supplier ─────────────────────────────────────────────────────────────────
 INSERT INTO ""Suppliers""
   (""Id"",""Name"",""Code"",""Phone"",""Address"",""Notes"",""IsActive"",""AccountId"",""CreatedAt"",""CreatedBy"",""BranchId"")
 VALUES
   (s1,'Iraq Auto Import Co','DEMO-SUP-001','07800000001','Baghdad','Demo supplier',true,acs,now_ts,admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+-- IX_Suppliers_Code_BranchId is the real natural key here, not Id.
+ON CONFLICT (""Code"",""BranchId"") DO NOTHING;
+
+SELECT ""Id"" INTO s1 FROM ""Suppliers"" WHERE ""Code""='DEMO-SUP-001' AND ""BranchId""=branch_id;
 
 -- ── Purchases (PaymentMethod: Cash=1, Bank=2) ────────────────────────────────
+-- Status='Completed' means the purchase transaction is fully settled, so
+-- AmountPaid must equal PurchaseCost for every row (see Purchase.AmountPaid /
+-- PurchasesController: remaining_amount = PurchaseCost - AmountPaid).
 INSERT INTO ""Purchases""
   (""Id"",""PurchaseNumber"",""SupplierId"",""VehicleId"",""PurchaseDate"",
-   ""PurchaseCost"",""PaymentMethod"",""Status"",""CreatedAt"",""CreatedBy"",""BranchId"")
+   ""PurchaseCost"",""AmountPaid"",""PaymentMethod"",""Status"",""CreatedAt"",""CreatedBy"",""BranchId"")
 VALUES
-  (p1,'DEMO-PUR-001',s1,v3,month_start+INTERVAL '5 days', 20000000,1,'Completed',now_ts-INTERVAL '5 days',admin_id,branch_id),
-  (p2,'DEMO-PUR-002',s1,v4,month_start+INTERVAL '3 days', 16200000,2,'Completed',now_ts-INTERVAL '3 days',admin_id,branch_id),
-  (p3,'DEMO-PUR-003',s1,v5,month_start+INTERVAL '1 days', 49100000,1,'Completed',now_ts-INTERVAL '1 days',admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+  (p1,'DEMO-PUR-001',s1,v3,month_start+INTERVAL '5 days', 20000000,20000000,1,'Completed',now_ts-INTERVAL '5 days',admin_id,branch_id),
+  (p2,'DEMO-PUR-002',s1,v4,month_start+INTERVAL '3 days', 16200000,16200000,2,'Completed',now_ts-INTERVAL '3 days',admin_id,branch_id),
+  (p3,'DEMO-PUR-003',s1,v5,month_start+INTERVAL '1 days', 49100000,49100000,1,'Completed',now_ts-INTERVAL '1 days',admin_id,branch_id)
+-- IX_Purchases_PurchaseNumber_BranchId is the real natural key here, not Id. p1/p2/p3
+-- aren't referenced by any later statement, so no resolve step is needed after this.
+ON CONFLICT (""PurchaseNumber"",""BranchId"") DO NOTHING;
 
 -- ── Sales Contracts ──────────────────────────────────────────────────────────
 -- PaymentMethod: Cash=1
@@ -297,7 +321,11 @@ VALUES
   (sc2,'DEMO-SAL-002',c2,v2,month_start+INTERVAL '2 days',
    25000000,0,200000,500000,24700000,5000000,19700000,3700000,1,'Active',
    now_ts-INTERVAL '8 days',admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+-- IX_SalesContracts_ContractNumber_BranchId is the real natural key here, not Id.
+ON CONFLICT (""ContractNumber"",""BranchId"") DO NOTHING;
+
+SELECT ""Id"" INTO sc1 FROM ""SalesContracts"" WHERE ""ContractNumber""='DEMO-SAL-001' AND ""BranchId""=branch_id;
+SELECT ""Id"" INTO sc2 FROM ""SalesContracts"" WHERE ""ContractNumber""='DEMO-SAL-002' AND ""BranchId""=branch_id;
 
 -- ── Installment plan for SC2 ─────────────────────────────────────────────────
 INSERT INTO ""InstallmentPlans""
@@ -307,51 +335,80 @@ INSERT INTO ""InstallmentPlans""
 VALUES
   (ip1,sc2,19700000,5000000,12,5,985000,20685000,1723750,'Active',
    now_ts-INTERVAL '8 days',admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+-- IX_InstallmentPlans_SalesContractId is the real natural key here, not Id — a sales
+-- contract can only ever have one plan.
+ON CONFLICT (""SalesContractId"") DO NOTHING;
+
+SELECT ""Id"" INTO ip1 FROM ""InstallmentPlans"" WHERE ""SalesContractId""=sc2;
 
 -- ── 12 monthly installments ──────────────────────────────────────────────────
+-- No unique constraint exists on (InstallmentPlanId, InstallmentNumber), so this is
+-- guarded manually per-row instead of via ON CONFLICT — otherwise a re-run (or a plan
+-- resolved to a pre-existing legacy row above) would keep appending duplicate
+-- installments to the same plan on every restart.
 FOR n IN 1..12 LOOP
-  INSERT INTO ""Installments""
-    (""Id"",""InstallmentPlanId"",""InstallmentNumber"",""DueDate"",""Amount"",""PaidAmount"",
-     ""Status"",""PaymentDate"",""CreatedAt"",""CreatedBy"",""BranchId"")
-  VALUES (
-    gen_random_uuid(), ip1, n,
-    month_start + (n * INTERVAL '1 month'),
-    1723750,
-    CASE WHEN n = 1 THEN 1723750 ELSE 0 END,
-    CASE WHEN n = 1 THEN 'Paid'
-         WHEN (month_start + (n * INTERVAL '1 month')) < NOW() THEN 'Overdue'
-         ELSE 'Pending' END,
-    CASE WHEN n = 1 THEN month_start + INTERVAL '1 month' ELSE NULL END,
-    now_ts, admin_id, branch_id
-  );
+  IF NOT EXISTS (
+    SELECT 1 FROM ""Installments""
+    WHERE ""InstallmentPlanId"" = ip1 AND ""InstallmentNumber"" = n
+  ) THEN
+    INSERT INTO ""Installments""
+      (""Id"",""InstallmentPlanId"",""InstallmentNumber"",""DueDate"",""Amount"",""PaidAmount"",
+       ""Status"",""PaymentDate"",""CreatedAt"",""CreatedBy"",""BranchId"")
+    VALUES (
+      gen_random_uuid(), ip1, n,
+      month_start + (n * INTERVAL '1 month'),
+      1723750,
+      CASE WHEN n = 1 THEN 1723750 ELSE 0 END,
+      CASE WHEN n = 1 THEN 'Paid'
+           WHEN (month_start + (n * INTERVAL '1 month')) < NOW() THEN 'Overdue'
+           ELSE 'Pending' END,
+      CASE WHEN n = 1 THEN month_start + INTERVAL '1 month' ELSE NULL END,
+      now_ts, admin_id, branch_id
+    );
+  END IF;
 END LOOP;
 
 -- ── Journal entries & lines ──────────────────────────────────────────────────
-INSERT INTO ""JournalEntries""
-  (""Id"",""EntryNumber"",""EntryDate"",""Description"",""IsPosted"",""IsReversed"",
-   ""ReversedEntryId"",""ReferenceType"",""ReferenceId"",""CreatedAt"",""CreatedBy"",""BranchId"")
-VALUES
-  (je1,'DEMO-JE-001',month_start+INTERVAL '8 days','Cash sale DEMO-SAL-001',
-   true,false,NULL,'SalesContract',sc1,now_ts-INTERVAL '5 days',admin_id,branch_id),
-  (je2,'DEMO-JE-002',month_start+INTERVAL '2 days','Down payment DEMO-SAL-002',
-   true,false,NULL,'SalesContract',sc2,now_ts-INTERVAL '8 days',admin_id,branch_id)
-ON CONFLICT (""Id"") DO NOTHING;
+-- No unique constraint exists on EntryNumber, so ON CONFLICT has nothing to target;
+-- guard manually by EntryNumber+BranchId instead. Each entry's lines are only ever
+-- inserted inside the same guard as the entry itself, so a re-run can neither post a
+-- duplicate journal entry nor duplicate its lines against an already-posted one.
+SELECT ""Id"" INTO je1 FROM ""JournalEntries"" WHERE ""EntryNumber""='DEMO-JE-001' AND ""BranchId""=branch_id;
+IF je1 IS NULL THEN
+  je1 := '{JE1}'::uuid;
 
--- Lines for JE1: full cash payment
-INSERT INTO ""JournalLines"" (""Id"",""JournalEntryId"",""AccountId"",""Debit"",""Credit"",""Description"")
-VALUES
-  (gen_random_uuid(),je1,acc_cash,   23200000,0,       'Cash received - DEMO-SAL-001'),
-  (gen_random_uuid(),je1,acc_revenue,0,        23000000,'Vehicle sale revenue'),
-  (gen_random_uuid(),je1,acc_cogs,   20000000,0,       'Cost of vehicle sold'),
-  (gen_random_uuid(),je1,acc_ar,     0,        20000000,'Remove vehicle from AR/inventory');
+  INSERT INTO ""JournalEntries""
+    (""Id"",""EntryNumber"",""EntryDate"",""Description"",""IsPosted"",""IsReversed"",
+     ""ReversedEntryId"",""ReferenceType"",""ReferenceId"",""CreatedAt"",""CreatedBy"",""BranchId"")
+  VALUES
+    (je1,'DEMO-JE-001',month_start+INTERVAL '8 days','Cash sale DEMO-SAL-001',
+     true,false,NULL,'SalesContract',sc1,now_ts-INTERVAL '5 days',admin_id,branch_id);
 
--- Lines for JE2: down payment received
-INSERT INTO ""JournalLines"" (""Id"",""JournalEntryId"",""AccountId"",""Debit"",""Credit"",""Description"")
-VALUES
-  (gen_random_uuid(),je2,acc_cash,   5000000, 0,       'Down payment - DEMO-SAL-002'),
-  (gen_random_uuid(),je2,acc_ar,     19700000,0,       'AR from installment customer'),
-  (gen_random_uuid(),je2,acc_revenue,0,       24700000,'Installment sale revenue');
+  INSERT INTO ""JournalLines"" (""Id"",""JournalEntryId"",""AccountId"",""Debit"",""Credit"",""Description"")
+  VALUES
+    (gen_random_uuid(),je1,acc_cash,   23200000,0,       'Cash received - DEMO-SAL-001'),
+    (gen_random_uuid(),je1,acc_revenue,0,        23000000,'Vehicle sale revenue'),
+    (gen_random_uuid(),je1,acc_cogs,   20000000,0,       'Cost of vehicle sold'),
+    (gen_random_uuid(),je1,acc_ar,     0,        20000000,'Remove vehicle from AR/inventory');
+END IF;
+
+SELECT ""Id"" INTO je2 FROM ""JournalEntries"" WHERE ""EntryNumber""='DEMO-JE-002' AND ""BranchId""=branch_id;
+IF je2 IS NULL THEN
+  je2 := '{JE2}'::uuid;
+
+  INSERT INTO ""JournalEntries""
+    (""Id"",""EntryNumber"",""EntryDate"",""Description"",""IsPosted"",""IsReversed"",
+     ""ReversedEntryId"",""ReferenceType"",""ReferenceId"",""CreatedAt"",""CreatedBy"",""BranchId"")
+  VALUES
+    (je2,'DEMO-JE-002',month_start+INTERVAL '2 days','Down payment DEMO-SAL-002',
+     true,false,NULL,'SalesContract',sc2,now_ts-INTERVAL '8 days',admin_id,branch_id);
+
+  INSERT INTO ""JournalLines"" (""Id"",""JournalEntryId"",""AccountId"",""Debit"",""Credit"",""Description"")
+  VALUES
+    (gen_random_uuid(),je2,acc_cash,   5000000, 0,       'Down payment - DEMO-SAL-002'),
+    (gen_random_uuid(),je2,acc_ar,     19700000,0,       'AR from installment customer'),
+    (gen_random_uuid(),je2,acc_revenue,0,       24700000,'Installment sale revenue');
+END IF;
 
 RAISE NOTICE '[DemoSeed] Inserted: 5 vehicles, 2 customers, 1 supplier, 3 purchases, 2 sales, 1 installment plan, 12 installments, 2 journal entries';
 END $$;

@@ -136,5 +136,166 @@ namespace CarShowroomManagementV2.UnitTests.Accounting
             await actDelete.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("*يُمنع تماماً تعديل أو حذف قيود اليومية التاريخية*");
         }
+
+        [Fact]
+        public async Task VerifyDecimalRounding_ShouldAlwaysTruncateOrRoundToFourDecimals()
+        {
+            // Arrange
+            var context = GetInMemoryDbContext();
+            
+            // تهيئة الحسابات المبدئية
+            var accDebit = new Account { Id = Guid.NewGuid(), AccountCode = "1101", Name = "Cash", Type = AccountType.Asset, BranchId = _testBranchId };
+            var accCredit = new Account { Id = Guid.NewGuid(), AccountCode = "3101", Name = "Capital", Type = AccountType.Equity, BranchId = _testBranchId };
+            context.Accounts.AddRange(accDebit, accCredit);
+            await context.SaveChangesAsync();
+
+            var handler = new CreateJournalEntryCommandHandler(context, _currentUserServiceMock.Object);
+
+            var command = new CreateJournalEntryCommand
+            {
+                Description = "قيد رأس المال المبدئي متوازن بدقة عشرية",
+                Lines = new List<JournalLineDto>
+                {
+                    new JournalLineDto { AccountId = accDebit.Id, Debit = 10000.12345m, Credit = 0, Description = "مدين" },
+                    new JournalLineDto { AccountId = accCredit.Id, Debit = 0, Credit = 10000.12345m, Description = "دائن" }
+                }
+            };
+
+            // Act
+            var entryId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            entryId.Should().NotBeEmpty();
+            var entry = await context.JournalEntries.Include(j => j.Lines).FirstOrDefaultAsync(j => j.Id == entryId);
+            entry.Should().NotBeNull();
+            entry!.Lines.First(l => l.Debit > 0).Debit.Should().Be(10000.12345m);
+        }
+
+        [Fact]
+        public async Task VerifyBranchIsolation_ShouldFilterEntitiesBasedOnUserBranch()
+        {
+            // Arrange
+            var context = GetInMemoryDbContext();
+            var otherBranchId = Guid.NewGuid();
+
+            var accountInMyBranch = new Account { Id = Guid.NewGuid(), AccountCode = "1001", Name = "Cash My Branch", Type = AccountType.Asset, BranchId = _testBranchId };
+            var accountInOtherBranch = new Account { Id = Guid.NewGuid(), AccountCode = "1002", Name = "Cash Other Branch", Type = AccountType.Asset, BranchId = otherBranchId };
+
+            context.Accounts.AddRange(accountInMyBranch, accountInOtherBranch);
+            await context.SaveChangesAsync();
+
+            // Act
+            var allAccounts = await context.Accounts.ToListAsync();
+
+            // Assert
+            allAccounts.Should().ContainSingle();
+            allAccounts.First().Id.Should().Be(accountInMyBranch.Id);
+        }
+
+        [Fact]
+        public void ValidateJournalEntry_WhenDebitAndCreditOnSameLine_ShouldThrowValidationError()
+        {
+            // Arrange
+            var validator = new CreateJournalEntryCommandValidator();
+            var command = new CreateJournalEntryCommand
+            {
+                Description = "قيد سطر مدين ودائن معاً",
+                Lines = new List<JournalLineDto>
+                {
+                    new JournalLineDto { AccountId = Guid.NewGuid(), Debit = 500, Credit = 500, Description = "ملاحظة خاطئة" },
+                    new JournalLineDto { AccountId = Guid.NewGuid(), Debit = 0, Credit = 0, Description = "صفر" }
+                }
+            };
+
+            // Act
+            var result = validator.Validate(command);
+
+            // Assert
+            result.IsValid.Should().BeFalse();
+        }
+
+        [Fact]
+        public async Task CreateJournalEntry_WhenPostingToGroupAccount_ShouldThrowException()
+        {
+            // Arrange
+            var context = GetInMemoryDbContext();
+            var parentAcc = new Account { Id = Guid.NewGuid(), AccountCode = "1", Name = "Assets Parent", Type = AccountType.Asset, BranchId = _testBranchId };
+            var childAcc = new Account { Id = Guid.NewGuid(), AccountCode = "11", Name = "Current Assets Child", ParentAccountId = parentAcc.Id, Type = AccountType.Asset, BranchId = _testBranchId };
+            var accCredit = new Account { Id = Guid.NewGuid(), AccountCode = "3101", Name = "Capital", Type = AccountType.Equity, BranchId = _testBranchId };
+            context.Accounts.AddRange(parentAcc, childAcc, accCredit);
+            await context.SaveChangesAsync();
+
+            var handler = new CreateJournalEntryCommandHandler(context, _currentUserServiceMock.Object);
+            var command = new CreateJournalEntryCommand
+            {
+                Description = "قيد حساب تجميعي",
+                Lines = new List<JournalLineDto>
+                {
+                    new JournalLineDto { AccountId = parentAcc.Id, Debit = 5000, Credit = 0 },
+                    new JournalLineDto { AccountId = accCredit.Id, Debit = 0, Credit = 5000 }
+                }
+            };
+
+            // Act & Assert
+            Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
+            await act.Should().ThrowAsync<Exception>().WithMessage("*حساب رئيسي/تجميعي*");
+        }
+
+        [Fact]
+        public async Task CreateJournalEntry_WhenAccountInactive_ShouldThrowException()
+        {
+            // Arrange
+            var context = GetInMemoryDbContext();
+            var inactiveAcc = new Account { Id = Guid.NewGuid(), AccountCode = "1102", Name = "Inactive Cash", IsActive = false, Type = AccountType.Asset, BranchId = _testBranchId };
+            var accCredit = new Account { Id = Guid.NewGuid(), AccountCode = "3101", Name = "Capital", Type = AccountType.Equity, BranchId = _testBranchId };
+            context.Accounts.AddRange(inactiveAcc, accCredit);
+            await context.SaveChangesAsync();
+
+            var handler = new CreateJournalEntryCommandHandler(context, _currentUserServiceMock.Object);
+            var command = new CreateJournalEntryCommand
+            {
+                Description = "قيد حساب معطل",
+                Lines = new List<JournalLineDto>
+                {
+                    new JournalLineDto { AccountId = inactiveAcc.Id, Debit = 5000, Credit = 0 },
+                    new JournalLineDto { AccountId = accCredit.Id, Debit = 0, Credit = 5000 }
+                }
+            };
+
+            // Act & Assert
+            Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
+            await act.Should().ThrowAsync<Exception>().WithMessage("*غير موجود أو غير نشط*");
+        }
+
+        [Fact]
+        public async Task CreateJournalEntry_WhenDraft_ShouldHaveIsPostedFalse()
+        {
+            // Arrange
+            var context = GetInMemoryDbContext();
+            var accDebit = new Account { Id = Guid.NewGuid(), AccountCode = "1101", Name = "Cash", Type = AccountType.Asset, BranchId = _testBranchId };
+            var accCredit = new Account { Id = Guid.NewGuid(), AccountCode = "3101", Name = "Capital", Type = AccountType.Equity, BranchId = _testBranchId };
+            context.Accounts.AddRange(accDebit, accCredit);
+            await context.SaveChangesAsync();
+
+            var handler = new CreateJournalEntryCommandHandler(context, _currentUserServiceMock.Object);
+            var command = new CreateJournalEntryCommand
+            {
+                Description = "مسودة قيد غير مرحل",
+                IsPosted = false,
+                Lines = new List<JournalLineDto>
+                {
+                    new JournalLineDto { AccountId = accDebit.Id, Debit = 2000, Credit = 0 },
+                    new JournalLineDto { AccountId = accCredit.Id, Debit = 0, Credit = 2000 }
+                }
+            };
+
+            // Act
+            var entryId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            var entry = await context.JournalEntries.FirstOrDefaultAsync(j => j.Id == entryId);
+            entry.Should().NotBeNull();
+            entry!.IsPosted.Should().BeFalse();
+        }
     }
 }

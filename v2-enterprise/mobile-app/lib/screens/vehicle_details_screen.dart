@@ -12,12 +12,12 @@ class VehicleDetailsScreen extends StatefulWidget {
   final VoidCallback? onRefreshCatalog;
 
   const VehicleDetailsScreen({
-    Key? key,
+    super.key,
     required this.car,
     required this.apiService,
     required this.isManager,
     this.onRefreshCatalog,
-  }) : super(key: key);
+  });
 
   @override
   State<VehicleDetailsScreen> createState() => _VehicleDetailsScreenState();
@@ -114,8 +114,7 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
     setState(() => _isStartingConversation = true);
 
     final vehicleId = (_car['id'] ?? '').toString();
-    final conversationId =
-        await widget.apiService.startConversation(vehicleId);
+    final conversationId = await widget.apiService.startConversation(vehicleId);
 
     if (!mounted) return;
     setState(() => _isStartingConversation = false);
@@ -123,8 +122,8 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
     if (conversationId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('تعذر بدء المحادثة، يرجى المحاولة لاحقاً', textAlign: TextAlign.right),
+          content: Text('تعذر بدء المحادثة، يرجى المحاولة لاحقاً',
+              textAlign: TextAlign.right),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -267,7 +266,8 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.cyanAccent.withOpacity(0.15),
+                                  color: AppColors.cyanAccent
+                                      .withValues(alpha: 0.15),
                                   blurRadius: 50,
                                   spreadRadius: 20,
                                 )

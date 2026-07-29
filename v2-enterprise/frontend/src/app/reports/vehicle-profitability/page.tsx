@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, TrendingDown, Car, RefreshCw, Download, AlertTriangle } from 'lucide-react'
 import { getVehicleProfitabilityReport } from '@/lib/api/inventory'
 import { formatMoney } from '@/lib/utils'
+import { exportXlsx } from '@/lib/export'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -51,29 +52,23 @@ export default function VehicleProfitabilityPage() {
 
   const s = data?.summary
 
-  function handleExport() {
+  async function handleExport() {
     if (!cars.length) return
-    const rows = [
-      ['السيارة', 'الموديل', 'السنة', 'رقم الهيكل', 'الحالة', 'سعر الشراء', 'التكاليف', 'إجمالي التكلفة', 'سعر البيع', 'صافي الربح', 'هامش الربح%'],
-      ...cars.map(c => [
-        c.brand || c.model,
-        c.model,
-        c.year,
-        c.vin,
-        c.status,
-        c.purchase_price_iqd,
-        c.costs_total_iqd,
-        c.total_cost_iqd,
-        c.selling_price_iqd ?? '',
-        c.net_profit_iqd ?? '',
-        c.profit_pct != null ? `${c.profit_pct}%` : '',
-      ]),
-    ]
-    const csv  = rows.map(r => r.join('\t')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/tab-separated-values;charset=utf-8;' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a'); a.href = url; a.download = 'vehicle-profitability.tsv'; a.click()
-    URL.revokeObjectURL(url)
+    const headers = ['السيارة', 'الموديل', 'السنة', 'رقم الهيكل', 'الحالة', 'سعر الشراء', 'التكاليف', 'إجمالي التكلفة', 'سعر البيع', 'صافي الربح', 'هامش الربح%']
+    const rows = cars.map(c => [
+      c.brand || c.model,
+      c.model,
+      c.year,
+      c.vin,
+      c.status,
+      c.purchase_price_iqd,
+      c.costs_total_iqd,
+      c.total_cost_iqd,
+      c.selling_price_iqd ?? '',
+      c.net_profit_iqd ?? '',
+      c.profit_pct != null ? `${c.profit_pct}%` : '',
+    ])
+    await exportXlsx('vehicle-profitability', headers, rows)
   }
 
   return (

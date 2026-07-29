@@ -9,6 +9,7 @@ namespace CarShowroomManagementV2.Domain.Entities
         public PaymentType Type { get; set; }
         public PaymentMethod Method { get; set; }
         public decimal Amount { get; set; }
+        public string Currency { get; set; } = "IQD"; // عملة المبلغ المدفوع فعلياً (IQD أو USD)
         public string ReferenceNumber { get; set; } = string.Empty; // رقم السند / الشيك / الحوالة
         public string Description { get; set; } = string.Empty;
         

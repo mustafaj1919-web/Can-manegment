@@ -28,6 +28,7 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
 
         // حقول التقسيط
         public int InstallmentPeriodMonths { get; set; } = 0;
+        public decimal? CustomMonthlyInstallmentAmount { get; set; } = null;
         public decimal ProfitRatePercentage { get; set; } = 0; // نسبة الربح المضافة للتقسيط
         public DateTime? InstallmentStartDate { get; set; } // تاريخ بدء الأقساط (اختياري - افتراضي اليوم)
     }
@@ -149,6 +150,9 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
             var discount = AccountingAmount.RoundMoney(request.Discount);
             var downPayment = AccountingAmount.RoundMoney(request.DownPayment);
             var bookValue = AccountingAmount.RoundMoney(vehicle.BookValue);
+            // حساب المخزون (1201) وتكلفة البضاعة المباعة يُخفَّضان بسعر الشراء الأساسي الثابت فقط،
+            // بينما المصاريف الإضافية (شحن/تخليص/فحص/تجهيز) تُحمَّل كمصروفات مستقلة لحظة إضافتها
+            var inventoryRelief = AccountingAmount.RoundMoney(vehicle.PurchaseCost);
 
             var netPrice = AccountingAmount.RoundMoney(salePrice + taxAmount + registrationFees - discount);
             var remainingBalance = AccountingAmount.RoundMoney(netPrice - downPayment);
@@ -257,15 +261,35 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
 
                 if (request.PaymentMethod != PaymentMethod.Cash && remainingBalance > 0)
                 {
-                    if (request.InstallmentPeriodMonths <= 0)
-                    {
-                        throw new InvalidOperationException("فترة التقسيط بالأشهر مطلوبة لعمليات التقسيط.");
-                    }
+                    int periodMonths = request.InstallmentPeriodMonths;
+                    decimal monthlyAmount = 0m;
 
                     // احتساب أرباح التقسيط المضافة
                     totalProfitMarkup = AccountingAmount.RoundMoney(remainingBalance * (request.ProfitRatePercentage / 100));
                     var totalPlanAmount = AccountingAmount.RoundMoney(remainingBalance + totalProfitMarkup);
-                    var monthlyAmount = AccountingAmount.RoundMoney(totalPlanAmount / request.InstallmentPeriodMonths);
+
+                    if (request.CustomMonthlyInstallmentAmount.HasValue && request.CustomMonthlyInstallmentAmount.Value > 0)
+                    {
+                        var customAmount = AccountingAmount.RoundMoney(request.CustomMonthlyInstallmentAmount.Value);
+                        periodMonths = (int)Math.Ceiling(totalPlanAmount / customAmount);
+                        if (periodMonths > 240)
+                        {
+                            throw new InvalidOperationException("فترة التقسيط المحتسبة طويلة جداً (أكثر من 20 سنة). يرجى زيادة قيمة القسط الشهري.");
+                        }
+                        monthlyAmount = customAmount;
+                    }
+                    else
+                    {
+                        if (periodMonths <= 0)
+                        {
+                            throw new InvalidOperationException("فترة التقسيط بالأشهر مطلوبة لعمليات التقسيط.");
+                        }
+                        if (periodMonths > 240)
+                        {
+                            throw new InvalidOperationException("فترة التقسيط لا يمكن أن تتجاوز 240 شهراً (20 سنة).");
+                        }
+                        monthlyAmount = AccountingAmount.RoundMoney(totalPlanAmount / periodMonths);
+                    }
 
                     plan = new InstallmentPlan
                     {
@@ -273,7 +297,7 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                         SalesContractId = contract.Id,
                         TotalAmount = remainingBalance,
                         DownPayment = downPayment,
-                        InstallmentPeriodMonths = request.InstallmentPeriodMonths,
+                        InstallmentPeriodMonths = periodMonths,
                         ProfitRatePercentage = request.ProfitRatePercentage,
                         TotalProfit = totalProfitMarkup,
                         TotalPlanAmount = totalPlanAmount,
@@ -286,18 +310,31 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     await _context.SaveChangesAsync(cancellationToken);
 
                     // توليد جدول الأقساط
-                    var baseDate = request.InstallmentStartDate.HasValue
+                    var hasCustomStartDate = request.InstallmentStartDate.HasValue;
+                    var baseDate = hasCustomStartDate
                         ? DateTime.SpecifyKind(request.InstallmentStartDate.Value, DateTimeKind.Utc)
                         : DateTime.UtcNow;
-                    for (int i = 1; i <= request.InstallmentPeriodMonths; i++)
+
+                    for (int i = 1; i <= periodMonths; i++)
                     {
+                        decimal installmentAmount = monthlyAmount;
+
+                        // تسوية القسط الأخير لضمان مطابقة الإجمالي
+                        if (i == periodMonths)
+                        {
+                            var previousSum = monthlyAmount * (periodMonths - 1);
+                            installmentAmount = totalPlanAmount - previousSum;
+                        }
+
+                        var dueDate = hasCustomStartDate ? baseDate.AddMonths(i - 1) : baseDate.AddMonths(i);
+
                         var installment = new Installment
                         {
                             Id = Guid.NewGuid(),
                             InstallmentPlanId = plan.Id,
                             InstallmentNumber = i,
-                            DueDate = baseDate.AddMonths(i),
-                            Amount = monthlyAmount,
+                            DueDate = dueDate,
+                            Amount = installmentAmount,
                             PaidAmount = 0,
                             Status = "Pending",
                             BranchId = branchId
@@ -365,13 +402,13 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     });
                 }
 
-                // 3. حساب COGS بقيمة السيارة الدفترية
+                // 3. حساب COGS بسعر الشراء الأساسي الثابت للسيارة
                 journalEntry.Lines.Add(new JournalLine
                 {
                     Id = Guid.NewGuid(),
                     JournalEntryId = journalEntry.Id,
                     AccountId = cogsAccount.Id,
-                    Debit = bookValue,
+                    Debit = inventoryRelief,
                     Credit = 0,
                     Description = $"تكلفة السيارة المباعة {vehicle.Model}",
                     VehicleId = vehicle.Id
@@ -435,14 +472,14 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     });
                 }
 
-                // 5. حساب المخزون لتخفيض قيمة السيارة الدفترية
+                // 5. حساب المخزون لتخفيض سعر الشراء الأساسي للسيارة (ثابت، بدون المصاريف الإضافية)
                 journalEntry.Lines.Add(new JournalLine
                 {
                     Id = Guid.NewGuid(),
                     JournalEntryId = journalEntry.Id,
                     AccountId = inventoryAccount.Id,
                     Debit = 0,
-                    Credit = bookValue,
+                    Credit = inventoryRelief,
                     Description = $"تخفيض المخزون لبيع سيارة {vehicle.Model}",
                     VehicleId = vehicle.Id
                 });

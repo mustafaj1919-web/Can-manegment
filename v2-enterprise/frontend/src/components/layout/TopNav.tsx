@@ -44,6 +44,13 @@ const PATH_MAP: Record<string, string> = {
   'pipeline': 'خط أنابيب المبيعات',
   'employees': 'إدارة الموظفين',
   'settings': 'الإعدادات العامة',
+  'website': 'إدارة الموقع',
+  'homepage': 'الصفحة الرئيسية',
+  'pages': 'الصفحات الفرعية',
+  'news': 'الأخبار والمقالات',
+  'services': 'الخدمات',
+  'testimonials': 'آراء العملاء',
+  'media': 'مكتبة الوسائط',
 }
 
 function getBreadcrumbs(pathname: string) {
@@ -134,9 +141,23 @@ const NAV_MENU = [
     label: 'المحاسبة والتقارير',
     subLinks: [
       { label: 'دليل الحسابات وشجرة الحسابات', href: '/chart-of-accounts' },
+      { label: 'دفتر الأستاذ العام', href: '/general-ledger' },
       { label: 'القيود والعمليات اليومية', href: '/journal-entries' },
       { label: 'ميزان المراجعة المحاسبي', href: '/trial-balance' },
       { label: 'مركز التقارير والتحليلات', href: '/reports' },
+    ]
+  },
+  {
+    label: 'إدارة الموقع',
+    subLinks: [
+      { label: 'لوحة التحكم', href: '/website' },
+      { label: 'إعدادات الموقع العامة', href: '/website/settings' },
+      { label: 'الصفحة الرئيسية', href: '/website/homepage' },
+      { label: 'الصفحات الفرعية', href: '/website/pages' },
+      { label: 'الأخبار والمقالات', href: '/website/news' },
+      { label: 'الخدمات', href: '/website/services' },
+      { label: 'آراء العملاء', href: '/website/testimonials' },
+      { label: 'مكتبة الوسائط', href: '/website/media' },
     ]
   },
   {

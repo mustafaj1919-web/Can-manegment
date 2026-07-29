@@ -12,11 +12,11 @@ class MessagesTab extends StatefulWidget {
   final dynamic apiService;
 
   const MessagesTab({
-    Key? key,
+    super.key,
     this.customerPhotoUrl,
     this.isManager = false,
     required this.apiService,
-  }) : super(key: key);
+  });
 
   @override
   State<MessagesTab> createState() => _MessagesTabState();
@@ -79,7 +79,8 @@ class _MessagesTabState extends State<MessagesTab> {
               if (_isLoading)
                 const SliverFillRemaining(
                   child: Center(
-                    child: CircularProgressIndicator(color: AppColors.luxAccent),
+                    child:
+                        CircularProgressIndicator(color: AppColors.luxAccent),
                   ),
                 )
               else if (visible.isEmpty)
@@ -271,16 +272,18 @@ class _MessagesTabState extends State<MessagesTab> {
       padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => ConversationScreen(
-                conversationId: conversation['id'].toString(),
-                vehicleTitle: title,
-                isManager: widget.isManager,
-                apiService: widget.apiService,
-              ),
-            ),
-          ).then((_) => _loadConversations());
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (context) => ConversationScreen(
+                    conversationId: conversation['id'].toString(),
+                    vehicleTitle: title,
+                    isManager: widget.isManager,
+                    apiService: widget.apiService,
+                  ),
+                ),
+              )
+              .then((_) => _loadConversations());
         },
         child: Container(
           padding: const EdgeInsets.all(14),
@@ -298,7 +301,7 @@ class _MessagesTabState extends State<MessagesTab> {
               Container(
                 width: 50,
                 height: 50,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.luxCardAlt,
                   shape: BoxShape.circle,
                 ),
@@ -365,8 +368,9 @@ class _MessagesTabState extends State<MessagesTab> {
                                   ? AppColors.luxText
                                   : AppColors.luxTextMuted,
                               fontSize: 12.5,
-                              fontWeight:
-                                  unread > 0 ? FontWeight.w600 : FontWeight.w400,
+                              fontWeight: unread > 0
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                               fontFamily: 'Cairo',
                             ),
                           ),

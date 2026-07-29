@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getCostCenterReport } from '@/lib/api/reports'
 import { formatMoney } from '@/lib/utils'
+import { exportXlsx } from '@/lib/export'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -37,23 +38,19 @@ export default function CostCenterPage() {
     setExpanded(prev => ({ ...prev, [center]: !prev[center] }))
   }
 
-  function handleExport() {
+  async function handleExport() {
     if (!data) return
-    const rows: string[][] = [
-      ['مركز التكلفة', 'عدد البنود', 'المجموع (IQD)'],
-      ...(data.expense_centers ?? []).map(g => [g.center, String(g.count), String(g.total)]),
-      ...(data.vehicle_cost_centers ?? []).map(g => [g.center, String(g.count), String(g.total)]),
+    const headers = ['مركز التكلفة', 'عدد البنود', 'المجموع (IQD)']
+    const rows: (string | number)[][] = [
+      ...(data.expense_centers ?? []).map(g => [g.center, g.count, g.total]),
+      ...(data.vehicle_cost_centers ?? []).map(g => [g.center, g.count, g.total]),
       ['---', '', ''],
-      ['إجمالي الإيرادات', String(data.sales_count), String(data.total_revenue)],
-      ['إجمالي المصاريف', '', String(data.total_expenses)],
-      ['تكاليف السيارات', '', String(data.total_vehicle_costs)],
-      ['صافي النتيجة', '', String(data.net_result)],
+      ['إجمالي الإيرادات', data.sales_count, data.total_revenue],
+      ['إجمالي المصاريف', '', data.total_expenses],
+      ['تكاليف السيارات', '', data.total_vehicle_costs],
+      ['صافي النتيجة', '', data.net_result],
     ]
-    const csv = rows.map(r => r.join('\t')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/tab-separated-values;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'cost-center-report.tsv'; a.click()
-    URL.revokeObjectURL(url)
+    await exportXlsx('cost-center-report', headers, rows)
   }
 
   const allCenters = [
