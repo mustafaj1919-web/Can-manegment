@@ -144,4 +144,4 @@ volumes:
 networks:
   v2-network:
     name: v2-enterprise-network
-    driver: bridge
+    external: true
