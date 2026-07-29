@@ -82,8 +82,8 @@ function mapVehicleFromBackend(v: any): Car {
     typeof img === 'string'
       ? { id: img, filename: img, subfolder: 'vehicles' }
       : typeof img === 'object' && img !== null && (img.id ?? img.Id) && (img.fileName ?? img.FileName)
-      ? { id: img.id ?? img.Id, filename: img.fileName ?? img.FileName, subfolder: 'vehicles' }
-      : img
+        ? { id: img.id ?? img.Id, filename: img.fileName ?? img.FileName, subfolder: 'vehicles' }
+        : img
   )
 
   // cover photo: from photos array or from coverImage field (list endpoint)
@@ -95,35 +95,35 @@ function mapVehicleFromBackend(v: any): Car {
       : null
 
   return {
-    id:                v.id               ?? v.Id               ?? '',
-    branch_id:         v.branchId         ?? v.branch_id        ?? null,
-    brand:             v.brand            ?? v.Brand            ?? '',
-    model:             v.model            ?? v.Model            ?? '',
-    manufacturing_year: v.year            ?? v.manufacturingYear ?? v.manufacturing_year ?? 0,
-    trim:              v.trim             ?? v.Trim             ?? null,
-    condition:         v.condition        ?? v.Condition        ?? null,
-    color:             v.color            ?? v.Color            ?? null,
-    vin:               v.chassisNumber    ?? v.vin              ?? v.ChassisNumber ?? '',
-    plate_number:      v.plateNumber      ?? v.plate_number     ?? v.PlateNumber ?? '',
-    plate_status:      v.plateStatus      ?? v.plate_status     ?? v.PlateStatus ?? null,
-    mileage:           v.mileage          ?? v.Mileage          ?? null,
-    engine_size:       v.engineSize       ?? v.EngineSize       ?? v.engine_size ?? v.engine ?? null,
-    cylinders:         v.cylinders        ?? v.Cylinders        ?? null,
-    transmission:      v.transmission     ?? v.Transmission     ?? null,
-    fuel_type:         v.fuelType         ?? v.FuelType         ?? v.fuel_type ?? null,
-    import_country:    v.importCountry    ?? v.ImportCountry    ?? v.import_country ?? null,
-    seat_count:        v.seatCount        ?? v.SeatCount        ?? v.seat_count ?? null,
-    seat_material:     v.seatMaterial     ?? v.SeatMaterial     ?? v.seat_material ?? null,
-    purchase_price:    v.purchaseCost     ?? v.purchase_price   ?? v.PurchaseCost ?? 0,
-    selling_price:     v.targetSellingPrice ?? v.selling_price  ?? v.TargetSellingPrice ?? v.price ?? null,
-    currency:          v.currency         ?? v.Currency         ?? 'IQD',
-    status:            v.status           ?? v.Status           ?? 'Available',
-    notes:             v.notes            ?? v.Notes            ?? null,
-    created_at:        v.createdAt        ?? v.created_at       ?? null,
+    id: v.id ?? v.Id ?? '',
+    branch_id: v.branchId ?? v.branch_id ?? null,
+    brand: v.brand ?? v.Brand ?? '',
+    model: v.model ?? v.Model ?? '',
+    manufacturing_year: v.year ?? v.manufacturingYear ?? v.manufacturing_year ?? 0,
+    trim: v.trim ?? v.Trim ?? null,
+    condition: v.condition ?? v.Condition ?? null,
+    color: v.color ?? v.Color ?? null,
+    vin: v.chassisNumber ?? v.vin ?? v.ChassisNumber ?? '',
+    plate_number: v.plateNumber ?? v.plate_number ?? v.PlateNumber ?? '',
+    plate_status: v.plateStatus ?? v.plate_status ?? v.PlateStatus ?? null,
+    mileage: v.mileage ?? v.Mileage ?? null,
+    engine_size: v.engineSize ?? v.EngineSize ?? v.engine_size ?? v.engine ?? null,
+    cylinders: v.cylinders ?? v.Cylinders ?? null,
+    transmission: v.transmission ?? v.Transmission ?? null,
+    fuel_type: v.fuelType ?? v.FuelType ?? v.fuel_type ?? null,
+    import_country: v.importCountry ?? v.ImportCountry ?? v.import_country ?? null,
+    seat_count: v.seatCount ?? v.SeatCount ?? v.seat_count ?? null,
+    seat_material: v.seatMaterial ?? v.SeatMaterial ?? v.seat_material ?? null,
+    purchase_price: v.purchaseCost ?? v.purchase_price ?? v.PurchaseCost ?? 0,
+    selling_price: v.targetSellingPrice ?? v.selling_price ?? v.TargetSellingPrice ?? v.price ?? null,
+    currency: v.currency ?? v.Currency ?? 'IQD',
+    status: v.status ?? v.Status ?? 'Available',
+    notes: v.notes ?? v.Notes ?? null,
+    created_at: v.createdAt ?? v.created_at ?? null,
     photos,
     cover_photo,
-    supplier_id:       v.supplierId       ?? v.supplier_id      ?? null,
-    supplier_name:     v.supplierName     ?? v.supplier_name    ?? null,
+    supplier_id: v.supplierId ?? v.supplier_id ?? null,
+    supplier_name: v.supplierName ?? v.supplier_name ?? null,
   }
 }
 
@@ -140,14 +140,14 @@ export async function getCars(params: {
   sort_dir?: 'asc' | 'desc';
 } = {}): Promise<CarsListResponse> {
   const qs = new URLSearchParams()
-  qs.set('page',     String(params.page     ?? 1))
+  qs.set('page', String(params.page ?? 1))
   qs.set('per_page', String(params.per_page ?? 25))
-  if (params.status)      qs.set('status',      params.status)
-  if (params.search)      qs.set('search',      params.search)
+  if (params.status) qs.set('status', params.status)
+  if (params.search) qs.set('search', params.search)
   if (params.supplier_id) qs.set('supplier_id', params.supplier_id)
-  if (params.branch_id)   qs.set('branch_id',   params.branch_id)
-  if (params.sort_by)     qs.set('sort_by',     params.sort_by)
-  if (params.sort_dir)    qs.set('sort_dir',    params.sort_dir)
+  if (params.branch_id) qs.set('branch_id', params.branch_id)
+  if (params.sort_by) qs.set('sort_by', params.sort_by)
+  if (params.sort_dir) qs.set('sort_dir', params.sort_dir)
   const res = await get<any>(`/Inventory?${qs.toString()}`)
   if (res && res.success && res.data) {
     const data = res.data
@@ -155,7 +155,7 @@ export async function getCars(params: {
       return {
         items: data.map(mapVehicleFromBackend),
         total: res.total ?? data.length,
-        page:  res.page  ?? params.page     ?? 1,
+        page: res.page ?? params.page ?? 1,
         per_page: res.per_page ?? params.per_page ?? 25,
       }
     }
@@ -176,7 +176,7 @@ export async function getPublicCars(params: {
   page?: number; per_page?: number; search?: string
 } = {}): Promise<CarsListResponse> {
   const qs = new URLSearchParams()
-  qs.set('page',     String(params.page     ?? 1))
+  qs.set('page', String(params.page ?? 1))
   qs.set('per_page', String(params.per_page ?? 25))
   if (params.search) qs.set('search', params.search)
   const res = await get<any>(`/public/inventory?${qs.toString()}`)
@@ -186,7 +186,7 @@ export async function getPublicCars(params: {
       return {
         items: data.map(mapVehicleFromBackend),
         total: res.total ?? data.length,
-        page:  res.page  ?? params.page     ?? 1,
+        page: res.page ?? params.page ?? 1,
         per_page: res.per_page ?? params.per_page ?? 25,
       }
     }
@@ -287,26 +287,26 @@ export async function submitVisitRequest(payload: {
 // تحويل حقول الفورم (snake_case) إلى حقول أمر السيارة في الباكيند (PascalCase).
 function mapVehicleCreateBody(payload: CarPayload) {
   return {
-    Brand:              payload.brand || null,
-    Model:              payload.model,
-    Trim:               payload.trim || null,
-    ChassisNumber:      payload.vin,
-    Color:              payload.color || null,
-    Year:               payload.manufacturing_year,
-    Condition:          payload.condition || null,
-    PlateNumber:        payload.plate_number || null,
-    PlateStatus:        payload.plate_status || null,
-    Mileage:            payload.mileage || null,
-    EngineSize:         payload.engine_size || null,
-    Cylinders:          payload.cylinders || null,
-    Transmission:       payload.transmission || null,
-    FuelType:           payload.fuel_type || null,
-    ImportCountry:      payload.import_country || null,
-    SeatCount:          payload.seat_count || null,
-    SeatMaterial:       payload.seat_material || null,
-    Currency:           payload.currency ?? 'IQD',
-    Notes:              payload.notes || null,
-    PurchaseCost:       payload.purchase_price,
+    Brand: payload.brand || null,
+    Model: payload.model,
+    Trim: payload.trim || null,
+    ChassisNumber: payload.vin,
+    Color: payload.color || null,
+    Year: payload.manufacturing_year,
+    Condition: payload.condition || null,
+    PlateNumber: payload.plate_number || null,
+    PlateStatus: payload.plate_status || null,
+    Mileage: payload.mileage || null,
+    EngineSize: payload.engine_size || null,
+    Cylinders: payload.cylinders || null,
+    Transmission: payload.transmission || null,
+    FuelType: payload.fuel_type || null,
+    ImportCountry: payload.import_country || null,
+    SeatCount: payload.seat_count || null,
+    SeatMaterial: payload.seat_material || null,
+    Currency: payload.currency ?? 'IQD',
+    Notes: payload.notes || null,
+    PurchaseCost: payload.purchase_price,
     TargetSellingPrice: payload.selling_price ?? payload.purchase_price,
   }
 }
@@ -322,25 +322,25 @@ export async function createCar(payload: CarPayload): Promise<Car> {
 
 export async function updateCar(id: string | number, payload: CarPayload): Promise<Car> {
   const body = {
-    Brand:              payload.brand || null,
-    Model:              payload.model,
-    Trim:               payload.trim || null,
-    ChassisNumber:      payload.vin,
-    Color:              payload.color || null,
-    Year:               payload.manufacturing_year,
-    Condition:          payload.condition || null,
-    PlateNumber:        payload.plate_number || null,
-    PlateStatus:        payload.plate_status || null,
-    Mileage:            payload.mileage || null,
-    EngineSize:         payload.engine_size || null,
-    Cylinders:          payload.cylinders || null,
-    Transmission:       payload.transmission || null,
-    FuelType:           payload.fuel_type || null,
-    ImportCountry:      payload.import_country || null,
-    SeatCount:          payload.seat_count || null,
-    SeatMaterial:       payload.seat_material || null,
-    Currency:           payload.currency ?? 'IQD',
-    Notes:              payload.notes || null,
+    Brand: payload.brand || null,
+    Model: payload.model,
+    Trim: payload.trim || null,
+    ChassisNumber: payload.vin,
+    Color: payload.color || null,
+    Year: payload.manufacturing_year,
+    Condition: payload.condition || null,
+    PlateNumber: payload.plate_number || null,
+    PlateStatus: payload.plate_status || null,
+    Mileage: payload.mileage || null,
+    EngineSize: payload.engine_size || null,
+    Cylinders: payload.cylinders || null,
+    Transmission: payload.transmission || null,
+    FuelType: payload.fuel_type || null,
+    ImportCountry: payload.import_country || null,
+    SeatCount: payload.seat_count || null,
+    SeatMaterial: payload.seat_material || null,
+    Currency: payload.currency ?? 'IQD',
+    Notes: payload.notes || null,
     TargetSellingPrice: payload.selling_price ?? 0,
   }
   const res = await put<any>(`/Inventory/${id}`, body)

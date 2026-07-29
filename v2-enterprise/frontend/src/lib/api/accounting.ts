@@ -862,7 +862,63 @@ export async function getProfitAndLoss(fromDate?: string, toDate?: string): Prom
   const qs = new URLSearchParams()
   if (fromDate) qs.set('fromDate', fromDate + 'T00:00:00Z')
   if (toDate) qs.set('toDate', toDate + 'T23:59:59Z')
-  return get<ProfitLossResponse>(`/Accounting/profit-loss?${qs.toString()}`)
+
+  const res = await get<any>(`/Accounting/profit-loss?${qs.toString()}`)
+  const rawData = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res
+
+  const rawRevenues = Array.isArray(rawData?.revenues)
+    ? rawData.revenues
+    : Array.isArray(rawData?.Revenues)
+    ? rawData.Revenues
+    : Array.isArray(rawData?.revenueGroups)
+    ? rawData.revenueGroups
+    : []
+
+  const rawExpenses = Array.isArray(rawData?.expenses)
+    ? rawData.expenses
+    : Array.isArray(rawData?.Expenses)
+    ? rawData.Expenses
+    : Array.isArray(rawData?.expenseGroups)
+    ? rawData.expenseGroups
+    : []
+
+  const revenues: ProfitLossItem[] = rawRevenues.map((r: any) => ({
+    accountCode: String(r?.accountCode ?? r?.AccountCode ?? r?.code ?? ''),
+    accountName: String(r?.accountName ?? r?.AccountName ?? r?.name ?? ''),
+    amount: typeof r?.amount === 'number' ? r.amount : typeof r?.Amount === 'number' ? r.Amount : 0,
+  }))
+
+  const expenses: ProfitLossItem[] = rawExpenses.map((e: any) => ({
+    accountCode: String(e?.accountCode ?? e?.AccountCode ?? e?.code ?? ''),
+    accountName: String(e?.accountName ?? e?.AccountName ?? e?.name ?? ''),
+    amount: typeof e?.amount === 'number' ? e.amount : typeof e?.Amount === 'number' ? e.Amount : 0,
+  }))
+
+  const totalRevenues = typeof rawData?.totalRevenues === 'number'
+    ? rawData.totalRevenues
+    : typeof rawData?.TotalRevenues === 'number'
+    ? rawData.TotalRevenues
+    : revenues.reduce((sum, r) => sum + r.amount, 0)
+
+  const totalExpenses = typeof rawData?.totalExpenses === 'number'
+    ? rawData.totalExpenses
+    : typeof rawData?.TotalExpenses === 'number'
+    ? rawData.TotalExpenses
+    : expenses.reduce((sum, e) => sum + e.amount, 0)
+
+  const netProfitOrLoss = typeof rawData?.netProfitOrLoss === 'number'
+    ? rawData.netProfitOrLoss
+    : typeof rawData?.NetProfitOrLoss === 'number'
+    ? rawData.NetProfitOrLoss
+    : totalRevenues - totalExpenses
+
+  return {
+    revenues,
+    expenses,
+    totalRevenues,
+    totalExpenses,
+    netProfitOrLoss,
+  }
 }
 
 export interface DepreciationVehicleRow {

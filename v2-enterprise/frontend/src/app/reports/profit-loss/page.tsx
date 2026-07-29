@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, TrendingUp, TrendingDown, Scale, RefreshCw, Download } from 'lucide-react'
@@ -29,7 +29,11 @@ export default function ProfitLossPage() {
 
   const [exporting, setExporting] = useState(false)
 
-  const netProfit = data?.netProfitOrLoss ?? 0
+  const revenues = useMemo(() => Array.isArray(data?.revenues) ? data.revenues : [], [data])
+  const expenses = useMemo(() => Array.isArray(data?.expenses) ? data.expenses : [], [data])
+  const totalRevenues = typeof data?.totalRevenues === 'number' ? data.totalRevenues : 0
+  const totalExpenses = typeof data?.totalExpenses === 'number' ? data.totalExpenses : 0
+  const netProfit = typeof data?.netProfitOrLoss === 'number' ? data.netProfitOrLoss : totalRevenues - totalExpenses
   const isProfitable = netProfit >= 0
 
   const handleExport = async () => {
@@ -40,19 +44,19 @@ export default function ProfitLossPage() {
       const rows: (string | number)[][] = []
       
       // Add Revenues
-      data.revenues.forEach(r => {
+      revenues.forEach(r => {
         rows.push(['إيراد', r.accountCode, r.accountName, r.amount])
       })
-      rows.push(['إجمالي الإيرادات', '', '', data.totalRevenues])
+      rows.push(['إجمالي الإيرادات', '', '', totalRevenues])
       
       // Empty separator row
       rows.push(['', '', '', ''])
 
       // Add Expenses
-      data.expenses.forEach(e => {
+      expenses.forEach(e => {
         rows.push(['مصروف', e.accountCode, e.accountName, e.amount])
       })
-      rows.push(['إجمالي المصروفات', '', '', data.totalExpenses])
+      rows.push(['إجمالي المصروفات', '', '', totalExpenses])
       
       // Empty separator row
       rows.push(['', '', '', ''])
@@ -137,7 +141,7 @@ export default function ProfitLossPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">إجمالي الإيرادات</p>
               </div>
-              <p className="font-numeric text-lg font-bold text-emerald-400">{formatMoney(data.totalRevenues, 'IQD')}</p>
+              <p className="font-numeric text-lg font-bold text-emerald-400">{formatMoney(totalRevenues, 'IQD')}</p>
             </div>
             <div className="glass rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -146,7 +150,7 @@ export default function ProfitLossPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">إجمالي المصروفات</p>
               </div>
-              <p className="font-numeric text-lg font-bold text-rose-400">{formatMoney(data.totalExpenses, 'IQD')}</p>
+              <p className="font-numeric text-lg font-bold text-rose-400">{formatMoney(totalExpenses, 'IQD')}</p>
             </div>
             <div className="glass rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -161,8 +165,8 @@ export default function ProfitLossPage() {
 
           {/* Two columns: revenues and expenses */}
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <SectionCard title={`الإيرادات (${data.revenues.length})`}>
-              {data.revenues.length === 0 ? (
+            <SectionCard title={`الإيرادات (${revenues.length})`}>
+              {revenues.length === 0 ? (
                 <p className="py-8 text-center text-xs text-muted-foreground">لا توجد إيرادات في هذه الفترة</p>
               ) : (
                 <div className="overflow-x-auto -mx-5">
@@ -172,7 +176,7 @@ export default function ProfitLossPage() {
                       <th className="px-4 py-2.5 text-left">المبلغ</th>
                     </tr></thead>
                     <tbody>
-                      {data.revenues.map((r, i) => (
+                      {revenues.map((r, i) => (
                         <tr key={i} className="border-b border-border/20 hover:bg-secondary/20">
                           <td className="px-4 py-2.5">
                             <p className="text-xs font-medium text-foreground">{r.accountName}</p>
@@ -184,15 +188,15 @@ export default function ProfitLossPage() {
                     </tbody>
                     <tfoot><tr className="border-t border-border/50 bg-secondary/20">
                       <td className="px-4 py-2.5 text-xs font-bold">الإجمالي</td>
-                      <td className="px-4 py-2.5 font-numeric text-xs font-bold text-left text-emerald-400">{formatMoney(data.totalRevenues, 'IQD')}</td>
+                      <td className="px-4 py-2.5 font-numeric text-xs font-bold text-left text-emerald-400">{formatMoney(totalRevenues, 'IQD')}</td>
                     </tr></tfoot>
                   </table>
                 </div>
               )}
             </SectionCard>
 
-            <SectionCard title={`المصروفات (${data.expenses.length})`}>
-              {data.expenses.length === 0 ? (
+            <SectionCard title={`المصروفات (${expenses.length})`}>
+              {expenses.length === 0 ? (
                 <p className="py-8 text-center text-xs text-muted-foreground">لا توجد مصروفات في هذه الفترة</p>
               ) : (
                 <div className="overflow-x-auto -mx-5">
@@ -202,7 +206,7 @@ export default function ProfitLossPage() {
                       <th className="px-4 py-2.5 text-left">المبلغ</th>
                     </tr></thead>
                     <tbody>
-                      {data.expenses.map((r, i) => (
+                      {expenses.map((r, i) => (
                         <tr key={i} className="border-b border-border/20 hover:bg-secondary/20">
                           <td className="px-4 py-2.5">
                             <p className="text-xs font-medium text-foreground">{r.accountName}</p>
@@ -214,7 +218,7 @@ export default function ProfitLossPage() {
                     </tbody>
                     <tfoot><tr className="border-t border-border/50 bg-secondary/20">
                       <td className="px-4 py-2.5 text-xs font-bold">الإجمالي</td>
-                      <td className="px-4 py-2.5 font-numeric text-xs font-bold text-left text-rose-400">{formatMoney(data.totalExpenses, 'IQD')}</td>
+                      <td className="px-4 py-2.5 font-numeric text-xs font-bold text-left text-rose-400">{formatMoney(totalExpenses, 'IQD')}</td>
                     </tr></tfoot>
                   </table>
                 </div>

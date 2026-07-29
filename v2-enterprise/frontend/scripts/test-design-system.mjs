@@ -361,6 +361,39 @@ assert(tbTotals.period_debit === tbTotals.period_credit, 'Total Period Debit equ
 assert(tbTotals.closing_debit === tbTotals.closing_credit, 'Total Closing Debit equals Total Closing Credit (1,500,000 IQD)')
 assert(tbTotals.difference === 0, 'Trial Balance difference equals exactly 0.00 IQD')
 
+// --- Test Group 12: Profit & Loss Response Normalization & Array Safety ---
+console.log('\n--- Test Group 12: Profit & Loss Response Normalization & Array Safety ---')
+
+function normalizeProfitLossData(rawData) {
+  const data = (rawData && typeof rawData === 'object' && 'data' in rawData && rawData.data) ? rawData.data : rawData
+  const revenues = Array.isArray(data?.revenues) ? data.revenues : Array.isArray(data?.Revenues) ? data.Revenues : []
+  const expenses = Array.isArray(data?.expenses) ? data.expenses : Array.isArray(data?.Expenses) ? data.Expenses : []
+  const totalRevenues = typeof data?.totalRevenues === 'number' ? data.totalRevenues : revenues.reduce((s, r) => s + (r.amount ?? 0), 0)
+  const totalExpenses = typeof data?.totalExpenses === 'number' ? data.totalExpenses : expenses.reduce((s, e) => s + (e.amount ?? 0), 0)
+  const netProfitOrLoss = typeof data?.netProfitOrLoss === 'number' ? data.netProfitOrLoss : totalRevenues - totalExpenses
+
+  return { revenues, expenses, totalRevenues, totalExpenses, netProfitOrLoss }
+}
+
+const nullResult = normalizeProfitLossData(null)
+assert(Array.isArray(nullResult.revenues) && nullResult.revenues.length === 0, 'Null rawData normalizes revenues to []')
+assert(Array.isArray(nullResult.expenses) && nullResult.expenses.length === 0, 'Null rawData normalizes expenses to []')
+assert(nullResult.netProfitOrLoss === 0, 'Null rawData normalizes netProfitOrLoss to 0')
+
+const wrapperResult = normalizeProfitLossData({
+  success: true,
+  data: {
+    revenues: [{ accountCode: '411', accountName: 'مبيعات', amount: 100000 }],
+    expenses: [],
+    totalRevenues: 100000,
+    totalExpenses: 0,
+    netProfitOrLoss: 100000
+  }
+})
+assert(wrapperResult.revenues.length === 1, 'Wrapper object { success: true, data: { ... } } correctly unwrapped')
+assert(wrapperResult.expenses.length === 0, 'Empty expenses array safely preserved as []')
+assert(wrapperResult.netProfitOrLoss === 100000, 'Net profit correctly calculated')
+
 console.log('\n==================================================')
 console.log(`Test Summary: ${passed} passed, ${failed} failed`)
 console.log('==================================================\n')
