@@ -1083,3 +1083,127 @@ export async function getCashForecast(days = 30): Promise<CashForecast | null> {
     return null
   }
 }
+
+// ─── Supplier Profitability Statement ───────────────────────────────────────
+
+export interface SupplierProfitabilityParams {
+  supplierId: string
+  saleDateFrom?: string
+  saleDateTo?: string
+  branchId?: string
+  brand?: string
+  model?: string
+  year?: number
+  trim?: string
+  status?: string
+}
+
+export interface SupplierProfitabilityResponse {
+  supplier: {
+    id: string
+    name: string
+    code: string
+    phone: string
+  }
+  period: {
+    dateFrom?: string | null
+    dateTo?: string | null
+  }
+  summary: {
+    purchasedVehicleCount: number
+    soldVehicleCount: number
+    unsoldVehicleCount: number
+    purchaseValue: number
+    realizedRevenue: number
+    costOfSoldVehicles: number
+    directCosts: number
+    realizedGrossProfit: number
+    profitMarginPercent: number
+    markupPercent: number
+    averageProfitPerSoldVehicle: number
+    unsoldInventoryCost: number
+    averageDaysToSell: number
+  }
+  vehicles: Array<{
+    vehicleId: string
+    stockNumber: string
+    vin: string
+    brand: string
+    model: string
+    year: number
+    trim: string
+    branchName: string
+    purchaseDate: string
+    purchaseCost: number
+    additionalCosts: number
+    totalVehicleCost: number
+    saleDate?: string | null
+    saleNumber?: string
+    salePrice: number
+    discount: number
+    netRevenue: number
+    realizedProfit: number
+    profitMarginPercent: number
+    daysToSell: number
+    status: 'Sold' | 'InStock' | string
+  }>
+  monthlyTrend: Array<{
+    period: string
+    soldCount: number
+    revenue: number
+    cost: number
+    profit: number
+  }>
+  modelBreakdown: Array<{
+    brand: string
+    model: string
+    soldCount: number
+    revenue: number
+    cost: number
+    profit: number
+    marginPercent: number
+  }>
+}
+
+export async function getSupplierProfitability(params: SupplierProfitabilityParams): Promise<SupplierProfitabilityResponse> {
+  if (!params.supplierId) {
+    throw new Error('supplierId is required')
+  }
+
+  const qs = new URLSearchParams()
+  qs.set('supplierId', params.supplierId)
+  if (params.saleDateFrom) qs.set('saleDateFrom', params.saleDateFrom)
+  if (params.saleDateTo) qs.set('saleDateTo', params.saleDateTo)
+  if (params.branchId && params.branchId !== 'all') qs.set('branchId', params.branchId)
+  if (params.brand) qs.set('brand', params.brand)
+  if (params.model) qs.set('model', params.model)
+  if (params.year) qs.set('year', params.year.toString())
+  if (params.trim) qs.set('trim', params.trim)
+  if (params.status && params.status !== 'all') qs.set('status', params.status)
+
+  const res = await get<any>(`/reports/supplier-profitability?${qs.toString()}`)
+  const raw = (res && res.success && res.data) ? res.data : res
+
+  return {
+    supplier: raw?.supplier ?? { id: '', name: '', code: '', phone: '' },
+    period: raw?.period ?? { dateFrom: null, dateTo: null },
+    summary: raw?.summary ?? {
+      purchasedVehicleCount: 0,
+      soldVehicleCount: 0,
+      unsoldVehicleCount: 0,
+      purchaseValue: 0,
+      realizedRevenue: 0,
+      costOfSoldVehicles: 0,
+      directCosts: 0,
+      realizedGrossProfit: 0,
+      profitMarginPercent: 0,
+      markupPercent: 0,
+      averageProfitPerSoldVehicle: 0,
+      unsoldInventoryCost: 0,
+      averageDaysToSell: 0,
+    },
+    vehicles: Array.isArray(raw?.vehicles) ? raw.vehicles : [],
+    monthlyTrend: Array.isArray(raw?.monthlyTrend) ? raw.monthlyTrend : [],
+    modelBreakdown: Array.isArray(raw?.modelBreakdown) ? raw.modelBreakdown : [],
+  }
+}

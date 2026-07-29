@@ -45,6 +45,17 @@ namespace CarShowroomManagementV2.UnitTests.Accounting
 
             var context = new ApplicationDbContext(options, _currentUserServiceMock.Object, _interceptor);
             context.Database.EnsureCreated();
+
+            if (!context.Branches.Any(b => b.Id == _baghdadBranchId))
+            {
+                context.Branches.Add(new Branch { Id = _baghdadBranchId, Name = "فرع بغداد", Code = "BGD-01", IsActive = true });
+            }
+            if (!context.Branches.Any(b => b.Id == _erbilBranchId))
+            {
+                context.Branches.Add(new Branch { Id = _erbilBranchId, Name = "فرع أربيل", Code = "ERB-01", IsActive = true });
+            }
+            context.SaveChanges();
+
             return context;
         }
 
@@ -670,6 +681,234 @@ namespace CarShowroomManagementV2.UnitTests.Accounting
             result.Totals.PeriodCredit.Should().Be(0);
             result.Totals.ClosingDebit.Should().Be(0);
             result.Totals.ClosingCredit.Should().Be(0);
+        }
+
+        [Fact]
+        public async Task GetSupplierProfitability_WithSoldAndUnsoldVehicles_ShouldReconcileTotalsAndCalculations()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            _currentUserServiceMock.Setup(x => x.CanSeeAllBranches).Returns(true);
+
+            var acc = await SeedAccountAsync(context, "2101001", "حساب المورد", AccountType.Liability, _baghdadBranchId);
+
+            var supplier = new Supplier
+            {
+                Id = Guid.NewGuid(),
+                Name = "شركة النور للمربعات والسيارات",
+                Code = "SUP-TEST-101",
+                Phone = "07700000000",
+                AccountId = acc.Id,
+                BranchId = _baghdadBranchId,
+                IsActive = true
+            };
+            context.Suppliers.Add(supplier);
+
+            // 1. سيارة مباعة
+            var car1 = new Vehicle
+            {
+                Id = Guid.NewGuid(),
+                Brand = "Toyota",
+                Model = "Camry",
+                Year = 2025,
+                ChassisNumber = "VIN-TOYOTA-001",
+                PurchaseCost = 20000000,
+                CustomDuties = 1000000,
+                MaintenanceCost = 500000,
+                BranchId = _baghdadBranchId,
+                Status = "Sold",
+                IsSold = true,
+                Currency = "IQD"
+            };
+            context.Vehicles.Add(car1);
+
+            var purchase1 = new Purchase
+            {
+                Id = Guid.NewGuid(),
+                PurchaseNumber = "PUR-001",
+                SupplierId = supplier.Id,
+                VehicleId = car1.Id,
+                PurchaseDate = DateTime.UtcNow.AddDays(-30),
+                PurchaseCost = 20000000,
+                Status = "Active",
+                BranchId = _baghdadBranchId
+            };
+            context.Purchases.Add(purchase1);
+
+            var customerAcc = await SeedAccountAsync(context, "1102001", "حساب العميل", AccountType.Asset, _baghdadBranchId);
+
+            var customer = new Customer
+            {
+                Id = Guid.NewGuid(),
+                Name = "عميل تجريبي",
+                Phone = "07800000000",
+                AccountId = customerAcc.Id,
+                BranchId = _baghdadBranchId
+            };
+            context.Customers.Add(customer);
+
+            var sale1 = new SalesContract
+            {
+                Id = Guid.NewGuid(),
+                ContractNumber = "INV-001",
+                CustomerId = customer.Id,
+                VehicleId = car1.Id,
+                SaleDate = DateTime.UtcNow.AddDays(-5),
+                SalePrice = 26000000,
+                Discount = 1000000,
+                NetPrice = 25000000, // Net of discount
+                Status = "Active",
+                BranchId = _baghdadBranchId
+            };
+            context.SalesContracts.Add(sale1);
+
+            // 2. سيارة غير مباعة
+            var car2 = new Vehicle
+            {
+                Id = Guid.NewGuid(),
+                Brand = "Toyota",
+                Model = "Corolla",
+                Year = 2024,
+                ChassisNumber = "VIN-TOYOTA-002",
+                PurchaseCost = 15000000,
+                CustomDuties = 500000,
+                MaintenanceCost = 0,
+                BranchId = _baghdadBranchId,
+                Status = "Available",
+                IsSold = false,
+                Currency = "IQD"
+            };
+            context.Vehicles.Add(car2);
+
+            var purchase2 = new Purchase
+            {
+                Id = Guid.NewGuid(),
+                PurchaseNumber = "PUR-002",
+                SupplierId = supplier.Id,
+                VehicleId = car2.Id,
+                PurchaseDate = DateTime.UtcNow.AddDays(-10),
+                PurchaseCost = 15000000,
+                Status = "Active",
+                BranchId = _baghdadBranchId
+            };
+            context.Purchases.Add(purchase2);
+
+            await context.SaveChangesAsync();
+
+            var handler = new GetSupplierProfitabilityQueryHandler(context, _currentUserServiceMock.Object);
+            var query = new GetSupplierProfitabilityQuery { SupplierId = supplier.Id };
+
+            // Act
+            var report = await handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            report.Supplier.Name.Should().Be("شركة النور للمربعات والسيارات");
+            report.Summary.PurchasedVehicleCount.Should().Be(2);
+            report.Summary.SoldVehicleCount.Should().Be(1);
+            report.Summary.UnsoldVehicleCount.Should().Be(1);
+
+            // Car1 Total Cost = 20,000,000 + 1,000,000 + 500,000 = 21,500,000
+            // Car1 Net Revenue = 25,000,000
+            // Realized Profit = 25,000,000 - 21,500,000 = 3,500,000
+            report.Summary.CostOfSoldVehicles.Should().Be(21500000);
+            report.Summary.RealizedRevenue.Should().Be(25000000);
+            report.Summary.RealizedGrossProfit.Should().Be(3500000);
+            report.Summary.UnsoldInventoryCost.Should().Be(15500000);
+            report.Summary.PurchaseValue.Should().Be(21500000 + 15500000);
+
+            // Automatic reconciliation check
+            report.Summary.RealizedGrossProfit.Should().Be(report.Summary.RealizedRevenue - report.Summary.CostOfSoldVehicles);
+            report.Summary.PurchaseValue.Should().Be(report.Summary.CostOfSoldVehicles + report.Summary.UnsoldInventoryCost);
+        }
+
+        [Fact]
+        public async Task GetSupplierProfitability_WithCancelledSale_ShouldExcludeCancelledSaleFromProfit()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            _currentUserServiceMock.Setup(x => x.CanSeeAllBranches).Returns(true);
+
+            var acc = await SeedAccountAsync(context, "2101002", "حساب مورد أربيل", AccountType.Liability, _erbilBranchId);
+
+            var supplier = new Supplier
+            {
+                Id = Guid.NewGuid(),
+                Name = "مورد أربيل الممتاز",
+                Code = "SUP-ERBIL-01",
+                AccountId = acc.Id,
+                BranchId = _erbilBranchId,
+                IsActive = true
+            };
+            context.Suppliers.Add(supplier);
+
+            var car = new Vehicle
+            {
+                Id = Guid.NewGuid(),
+                Brand = "Hyundai",
+                Model = "Tucson",
+                Year = 2025,
+                ChassisNumber = "VIN-HYUNDAI-99",
+                PurchaseCost = 18000000,
+                BranchId = _erbilBranchId,
+                Status = "Available",
+                IsSold = false,
+                Currency = "IQD"
+            };
+            context.Vehicles.Add(car);
+
+            var purchase = new Purchase
+            {
+                Id = Guid.NewGuid(),
+                PurchaseNumber = "PUR-ERB-01",
+                SupplierId = supplier.Id,
+                VehicleId = car.Id,
+                PurchaseDate = DateTime.UtcNow.AddDays(-20),
+                PurchaseCost = 18000000,
+                Status = "Active",
+                BranchId = _erbilBranchId
+            };
+            context.Purchases.Add(purchase);
+
+            var customerAcc = await SeedAccountAsync(context, "1102002", "حساب عميل أربيل", AccountType.Asset, _erbilBranchId);
+
+            var customer = new Customer
+            {
+                Id = Guid.NewGuid(),
+                Name = "عميل أربيل",
+                Phone = "07500000000",
+                AccountId = customerAcc.Id,
+                BranchId = _erbilBranchId
+            };
+            context.Customers.Add(customer);
+
+            // عقد ملغى (Cancelled)
+            var cancelledSale = new SalesContract
+            {
+                Id = Guid.NewGuid(),
+                ContractNumber = "INV-CANCELLED-99",
+                CustomerId = customer.Id,
+                VehicleId = car.Id,
+                SaleDate = DateTime.UtcNow.AddDays(-2),
+                SalePrice = 22000000,
+                NetPrice = 22000000,
+                Status = "Cancelled", // CANCELLED!
+                BranchId = _erbilBranchId
+            };
+            context.SalesContracts.Add(cancelledSale);
+
+            await context.SaveChangesAsync();
+
+            var handler = new GetSupplierProfitabilityQueryHandler(context, _currentUserServiceMock.Object);
+
+            // Act
+            var report = await handler.Handle(new GetSupplierProfitabilityQuery { SupplierId = supplier.Id }, CancellationToken.None);
+
+            // Assert: العقد الملغى لا يحتسب كربح محقق
+            report.Summary.SoldVehicleCount.Should().Be(0);
+            report.Summary.UnsoldVehicleCount.Should().Be(1);
+            report.Summary.RealizedRevenue.Should().Be(0);
+            report.Summary.RealizedGrossProfit.Should().Be(0);
+            report.Summary.UnsoldInventoryCost.Should().Be(18000000);
         }
     }
 }

@@ -67,6 +67,14 @@ const REPORT_LINKS = [
     available: true,
   },
   {
+    href: '/reports/supplier-profitability',
+    icon: TrendingUp,
+    color: 'emerald' as const,
+    title: 'كشف ربحية المورد',
+    description: 'تحليل الربح الإجمالي المحقق والمخزون المتبقي حسب المورد',
+    available: true,
+  },
+  {
     href: '/reports/cashbox-movement',
     icon: Wallet,
     color: 'emerald' as const,

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CarShowroomManagementV2.Application.Common.Interfaces;
+using CarShowroomManagementV2.Application.Accounting.Queries;
 
 namespace CarShowroomManagementV2.API.Controllers
 {
@@ -388,6 +390,30 @@ namespace CarShowroomManagementV2.API.Controllers
             }
 
             return Ok(result);
+        }
+
+        // GET /api/reports/supplier-profitability
+        [HttpGet("supplier-profitability")]
+        public async Task<IActionResult> GetSupplierProfitability([FromQuery] GetSupplierProfitabilityQuery query, CancellationToken cancellationToken)
+        {
+            if (query.SupplierId == Guid.Empty)
+            {
+                return BadRequest(new { success = false, message = "معرف المورد (supplierId) مطلوب." });
+            }
+
+            try
+            {
+                var result = await Mediator.Send(query, cancellationToken);
+                return Ok(new { success = true, data = result });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         private static string GetArabicMonthLabel(DateTime date)

@@ -426,6 +426,64 @@ const bsWithGroupNoChildren = normalizeBalanceSheetData({
 assert(bsWithGroupNoChildren.assets.length === 1, 'Assets group with children=null preserved as group')
 assert(Array.isArray(bsWithGroupNoChildren.assets[0].children) && bsWithGroupNoChildren.assets[0].children.length === 0, 'Group children=null safely normalized to []')
 
+// ==================================================
+// GROUP 14: SUPPLIER PROFITABILITY DATA NORMALIZATION
+// ==================================================
+console.log('--- Group 14: Supplier Profitability Statement Normalization ---')
+
+function normalizeSupplierProfitabilityData(rawData) {
+  const data = (rawData && typeof rawData === 'object' && 'data' in rawData && rawData.data) ? rawData.data : rawData
+
+  return {
+    supplier: data?.supplier ?? { id: '', name: '', code: '', phone: '' },
+    period: data?.period ?? { dateFrom: null, dateTo: null },
+    summary: data?.summary ?? {
+      purchasedVehicleCount: 0,
+      soldVehicleCount: 0,
+      unsoldVehicleCount: 0,
+      purchaseValue: 0,
+      realizedRevenue: 0,
+      costOfSoldVehicles: 0,
+      directCosts: 0,
+      realizedGrossProfit: 0,
+      profitMarginPercent: 0,
+      markupPercent: 0,
+      averageProfitPerSoldVehicle: 0,
+      unsoldInventoryCost: 0,
+      averageDaysToSell: 0,
+    },
+    vehicles: Array.isArray(data?.vehicles) ? data.vehicles : [],
+    monthlyTrend: Array.isArray(data?.monthlyTrend) ? data.monthlyTrend : [],
+    modelBreakdown: Array.isArray(data?.modelBreakdown) ? data.modelBreakdown : [],
+  }
+}
+
+const spNull = normalizeSupplierProfitabilityData(null)
+assert(spNull.supplier.id === '', 'Null rawData normalizes supplier to empty object')
+assert(spNull.summary.realizedGrossProfit === 0, 'Null rawData normalizes realizedGrossProfit to 0')
+assert(Array.isArray(spNull.vehicles) && spNull.vehicles.length === 0, 'Null rawData normalizes vehicles to []')
+
+const spValid = normalizeSupplierProfitabilityData({
+  supplier: { id: 'sup-1', name: 'شركة ذرى الخليج', code: 'SUP-01', phone: '077000' },
+  summary: {
+    purchasedVehicleCount: 10,
+    soldVehicleCount: 6,
+    unsoldVehicleCount: 4,
+    purchaseValue: 120000000,
+    realizedRevenue: 90000000,
+    costOfSoldVehicles: 70000000,
+    realizedGrossProfit: 20000000,
+  },
+  vehicles: [
+    { vehicleId: 'v-1', vin: 'VIN01', netRevenue: 15000000, totalVehicleCost: 12000000, realizedProfit: 3000000, status: 'Sold' }
+  ]
+})
+
+assert(spValid.supplier.name === 'شركة ذرى الخليج', 'Valid supplier name extracted')
+assert(spValid.summary.purchasedVehicleCount === 10, 'Valid purchased count extracted')
+assert(spValid.vehicles.length === 1, 'Valid vehicles array preserved')
+assert(spValid.summary.realizedGrossProfit === spValid.summary.realizedRevenue - spValid.summary.costOfSoldVehicles, 'Gross profit reconciles exactly with revenue minus cost of sold')
+
 console.log('\n==================================================')
 console.log(`Test Summary: ${passed} passed, ${failed} failed`)
 console.log('==================================================\n')
