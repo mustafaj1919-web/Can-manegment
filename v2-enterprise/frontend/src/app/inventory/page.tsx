@@ -73,7 +73,9 @@ const cardVariants: Variants = {
 
 function VehicleCard({ car, isAuthorized }: { car: Car; isAuthorized: boolean }) {
   const [imgError, setImgError] = useState(false)
-  const coverUrl = car.cover_photo ? photoUrl(car.cover_photo.filename) : null
+  const coverUrl = car.cover_photo
+    ? photoUrl(car.cover_photo.filename, car.cover_photo.subfolder ?? 'vehicles')
+    : null
 
   const statusConfig = STATUS_PILLS[car.status] ?? { bg: 'bg-slate-600', text: 'text-white', label: translateStatus(car.status) }
   const conditionText = car.condition ? (CONDITION_LABEL[car.condition] ?? car.condition) : 'جديدة'
