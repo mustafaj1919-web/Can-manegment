@@ -30,7 +30,16 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ShieldCheck,
-  Tag
+  Tag,
+  BarChart3,
+  LineChart as LineIcon,
+  UserCheck,
+  Hash,
+  PhoneCall,
+  MapPin,
+  CalendarRange,
+  Zap,
+  ArrowRight
 } from 'lucide-react'
 import { getSuppliers, Supplier } from '@/lib/api/suppliers'
 import { ReportBranch } from '@/lib/api/reports'
@@ -61,7 +70,7 @@ export default function SupplierProfitabilityPage() {
   const [trim, setTrim] = useState<string>('')
   const [status, setStatus] = useState<string>('all')
 
-  // UI Table density & search
+  // UI Table density, search & drawer
   const [tableDensity, setTableDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [tableSearch, setTableSearch] = useState<string>('')
   const [sortColumn, setSortColumn] = useState<string>('saleDate')
@@ -148,6 +157,25 @@ export default function SupplierProfitabilityPage() {
     setStatus('all')
     setTableSearch('')
   }
+
+  // Derived Supplier Profile Meta (First/Last purchase dates, avg purchase cost)
+  const supplierProfileMeta = useMemo(() => {
+    if (!reportData?.vehicles || reportData.vehicles.length === 0) {
+      return { firstPurchase: '-', latestPurchase: '-', avgPurchaseCost: 0 }
+    }
+    const dates = reportData.vehicles
+      .map((v) => (v.purchaseDate ? new Date(v.purchaseDate).getTime() : 0))
+      .filter((d) => d > 0)
+      .sort((a, b) => a - b)
+
+    const firstPurchase = dates.length > 0 ? new Date(dates[0]).toLocaleDateString('ar-IQ') : '-'
+    const latestPurchase = dates.length > 0 ? new Date(dates[dates.length - 1]).toLocaleDateString('ar-IQ') : '-'
+
+    const totalCostSum = reportData.vehicles.reduce((sum, v) => sum + (v.totalVehicleCost || 0), 0)
+    const avgPurchaseCost = reportData.vehicles.length > 0 ? totalCostSum / reportData.vehicles.length : 0
+
+    return { firstPurchase, latestPurchase, avgPurchaseCost }
+  }, [reportData?.vehicles])
 
   // Filtered & sorted detail rows
   const filteredVehicles = useMemo(() => {
@@ -267,218 +295,199 @@ export default function SupplierProfitabilityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans p-4 sm:p-6 lg:p-8 dir-rtl" dir="rtl">
-      {/* SECTION 1: Executive Compact Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200 print:hidden">
-        <div>
-          {/* Breadcrumbs */}
-          <nav className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1.5">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#111827] font-sans px-4 sm:px-8 py-6 dir-rtl" dir="rtl">
+      {/* HEADER SECTION: Executive ERP Header */}
+      <header className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-6 border-b border-[#E5E7EB] print:hidden">
+        {/* LEFT: Breadcrumbs */}
+        <div className="flex flex-col">
+          <nav className="flex items-center gap-1.5 text-xs text-[#6B7280] font-medium mb-1">
             <span>التقارير المالية</span>
             <ChevronLeft className="w-3.5 h-3.5 text-slate-400 rotate-180" />
-            <span className="text-slate-900 font-semibold">كشف ربحية المورد</span>
+            <span className="text-[#111827] font-semibold">كشف ربحية المورد</span>
           </nav>
-
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-[34px] font-bold text-[#111827] tracking-tight leading-tight">
               كشف ربحية المورد
             </h1>
-            <span className="px-2.5 py-0.5 bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold rounded-full">
+            <span className="px-3 py-1 bg-teal-50 border border-teal-200 text-[#0F766E] text-xs font-bold rounded-full">
               IQD · الدينار العراقي
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1 font-mono tracking-wide">
-            Supplier Realized Gross Profitability Statement
+          <p className="text-xs text-[#6B7280] mt-0.5 font-mono tracking-wide">
+            Supplier Realized Gross Profitability Statement — CFO Cockpit Mode
           </p>
         </div>
 
-        {/* Action Controls */}
+        {/* RIGHT: Action Tools */}
         <div className="flex items-center gap-2.5">
           {lastRefreshed && (
-            <span className="text-xs text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm hidden sm:inline-block">
-              تحديث: {lastRefreshed}
+            <span className="text-xs text-[#6B7280] bg-white px-3 py-2 rounded-lg border border-[#E5E7EB] shadow-xs hidden sm:inline-block">
+              تحديث: <strong className="text-[#111827]">{lastRefreshed}</strong>
             </span>
           )}
           <button
             onClick={fetchReport}
             disabled={loadingReport || !selectedSupplierId}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-[#111827] border border-[#E5E7EB] rounded-lg text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loadingReport ? 'animate-spin' : ''}`} />
-            تحديث البيانات
+            <RefreshCw className={`w-3.5 h-3.5 text-[#6B7280] ${loadingReport ? 'animate-spin' : ''}`} />
+            تحديث
           </button>
           <button
             onClick={handleExportExcel}
             disabled={!reportData || filteredVehicles.length === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-teal-800 border border-teal-300 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-[#0F766E] border border-teal-200 rounded-lg text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-teal-700" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#0F766E]" />
             تصدير Excel
           </button>
           <button
             onClick={handlePrint}
             disabled={!reportData}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0F766E] hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
           >
             <Printer className="w-3.5 h-3.5" />
             طباعة A4
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* SECTION 2: Enterprise Single Container Filter Bar */}
-      <form onSubmit={handleApplyFilters} className="bg-white border border-slate-200 rounded-xl p-4 my-6 shadow-sm print:hidden">
-        <div className="flex flex-wrap items-end gap-3">
-          {/* Supplier Selector (Primary Focus) */}
-          <div className="flex-1 min-w-[240px]">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+      {/* FILTER BAR SECTION: Single Sticky Enterprise Toolbar */}
+      <div className="sticky top-0 z-30 bg-white border border-[#E5E7EB] rounded-xl p-3.5 my-6 shadow-xs print:hidden">
+        <form onSubmit={handleApplyFilters} className="flex flex-wrap items-center gap-3">
+          {/* Supplier Selector (Large Searchable) */}
+          <div className="flex-1 min-w-[260px]">
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">
               المورد المستهدف <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <select
-                value={selectedSupplierId}
-                onChange={(e) => setSelectedSupplierId(e.target.value)}
-                disabled={loadingSuppliers}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-teal-600 focus:bg-white focus:ring-1 focus:ring-teal-600 disabled:opacity-50"
-              >
-                {loadingSuppliers ? (
-                  <option value="">جاري تحميل الموردين...</option>
-                ) : suppliers.length === 0 ? (
-                  <option value="">لا يوجد موردين متاحين</option>
-                ) : (
-                  suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} — ({s.code})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
+            <select
+              value={selectedSupplierId}
+              onChange={(e) => setSelectedSupplierId(e.target.value)}
+              disabled={loadingSuppliers}
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white focus:ring-1 focus:ring-[#0F766E] disabled:opacity-50"
+            >
+              {loadingSuppliers ? (
+                <option value="">جاري تحميل الموردين...</option>
+              ) : suppliers.length === 0 ? (
+                <option value="">لا يوجد موردين متاحين</option>
+              ) : (
+                suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — ({s.code})
+                  </option>
+                ))
+              )}
+            </select>
           </div>
 
           {/* Sale Date From */}
           <div className="w-36">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              تاريخ البيع من
-            </label>
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">تاريخ البيع من</label>
             <input
               type="date"
               value={saleDateFrom}
               onChange={(e) => setSaleDateFrom(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             />
           </div>
 
           {/* Sale Date To */}
           <div className="w-36">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              تاريخ البيع إلى
-            </label>
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">تاريخ البيع إلى</label>
             <input
               type="date"
               value={saleDateTo}
               onChange={(e) => setSaleDateTo(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             />
           </div>
 
           {/* Branch Filter */}
-          <div className="w-36">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-              الفرع
-            </label>
+          <div className="w-32">
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">الفرع</label>
             <select
               value={selectedBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             >
               <option value="all">كافة الفروع</option>
               {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
+                <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
           </div>
 
           {/* Brand */}
           <div className="w-28">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">الماركة</label>
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">الماركة</label>
             <input
               type="text"
               placeholder="Toyota..."
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             />
           </div>
 
           {/* Model */}
           <div className="w-28">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">الموديل</label>
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">الموديل</label>
             <input
               type="text"
               placeholder="Camry..."
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             />
           </div>
 
           {/* Year */}
-          <div className="w-24">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">السنة</label>
+          <div className="w-20">
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">السنة</label>
             <input
               type="number"
               placeholder="2025"
               value={year}
               onChange={(e) => setYear(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             />
           </div>
 
           {/* Status */}
-          <div className="w-32">
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">الحالة</label>
+          <div className="w-28">
+            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">الحالة</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white"
+              className="w-full bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E] focus:bg-white"
             >
               <option value="all">كافة الحالات</option>
               <option value="sold">المباعة فقط</option>
-              <option value="unsold">غير المباعة فقط</option>
+              <option value="unsold">غير المباعة</option>
             </select>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 mr-auto">
+          <div className="flex items-center gap-2 mr-auto pt-4 sm:pt-0">
             <button
               type="button"
               onClick={handleResetFilters}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-all"
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#111827] rounded-lg text-xs font-semibold transition-all"
             >
-              إعادة ضبط
+              تصفير
             </button>
             <button
               type="submit"
               disabled={loadingReport}
-              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+              className="px-4 py-1.5 bg-[#0F766E] hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all"
             >
-              تطبيق الفلترة
+              تطبيق
             </button>
           </div>
-        </div>
+        </form>
+      </div>
 
-        {/* Informational Disclosure Rule Note */}
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 text-[11px] text-slate-500">
-          <Info className="w-3.5 h-3.5 text-teal-700 shrink-0" />
-          <span>
-            <strong>قاعدة احتساب الفترة:</strong> أرقام الإيراد والربح تعتمد على تاريخ عقد البيع المؤكد، بينما المخزون المتبقي يمثل الوضع الحالي للسيارات غير المباعة.
-          </span>
-        </div>
-      </form>
-
-      {/* Error State */}
+      {/* Error Message */}
       {error && (
         <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-800 text-xs font-medium">
           <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -486,230 +495,290 @@ export default function SupplierProfitabilityPage() {
         </div>
       )}
 
-      {/* Main Financial Analytics Workspace */}
+      {/* Main Workspace Layout */}
       {loadingReport ? (
-        <div className="py-28 flex flex-col items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl">
-          <RefreshCw className="w-8 h-8 text-teal-700 animate-spin" />
-          <p className="text-slate-600 text-xs font-semibold">جاري احتساب البيانات المالية وتسوية الحركات...</p>
+        <div className="py-32 flex flex-col items-center justify-center gap-3 bg-white border border-[#E5E7EB] rounded-xl">
+          <RefreshCw className="w-8 h-8 text-[#0F766E] animate-spin" />
+          <p className="text-[#6B7280] text-xs font-semibold">جاري احتساب البيانات وتسوية الأرباح...</p>
         </div>
       ) : reportData ? (
         <div className="space-y-6">
-          {/* SECTION 4: Executive Supplier Overview Panel */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          {/* SUPPLIER PROFILE PANEL: CRM Style Executive Panel */}
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-800 font-bold text-lg">
+              <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-[#0F766E] font-bold text-xl shadow-xs">
                 {reportData.supplier.name ? reportData.supplier.name.substring(0, 2) : 'SUP'}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-slate-900">{reportData.supplier.name}</h2>
-                  <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-mono rounded">
-                    {reportData.supplier.code}
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-xl font-bold text-[#111827]">{reportData.supplier.name}</h2>
+                  <span className="px-2.5 py-0.5 bg-slate-100 border border-slate-200 text-[#6B7280] text-[11px] font-mono rounded-md font-semibold">
+                    كود: {reportData.supplier.code}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
-                  {reportData.supplier.phone && <span>الهاتف: {reportData.supplier.phone}</span>}
-                  <span>إجمالي السيارات: <strong className="text-slate-900">{reportData.summary.purchasedVehicleCount}</strong></span>
-                  <span>المباعة: <strong className="text-emerald-700">{reportData.summary.soldVehicleCount}</strong></span>
-                  <span>المتبقية: <strong className="text-amber-700">{reportData.summary.unsoldVehicleCount}</strong></span>
+                <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280] mt-1.5">
+                  {reportData.supplier.phone && (
+                    <span className="flex items-center gap-1">
+                      <PhoneCall className="w-3.5 h-3.5 text-slate-400" />
+                      {reportData.supplier.phone}
+                    </span>
+                  )}
+                  <span>أول عملية شراء: <strong className="text-[#111827] font-mono">{supplierProfileMeta.firstPurchase}</strong></span>
+                  <span>آخر عملية شراء: <strong className="text-[#111827] font-mono">{supplierProfileMeta.latestPurchase}</strong></span>
+                  <span>متوسط تكلفة السيارة: <strong className="text-[#111827] font-mono">{formatCurrency(supplierProfileMeta.avgPurchaseCost)}</strong></span>
                 </div>
               </div>
             </div>
 
-            {/* Integrity Reconciliation Badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-              <ShieldCheck className={`w-4 h-4 ${isReconciled ? 'text-emerald-600' : 'text-amber-600'}`} />
-              <span className="font-semibold text-slate-700">
-                {isReconciled ? 'حسابات مطابقة 100%' : 'تنبيه تسوية'}
-              </span>
+            {/* Reconciliation Shield */}
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg">
+              <ShieldCheck className={`w-5 h-5 ${isReconciled ? 'text-[#16A34A]' : 'text-[#D97706]'}`} />
+              <div>
+                <span className="block text-xs font-bold text-[#111827]">
+                  {isReconciled ? 'مطابقة محاسبية بنسبة 100%' : 'تحذير عدم مطابقة'}
+                </span>
+                <span className="text-[10px] text-[#6B7280]">
+                  {isReconciled ? 'جميع أرقام الإيراد والتكلفة متطابقة كلياً' : 'توجد فروقات تتطلب المراجعة'}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* SECTION 3: Executive KPI Strip with Visual Hierarchy */}
+          {/* EXECUTIVE KPI SECTION: Strict Visual Hierarchy */}
           <div className="space-y-4">
-            {/* Primary Dominant KPIs (Row 1) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Primary KPI 1: Realized Gross Profit */}
-              <div className={`p-6 rounded-xl border shadow-sm transition-all ${
+            {/* ROW 1: Hero Card (40%) + Medium Cards (60%) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* HERO CARD: Realized Gross Profit (40% width / 5 cols) */}
+              <div className={`lg:col-span-5 p-6 rounded-xl border shadow-xs flex flex-col justify-between ${
                 reportData.summary.realizedGrossProfit >= 0
-                  ? 'bg-gradient-to-br from-teal-900 to-slate-900 text-white border-teal-800'
-                  : 'bg-gradient-to-br from-red-900 to-slate-900 text-white border-red-800'
+                  ? 'bg-gradient-to-br from-[#0F766E] to-slate-900 text-white border-teal-800'
+                  : 'bg-gradient-to-br from-[#DC2626] to-slate-900 text-white border-red-800'
               }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-teal-200 uppercase tracking-wider">
-                    الربح الإجمالي المحقق (Realized Profit)
-                  </span>
-                  {reportData.summary.realizedGrossProfit >= 0 ? (
-                    <ArrowUpRight className="w-5 h-5 text-emerald-400" />
-                  ) : (
-                    <ArrowDownRight className="w-5 h-5 text-red-400" />
-                  )}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-teal-100">
+                      الربح الإجمالي المحقق (Realized Gross Profit)
+                    </span>
+                    <span className="px-2.5 py-0.5 bg-white/10 backdrop-blur-xs text-xs rounded-md font-bold">
+                      الرئيسي
+                    </span>
+                  </div>
+                  <div className="text-[42px] font-bold font-mono tracking-tight leading-none my-4">
+                    {formatCurrency(reportData.summary.realizedGrossProfit)}
+                  </div>
                 </div>
-                <div className="text-3xl font-bold font-mono tracking-tight my-1">
-                  {formatCurrency(reportData.summary.realizedGrossProfit)}
-                </div>
-                <div className="flex items-center justify-between text-xs text-teal-200/80 mt-3 pt-2 border-t border-teal-800/60">
-                  <span>هامش الربح الإجمالي: <strong>{reportData.summary.profitMarginPercent}%</strong></span>
-                  <span>نسبة العلامة: <strong>{reportData.summary.markupPercent}%</strong></span>
+
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/15 text-xs text-teal-100/90">
+                  <div>
+                    <span className="block text-[11px] text-teal-200/70">هامش الربح الإجمالي</span>
+                    <span className="text-lg font-bold font-mono">{reportData.summary.profitMarginPercent}%</span>
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-teal-200/70">نسبة الإضافة (Markup %)</span>
+                    <span className="text-lg font-bold font-mono">{reportData.summary.markupPercent}%</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Primary KPI 2: Realized Revenue */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    إيرادات السيارات المباعة (Net Revenue)
-                  </span>
-                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+              {/* ROW 1 RIGHT: Revenue & Cost of Goods Sold (7 cols) */}
+              <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Revenue Card */}
+                <div className="bg-white p-6 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-[#6B7280] font-semibold mb-2">
+                      <span>إيرادات السيارات المباعة</span>
+                      <TrendingUp className="w-4 h-4 text-[#16A34A]" />
+                    </div>
+                    <div className="text-[28px] font-bold font-mono text-[#111827] tracking-tight my-2">
+                      {formatCurrency(reportData.summary.realizedRevenue)}
+                    </div>
+                  </div>
+                  <div className="text-xs text-[#6B7280] pt-3 border-t border-[#E5E7EB]">
+                    صافي إيراد {reportData.summary.soldVehicleCount} عقود بيع مؤكدة
+                  </div>
                 </div>
-                <div className="text-3xl font-bold font-mono text-slate-900 tracking-tight my-1">
-                  {formatCurrency(reportData.summary.realizedRevenue)}
-                </div>
-                <div className="text-xs text-slate-500 mt-3 pt-2 border-t border-slate-100">
-                  صافي قيمة عقود البيع النشطة للسيارات المباعة
-                </div>
-              </div>
 
-              {/* Primary KPI 3: Cost of Sold Vehicles */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    تكلفة المباع (Cost of Goods Sold)
-                  </span>
-                  <TrendingDown className="w-5 h-5 text-slate-400" />
-                </div>
-                <div className="text-3xl font-bold font-mono text-slate-900 tracking-tight my-1">
-                  {formatCurrency(reportData.summary.costOfSoldVehicles)}
-                </div>
-                <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-2 border-t border-slate-100">
-                  <span>شراء أساسي: {formatCurrency(reportData.summary.costOfSoldVehicles - reportData.summary.directCosts)}</span>
-                  <span>مصاريف إضافية: {formatCurrency(reportData.summary.directCosts)}</span>
+                {/* COGS Card */}
+                <div className="bg-white p-6 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-[#6B7280] font-semibold mb-2">
+                      <span>تكلفة السيارات المباعة</span>
+                      <TrendingDown className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div className="text-[28px] font-bold font-mono text-[#111827] tracking-tight my-2">
+                      {formatCurrency(reportData.summary.costOfSoldVehicles)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[#6B7280] pt-3 border-t border-[#E5E7EB]">
+                    <span>أصل الشراء: {formatCurrency(reportData.summary.costOfSoldVehicles - reportData.summary.directCosts)}</span>
+                    <span>المصاريف: {formatCurrency(reportData.summary.directCosts)}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Secondary Metrics Strip (Row 2) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-                <span className="block text-[11px] font-semibold text-slate-500">السيارات المباعة</span>
-                <span className="text-lg font-bold text-emerald-600 font-mono mt-0.5 block">
+            {/* ROW 2: Secondary Metrics Strip (8 Metrics) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">السيارات المباعة</span>
+                <span className="text-base font-bold text-[#16A34A] font-mono mt-0.5 block">
                   {formatNumber(reportData.summary.soldVehicleCount)}
                 </span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-                <span className="block text-[11px] font-semibold text-slate-500">السيارات غير المباعة</span>
-                <span className="text-lg font-bold text-amber-600 font-mono mt-0.5 block">
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">السيارات المتبقية</span>
+                <span className="text-base font-bold text-[#D97706] font-mono mt-0.5 block">
                   {formatNumber(reportData.summary.unsoldVehicleCount)}
                 </span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-                <span className="block text-[11px] font-semibold text-slate-500">متوسط الربح / سيارة</span>
-                <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">متوسط الربح / سيارة</span>
+                <span className="text-sm font-bold text-[#111827] font-mono mt-0.5 block">
                   {formatCurrency(reportData.summary.averageProfitPerSoldVehicle)}
                 </span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-                <span className="block text-[11px] font-semibold text-slate-500">تكلفة المخزون المتبقي</span>
-                <span className="text-base font-bold text-amber-700 font-mono mt-0.5 block">
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">تكلفة المخزون المتبقي</span>
+                <span className="text-sm font-bold text-[#D97706] font-mono mt-0.5 block">
                   {formatCurrency(reportData.summary.unsoldInventoryCost)}
                 </span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-                <span className="block text-[11px] font-semibold text-slate-500">إجمالي قيم المشتريات</span>
-                <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">إجمالي الشراء الأساسي</span>
+                <span className="text-sm font-bold text-[#111827] font-mono mt-0.5 block">
                   {formatCurrency(reportData.summary.purchaseValue)}
                 </span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-                <span className="block text-[11px] font-semibold text-slate-500">متوسط سرعة البيع</span>
-                <span className="text-lg font-bold text-slate-900 font-mono mt-0.5 block">
-                  {reportData.summary.averageDaysToSell} <span className="text-xs font-normal text-slate-500">يوم</span>
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">متوسط سرعة البيع</span>
+                <span className="text-base font-bold text-[#111827] font-mono mt-0.5 block">
+                  {reportData.summary.averageDaysToSell} <span className="text-xs font-normal text-[#6B7280]">يوم</span>
+                </span>
+              </div>
+
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">السيارات المرتبطة</span>
+                <span className="text-base font-bold text-[#111827] font-mono mt-0.5 block">
+                  {formatNumber(reportData.summary.purchasedVehicleCount)}
+                </span>
+              </div>
+
+              <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs">
+                <span className="block text-[11px] font-semibold text-[#6B7280]">نسبة Markup</span>
+                <span className="text-base font-bold text-[#0F766E] font-mono mt-0.5 block">
+                  {reportData.summary.markupPercent}%
                 </span>
               </div>
             </div>
           </div>
 
-          {/* SECTION 5 & 6: Financial Analytics & Model Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Monthly Profit Trend (Card 1) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-900">مسار الأرباح الشهرية</h3>
-                <span className="text-[11px] text-slate-500">حسب تاريخ عقد البيع</span>
+          {/* CHARTS SECTION: Executive 5 Financial Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Chart 1: Monthly Profit Trend */}
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E5E7EB]">
+                <h3 className="text-sm font-bold text-[#111827]">1. مسار الأرباح الشهري</h3>
+                <span className="text-[11px] text-[#6B7280]">Line Trend</span>
               </div>
               {reportData.monthlyTrend.length === 0 ? (
-                <p className="text-xs text-slate-400 py-10 text-center">لا توجد حركات بيع شهري في الفترة المحددة</p>
+                <p className="text-xs text-[#6B7280] py-12 text-center">لا توجد حركات بيع شهري في الفترة المحددة</p>
               ) : (
                 <div className="space-y-3">
                   {reportData.monthlyTrend.map((m) => (
                     <div key={m.period} className="space-y-1">
                       <div className="flex justify-between text-xs font-semibold">
-                        <span className="text-slate-800">{m.period}</span>
-                        <span className="font-mono text-emerald-600">{formatCurrency(m.profit)}</span>
+                        <span className="text-[#111827]">{m.period}</span>
+                        <span className="font-mono text-[#16A34A]">{formatCurrency(m.profit)}</span>
                       </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                         <div
-                          className="bg-emerald-600 h-full rounded-full"
+                          className="bg-[#16A34A] h-full rounded-full"
                           style={{
                             width: `${Math.min(100, Math.max(10, (m.profit / (reportData.summary.realizedGrossProfit || 1)) * 100))}%`
                           }}
                         />
                       </div>
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>مبيعات: {m.soldCount} سيارات</span>
-                        <span>إيراد: {formatCurrency(m.revenue)}</span>
-                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Model Profitability Breakdown (Card 2 & 3) */}
-            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-900">ربحية الموديلات الأكثر مبيعاً</h3>
-                <span className="text-[11px] text-slate-500">مرتبة حسب أعلى إجمالي ربح محقق</span>
+            {/* Chart 2: Revenue vs Cost Comparison */}
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E5E7EB]">
+                <h3 className="text-sm font-bold text-[#111827]">2. التناسب بين الإيراد والتكلفة</h3>
+                <span className="text-[11px] text-[#6B7280]">Area Ratio</span>
               </div>
-              {reportData.modelBreakdown.length === 0 ? (
-                <p className="text-xs text-slate-400 py-10 text-center">لا توجد بيانات موديلات مبيعة</p>
-              ) : (
-                <div className="space-y-3">
-                  {reportData.modelBreakdown.slice(0, 5).map((mb) => (
-                    <div key={`${mb.brand}-${mb.model}`} className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-slate-900">{mb.brand} {mb.model}</span>
-                        <span className="text-[11px] text-slate-500 block">عدد المباع: {mb.soldCount} سيارات</span>
-                      </div>
-                      <div className="text-left font-mono">
-                        <div className="font-bold text-emerald-700">{formatCurrency(mb.profit)}</div>
-                        <div className="text-[10px] text-slate-500">هامش: {mb.marginPercent}%</div>
-                      </div>
-                    </div>
-                  ))}
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span className="text-[#111827]">إيرادات المباع (Net Revenue)</span>
+                    <span className="font-mono text-[#16A34A]">{formatCurrency(reportData.summary.realizedRevenue)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                    <div className="bg-[#16A34A] h-full rounded-full w-full" />
+                  </div>
                 </div>
-              )}
+
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span className="text-[#111827]">تكلفة المباع (COGS)</span>
+                    <span className="font-mono text-slate-700">{formatCurrency(reportData.summary.costOfSoldVehicles)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-slate-700 h-full rounded-full"
+                      style={{
+                        width: `${reportData.summary.realizedRevenue > 0 ? (reportData.summary.costOfSoldVehicles / reportData.summary.realizedRevenue) * 100 : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Chart 3: Sold vs Unsold Ratio */}
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E5E7EB]">
+                <h3 className="text-sm font-bold text-[#111827]">3. نسبة المبيعات إلى المخزون</h3>
+                <span className="text-[11px] text-[#6B7280]">Donut Ratio</span>
+              </div>
+              <div className="flex items-center justify-around py-4">
+                <div className="text-center">
+                  <span className="block text-2xl font-bold font-mono text-[#16A34A]">
+                    {reportData.summary.soldVehicleCount}
+                  </span>
+                  <span className="text-xs text-[#6B7280]">سيارات مباعة</span>
+                </div>
+                <div className="h-10 w-px bg-[#E5E7EB]" />
+                <div className="text-center">
+                  <span className="block text-2xl font-bold font-mono text-[#D97706]">
+                    {reportData.summary.unsoldVehicleCount}
+                  </span>
+                  <span className="text-xs text-[#6B7280]">في المخزون</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* SECTION 7: Executive Enterprise Vehicle Detail Table */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            {/* Table Control Header */}
-            <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50 print:hidden">
+          {/* ENTERPRISE VEHICLE DETAIL TABLE SECTION */}
+          <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-xs overflow-hidden">
+            {/* Control Toolbar */}
+            <div className="p-4 border-b border-[#E5E7EB] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#F8FAFC] print:hidden">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">جدول حركات وتفاصيل السيارات</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  عرض {filteredVehicles.length} من أصل {reportData.vehicles.length} سيارات مرتبطة بالمورد
+                <h3 className="text-sm font-bold text-[#111827]">جدول حركات وتفاصيل السيارات</h3>
+                <p className="text-xs text-[#6B7280] mt-0.5">
+                  عرض {filteredVehicles.length} من أصل {reportData.vehicles.length} سيارات
                 </p>
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                {/* Search Bar */}
                 <div className="relative flex-1 sm:w-64">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
                   <input
@@ -717,14 +786,13 @@ export default function SupplierProfitabilityPage() {
                     placeholder="بحث بالشاسي، الموديل، المرجع..."
                     value={tableSearch}
                     onChange={(e) => setTableSearch(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+                    className="w-full bg-white border border-[#E5E7EB] rounded-lg pr-8 pl-3 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#0F766E]"
                   />
                 </div>
 
-                {/* Density Toggle */}
                 <button
                   onClick={() => setTableDensity(d => d === 'comfortable' ? 'compact' : 'comfortable')}
-                  className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold"
+                  className="px-2.5 py-1.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 text-[#111827] rounded-lg text-xs font-semibold"
                 >
                   {tableDensity === 'comfortable' ? 'عرض مدمج' : 'عرض مريح'}
                 </button>
@@ -733,20 +801,20 @@ export default function SupplierProfitabilityPage() {
 
             {/* Financial Data Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-right text-slate-800">
-                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200 sticky top-0 uppercase text-[11px] tracking-wider">
+              <table className="w-full text-xs text-right text-[#111827]">
+                <thead className="bg-[#F8FAFC] text-[#6B7280] font-semibold border-b border-[#E5E7EB] sticky top-0 uppercase text-[11px] tracking-wider">
                   <tr>
                     <th className="py-3 px-3">المرجع</th>
                     <th className="py-3 px-3">الشاسي (VIN)</th>
-                    <th className="py-3 px-3">السيارة والموديل</th>
+                    <th className="py-3 px-3">الماركة والموديل</th>
                     <th className="py-3 px-3">الفرع</th>
-                    <th className="py-3 px-3 cursor-pointer hover:text-teal-800" onClick={() => { setSortColumn('purchaseDate'); setSortDirection(d => d === 'asc' ? 'desc' : 'asc'); }}>
+                    <th className="py-3 px-3 cursor-pointer hover:text-[#0F766E]" onClick={() => { setSortColumn('purchaseDate'); setSortDirection(d => d === 'asc' ? 'desc' : 'asc'); }}>
                       تاريخ الشراء
                     </th>
                     <th className="py-3 px-3 text-left">تكلفة الشراء</th>
                     <th className="py-3 px-3 text-left">المصاريف الإضافية</th>
                     <th className="py-3 px-3 text-left">إجمالي التكلفة</th>
-                    <th className="py-3 px-3 cursor-pointer hover:text-teal-800" onClick={() => { setSortColumn('saleDate'); setSortDirection(d => d === 'asc' ? 'desc' : 'asc'); }}>
+                    <th className="py-3 px-3 cursor-pointer hover:text-[#0F766E]" onClick={() => { setSortColumn('saleDate'); setSortDirection(d => d === 'asc' ? 'desc' : 'asc'); }}>
                       تاريخ البيع
                     </th>
                     <th className="py-3 px-3">عقد البيع</th>
@@ -757,10 +825,10 @@ export default function SupplierProfitabilityPage() {
                     <th className="py-3 px-3 text-center">الحالة</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
+                <tbody className="divide-y divide-[#E5E7EB] bg-white">
                   {filteredVehicles.length === 0 ? (
                     <tr>
-                      <td colSpan={15} className="py-12 text-center text-slate-500 text-xs">
+                      <td colSpan={15} className="py-12 text-center text-[#6B7280] text-xs">
                         لا توجد سجلات سيارات مطابقة لشروط البحث المحددة.
                       </td>
                     </tr>
@@ -769,46 +837,46 @@ export default function SupplierProfitabilityPage() {
                       <tr
                         key={v.vehicleId}
                         onClick={() => setSelectedVehicle(v)}
-                        className={`hover:bg-teal-50/40 cursor-pointer transition-colors ${
+                        className={`hover:bg-teal-50/50 cursor-pointer transition-colors ${
                           tableDensity === 'compact' ? 'py-1.5' : 'py-3'
                         }`}
                       >
                         <td className="py-2.5 px-3 font-mono font-medium text-slate-700">{v.stockNumber}</td>
-                        <td className="py-2.5 px-3 font-mono text-slate-600">{v.vin}</td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                        <td className="py-2.5 px-3 font-mono text-[#6B7280]">{v.vin}</td>
+                        <td className="py-2.5 px-3 font-semibold text-[#111827]">
                           {v.brand} {v.model} {v.year}
                         </td>
-                        <td className="py-2.5 px-3 text-slate-500">{v.branchName}</td>
-                        <td className="py-2.5 px-3 text-slate-500">
+                        <td className="py-2.5 px-3 text-[#6B7280]">{v.branchName}</td>
+                        <td className="py-2.5 px-3 text-[#6B7280]">
                           {v.purchaseDate ? new Date(v.purchaseDate).toLocaleDateString('ar-IQ') : '-'}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-left">{formatCurrency(v.purchaseCost)}</td>
-                        <td className="py-2.5 px-3 font-mono text-left text-slate-500">{formatCurrency(v.additionalCosts)}</td>
-                        <td className="py-2.5 px-3 font-mono font-semibold text-left text-slate-900">{formatCurrency(v.totalVehicleCost)}</td>
-                        <td className="py-2.5 px-3 text-slate-500">
+                        <td className="py-2.5 px-3 font-mono text-left text-[#6B7280]">{formatCurrency(v.additionalCosts)}</td>
+                        <td className="py-2.5 px-3 font-mono font-semibold text-left text-[#111827]">{formatCurrency(v.totalVehicleCost)}</td>
+                        <td className="py-2.5 px-3 text-[#6B7280]">
                           {v.saleDate ? new Date(v.saleDate).toLocaleDateString('ar-IQ') : '-'}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-teal-700 font-medium">{v.saleNumber || '-'}</td>
-                        <td className="py-2.5 px-3 font-mono text-left font-semibold text-emerald-700">
+                        <td className="py-2.5 px-3 font-mono text-[#0F766E] font-medium">{v.saleNumber || '-'}</td>
+                        <td className="py-2.5 px-3 font-mono text-left font-semibold text-[#16A34A]">
                           {v.status === 'Sold' ? formatCurrency(v.netRevenue) : '-'}
                         </td>
                         <td className={`py-2.5 px-3 font-mono text-left font-bold ${
-                          v.status === 'Sold' ? (v.realizedProfit >= 0 ? 'text-emerald-700' : 'text-red-600') : 'text-slate-400'
+                          v.status === 'Sold' ? (v.realizedProfit >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]') : 'text-slate-400'
                         }`}>
                           {v.status === 'Sold' ? formatCurrency(v.realizedProfit) : '-'}
                         </td>
                         <td className={`py-2.5 px-3 text-left font-semibold ${
-                          v.status === 'Sold' ? (v.profitMarginPercent >= 0 ? 'text-emerald-700' : 'text-red-600') : 'text-slate-400'
+                          v.status === 'Sold' ? (v.profitMarginPercent >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]') : 'text-slate-400'
                         }`}>
                           {v.status === 'Sold' ? `${v.profitMarginPercent}%` : '-'}
                         </td>
-                        <td className="py-2.5 px-3 text-center text-slate-600">{v.daysToSell} يوم</td>
+                        <td className="py-2.5 px-3 text-center text-[#6B7280]">{v.daysToSell} يوم</td>
                         <td className="py-2.5 px-3 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
                               v.status === 'Sold'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                ? 'bg-emerald-50 text-[#16A34A] border border-emerald-200'
+                                : 'bg-amber-50 text-[#D97706] border border-amber-200'
                             }`}
                           >
                             {v.status === 'Sold' ? 'مباعة' : 'في المخزون'}
@@ -821,15 +889,15 @@ export default function SupplierProfitabilityPage() {
 
                 {/* Sticky Totals Footer */}
                 {filteredVehicles.length > 0 && (
-                  <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900 text-xs">
+                  <tfoot className="bg-[#F8FAFC] font-bold border-t-2 border-[#E5E7EB] text-[#111827] text-xs">
                     <tr>
-                      <td colSpan={5} className="py-3 px-3 text-left">الإجمالي الفعلي لجدول العرض:</td>
-                      <td className="py-3 px-3 font-mono text-left">{formatCurrency(tableTotals.purchaseCost)}</td>
-                      <td className="py-3 px-3 font-mono text-left">{formatCurrency(tableTotals.additionalCosts)}</td>
-                      <td className="py-3 px-3 font-mono text-left">{formatCurrency(tableTotals.totalVehicleCost)}</td>
+                      <td colSpan={5} className="py-3.5 px-3 text-left">الإجمالي الفعلي لجدول العرض:</td>
+                      <td className="py-3.5 px-3 font-mono text-left">{formatCurrency(tableTotals.purchaseCost)}</td>
+                      <td className="py-3.5 px-3 font-mono text-left">{formatCurrency(tableTotals.additionalCosts)}</td>
+                      <td className="py-3.5 px-3 font-mono text-left">{formatCurrency(tableTotals.totalVehicleCost)}</td>
                       <td colSpan={2}></td>
-                      <td className="py-3 px-3 font-mono text-left text-emerald-700">{formatCurrency(tableTotals.netRevenue)}</td>
-                      <td className={`py-3 px-3 font-mono text-left ${tableTotals.realizedProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                      <td className="py-3.5 px-3 font-mono text-left text-[#16A34A]">{formatCurrency(tableTotals.netRevenue)}</td>
+                      <td className={`py-3.5 px-3 font-mono text-left ${tableTotals.realizedProfit >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>
                         {formatCurrency(tableTotals.realizedProfit)}
                       </td>
                       <td colSpan={3}></td>
@@ -842,7 +910,7 @@ export default function SupplierProfitabilityPage() {
         </div>
       ) : null}
 
-      {/* Professional Right Slide-over Detail Drawer */}
+      {/* RIGHT SLIDE-OVER DRAWER WITH VISUAL WATERFALL BREAKDOWN */}
       <AnimatePresence>
         {selectedVehicle && (
           <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs print:hidden">
@@ -851,66 +919,68 @@ export default function SupplierProfitabilityPage() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="w-full max-w-lg bg-white border-r border-slate-200 h-full p-6 overflow-y-auto space-y-6 text-slate-800 shadow-2xl"
+              className="w-full max-w-lg bg-white border-r border-[#E5E7EB] h-full p-6 overflow-y-auto space-y-6 text-[#111827] shadow-2xl"
             >
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">تفاصيل الربحية الفردية للسيارة</h3>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5">VIN: {selectedVehicle.vin}</p>
+                  <h3 className="text-base font-bold text-[#111827]">تفاصيل الربحية الفردية للسيارة</h3>
+                  <p className="text-xs text-[#6B7280] font-mono mt-0.5">VIN: {selectedVehicle.vin}</p>
                 </div>
                 <button
                   onClick={() => setSelectedVehicle(null)}
-                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-all"
+                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-[#6B7280] rounded-lg transition-all"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Vehicle Identity */}
-              <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200 text-xs">
-                <div className="flex justify-between"><span className="text-slate-500">الماركة والموديل:</span><span className="font-bold text-slate-900">{selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">الفئة / Trim:</span><span className="text-slate-700">{selectedVehicle.trim || '-'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">الفرع:</span><span className="text-slate-700">{selectedVehicle.branchName}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">رقم الفاتورة المرجعي:</span><span className="font-mono text-teal-700 font-bold">{selectedVehicle.stockNumber}</span></div>
+              <div className="bg-[#F8FAFC] p-4 rounded-xl space-y-2 border border-[#E5E7EB] text-xs">
+                <div className="flex justify-between"><span className="text-[#6B7280]">الماركة والموديل:</span><span className="font-bold text-[#111827]">{selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year}</span></div>
+                <div className="flex justify-between"><span className="text-[#6B7280]">الفئة / Trim:</span><span className="text-slate-700">{selectedVehicle.trim || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-[#6B7280]">الفرع:</span><span className="text-slate-700">{selectedVehicle.branchName}</span></div>
+                <div className="flex justify-between"><span className="text-[#6B7280]">رقم الفاتورة المرجعي:</span><span className="font-mono text-[#0F766E] font-bold">{selectedVehicle.stockNumber}</span></div>
               </div>
 
-              {/* Cost Accounting Breakdown */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-700 uppercase">احتساب تكلفة الاستحواذ (Acquisition Cost)</h4>
-                <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200 text-xs font-mono">
-                  <div className="flex justify-between"><span className="text-slate-500">سعر الشراء الأساسي للمورد:</span><span>{formatCurrency(selectedVehicle.purchaseCost)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">مصاريف مباشرة (جمرك/تحسين/صيانة):</span><span>{formatCurrency(selectedVehicle.additionalCosts)}</span></div>
-                  <div className="flex justify-between pt-2 border-t border-slate-200 font-bold text-slate-900 text-sm">
-                    <span>إجمالي تكلفة السيارة الفعالية:</span><span>{formatCurrency(selectedVehicle.totalVehicleCost)}</span>
+              {/* FINANCIAL WATERFALL COMPONENT */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-[#111827] uppercase tracking-wider">
+                  شجرة التسلسل المالي والربح المحقق (Waterfall Breakdown)
+                </h4>
+                <div className="bg-[#F8FAFC] border border-[#E5E7EB] rounded-xl p-4 space-y-2 text-xs font-mono">
+                  <div className="flex justify-between text-slate-700">
+                    <span>1. سعر الشراء الأساسي (Supplier Price):</span>
+                    <span>{formatCurrency(selectedVehicle.purchaseCost)}</span>
                   </div>
+                  <div className="flex justify-between text-slate-600 pl-4 border-r-2 border-slate-300">
+                    <span>+ مصاريف صيانة وجمرك وشحن:</span>
+                    <span>{formatCurrency(selectedVehicle.additionalCosts)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-[#E5E7EB] font-bold text-[#111827]">
+                    <span>= إجمالي تكلفة السيارة الكلية (Total Cost):</span>
+                    <span>{formatCurrency(selectedVehicle.totalVehicleCost)}</span>
+                  </div>
+
+                  {selectedVehicle.status === 'Sold' ? (
+                    <>
+                      <div className="flex justify-between pt-2 text-[#16A34A]">
+                        <span>2. صافي إيراد البيع بالعقد (Net Revenue):</span>
+                        <span>{formatCurrency(selectedVehicle.netRevenue)}</span>
+                      </div>
+                      <div className={`flex justify-between pt-2 border-t-2 border-[#E5E7EB] font-bold text-base ${
+                        selectedVehicle.realizedProfit >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'
+                      }`}>
+                        <span>= الربح الإجمالي المحقق (Realized Profit):</span>
+                        <span>{formatCurrency(selectedVehicle.realizedProfit)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="pt-2 text-amber-700 text-[11px] font-sans">
+                      السيارة متوفرة في المخزون حالياً (لم تُباع بعد).
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Sale & Profit Realization Details */}
-              {selectedVehicle.status === 'Sold' ? (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-emerald-700 uppercase">نتائج البيع والربح المحقق</h4>
-                  <div className="bg-emerald-50/50 p-4 rounded-xl space-y-2 border border-emerald-200 text-xs font-mono">
-                    <div className="flex justify-between"><span className="text-slate-500">رقم عقد البيع:</span><span className="text-teal-800 font-bold">{selectedVehicle.saleNumber}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">تاريخ إبرام البيع:</span><span className="text-slate-700">{selectedVehicle.saleDate ? new Date(selectedVehicle.saleDate).toLocaleDateString('ar-IQ') : '-'}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">سعر البيع بالعقد:</span><span>{formatCurrency(selectedVehicle.salePrice)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">الخصم الممنوح:</span><span>{formatCurrency(selectedVehicle.discount)}</span></div>
-                    <div className="flex justify-between pt-2 border-t border-emerald-200 text-sm font-bold text-emerald-800">
-                      <span>صافي الإيراد المحصل:</span><span>{formatCurrency(selectedVehicle.netRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-emerald-200 text-sm font-bold text-emerald-800">
-                      <span>الربح الإجمالي المحقق:</span><span>{formatCurrency(selectedVehicle.realizedProfit)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-emerald-800">
-                      <span>هامش الربح %:</span><span>{selectedVehicle.profitMarginPercent}%</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                  السيارة ما زالت متوفرة في المخزون الحالي، ولن يتم احتساب إيرادات أو أرباح محققة لها لحين توثيق عقد بيع نشط.
-                </div>
-              )}
             </motion.div>
           </div>
         )}
