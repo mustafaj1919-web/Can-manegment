@@ -27,7 +27,8 @@ interface SectionItem {
 }
 
 function SectionGroup({ group, isLocalLight }: { group: SectionItem; isLocalLight?: boolean }) {
-  const hasChildren = group.children.length > 0
+  const children = Array.isArray(group?.children) ? group.children : []
+  const hasChildren = children.length > 0
   return (
     <div className={cn(
       "border-b last:border-0 transition-colors",
@@ -43,28 +44,28 @@ function SectionGroup({ group, isLocalLight }: { group: SectionItem; isLocalLigh
         </div>
         <span className={cn(
           "font-numeric text-sm font-bold transition-colors",
-          group.balance < 0 
+          (group.balance ?? 0) < 0 
             ? (isLocalLight ? 'text-rose-600' : 'text-rose-400')
             : (isLocalLight ? 'text-muted-foreground' : 'text-foreground')
         )}>
-          {money(group.balance)}
+          {money(group.balance ?? 0)}
         </span>
       </div>
       {hasChildren && (
         <div className={cn("divide-y transition-colors", isLocalLight ? "divide-slate-100 bg-white" : "divide-white/[0.03]")}>
-          {group.children.map(child => (
-            <div key={child.id} className="flex items-center justify-between px-5 py-2 ps-12">
+          {children.map(child => (
+            <div key={child.id ?? child.code} className="flex items-center justify-between px-5 py-2 ps-12">
               <div className="flex items-center gap-2">
                 <span className={cn("font-numeric text-xs transition-colors", isLocalLight ? "text-muted-foreground" : "text-muted-foreground/60")}>{child.code}</span>
                 <span className={cn("text-xs transition-colors", isLocalLight ? "text-muted-foreground" : "text-foreground/80")}>{child.name}</span>
               </div>
               <span className={cn(
                 "font-numeric text-xs transition-colors",
-                child.balance < 0 
+                (child.balance ?? 0) < 0 
                   ? (isLocalLight ? 'text-rose-600' : 'text-rose-400')
                   : (isLocalLight ? 'text-muted-foreground' : 'text-foreground/80')
               )}>
-                {money(child.balance)}
+                {money(child.balance ?? 0)}
               </span>
             </div>
           ))}
@@ -86,6 +87,10 @@ export default function BalanceSheetPage() {
     retry: 1,
   })
 
+  const assets = Array.isArray(data?.assets) ? data.assets : []
+  const liabilities = Array.isArray(data?.liabilities) ? data.liabilities : []
+  const equity = Array.isArray(data?.equity) ? data.equity : []
+
   const [exporting, setExporting] = useState(false)
 
   const handleExport = async () => {
@@ -97,28 +102,32 @@ export default function BalanceSheetPage() {
 
       // Helper to push section groups
       const pushSection = (sectionName: string, groups: any[]) => {
-        groups.forEach(g => {
+        const safeGroups = Array.isArray(groups) ? groups : []
+        safeGroups.forEach(g => {
+          if (!g) return
           // Push group header row
-          rows.push([sectionName, g.name, g.code, 'حساب رئيسي', g.balance])
+          rows.push([sectionName, g.name ?? '', g.code ?? '', 'حساب رئيسي', g.balance ?? 0])
           // Push children accounts
-          g.children.forEach((c: any) => {
-            rows.push([sectionName, g.name, c.code, c.name, c.balance])
+          const safeChildren = Array.isArray(g.children) ? g.children : []
+          safeChildren.forEach((c: any) => {
+            if (!c) return
+            rows.push([sectionName, g.name ?? '', c.code ?? '', c.name ?? '', c.balance ?? 0])
           })
         })
       }
 
       // Add Assets
-      pushSection('الموجودات (الأصول)', data.assets)
+      pushSection('الموجودات (الأصول)', assets)
       rows.push(['إجمالي الموجودات (الأصول)', '', '', '', data.total_assets])
       rows.push(['', '', '', '', ''])
 
       // Add Liabilities
-      pushSection('المطلوبات (الخصوم)', data.liabilities)
+      pushSection('المطلوبات (الخصوم)', liabilities)
       rows.push(['إجمالي المطلوبات (الخصوم)', '', '', '', data.total_liabilities])
       rows.push(['', '', '', '', ''])
 
       // Add Equity
-      pushSection('حقوق الملكية', data.equity)
+      pushSection('حقوق الملكية', equity)
       rows.push(['إجمالي حقوق الملكية', '', '', '', data.total_equity])
       rows.push(['', '', '', '', ''])
 
@@ -261,7 +270,7 @@ export default function BalanceSheetPage() {
                   <span className={cn("font-numeric text-xl font-black transition-colors", isLocalLight ? "text-cyan-900" : "text-cyan-300")}>{money(data.total_assets)}</span>
                 </div>
               </div>
-              {data.assets.map(g => <SectionGroup key={g.id} group={g} isLocalLight={isLocalLight} />)}
+              {assets.map(g => <SectionGroup key={g.id ?? g.code} group={g} isLocalLight={isLocalLight} />)}
               <div className={cn(
                 "flex items-center justify-between px-5 py-3.5 border-t transition-colors",
                 isLocalLight ? "border-slate-200 bg-slate-100" : "border-cyan-50/10 bg-cyan-50/[0.06]"
@@ -286,7 +295,7 @@ export default function BalanceSheetPage() {
                     <span className={cn("font-numeric text-xl font-black transition-colors", isLocalLight ? "text-rose-900" : "text-rose-300")}>{money(data.total_liabilities)}</span>
                   </div>
                 </div>
-                {data.liabilities.map(g => <SectionGroup key={g.id} group={g} isLocalLight={isLocalLight} />)}
+                {liabilities.map(g => <SectionGroup key={g.id ?? g.code} group={g} isLocalLight={isLocalLight} />)}
                 <div className={cn(
                   "flex items-center justify-between px-5 py-3.5 border-t transition-colors",
                   isLocalLight ? "border-slate-200 bg-slate-100" : "border-rose-50/10 bg-rose-50/[0.06]"
@@ -309,7 +318,7 @@ export default function BalanceSheetPage() {
                     <span className={cn("font-numeric text-xl font-black transition-colors", isLocalLight ? "text-violet-900" : "text-violet-300")}>{money(data.total_equity)}</span>
                   </div>
                 </div>
-                {data.equity.map(g => <SectionGroup key={g.id} group={g} isLocalLight={isLocalLight} />)}
+                {equity.map(g => <SectionGroup key={g.id ?? g.code} group={g} isLocalLight={isLocalLight} />)}
                 <div className={cn(
                   "flex items-center justify-between px-5 py-3.5 border-t transition-colors",
                   isLocalLight ? "border-slate-200 bg-slate-100" : "border-violet-50/10 bg-violet-50/[0.06]"

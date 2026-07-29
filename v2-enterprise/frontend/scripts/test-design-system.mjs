@@ -394,6 +394,38 @@ assert(wrapperResult.revenues.length === 1, 'Wrapper object { success: true, dat
 assert(wrapperResult.expenses.length === 0, 'Empty expenses array safely preserved as []')
 assert(wrapperResult.netProfitOrLoss === 100000, 'Net profit correctly calculated')
 
+// --- Test Group 13: Balance Sheet Normalization & Group Children Safety ---
+console.log('\n--- Test Group 13: Balance Sheet Normalization & Group Children Safety ---')
+
+function normalizeBalanceSheetData(rawData) {
+  const data = (rawData && typeof rawData === 'object' && 'data' in rawData && rawData.data) ? rawData.data : rawData
+  const assets = Array.isArray(data?.assets) ? data.assets : Array.isArray(data?.Assets) ? data.Assets : []
+  const liabilities = Array.isArray(data?.liabilities) ? data.liabilities : Array.isArray(data?.Liabilities) ? data.Liabilities : []
+  const equity = Array.isArray(data?.equity) ? data.equity : Array.isArray(data?.Equity) ? data.Equity : []
+
+  const normalizeGroup = (g) => ({
+    ...g,
+    children: Array.isArray(g?.children) ? g.children : Array.isArray(g?.Children) ? g.Children : []
+  })
+
+  return {
+    assets: assets.map(normalizeGroup),
+    liabilities: liabilities.map(normalizeGroup),
+    equity: equity.map(normalizeGroup),
+  }
+}
+
+const bsNull = normalizeBalanceSheetData(null)
+assert(Array.isArray(bsNull.assets) && bsNull.assets.length === 0, 'Null BalanceSheet rawData normalizes assets to []')
+
+const bsWithGroupNoChildren = normalizeBalanceSheetData({
+  assets: [
+    { id: 1, code: '11', name: 'أصول متداولة', balance: 500000, children: null }
+  ]
+})
+assert(bsWithGroupNoChildren.assets.length === 1, 'Assets group with children=null preserved as group')
+assert(Array.isArray(bsWithGroupNoChildren.assets[0].children) && bsWithGroupNoChildren.assets[0].children.length === 0, 'Group children=null safely normalized to []')
+
 console.log('\n==================================================')
 console.log(`Test Summary: ${passed} passed, ${failed} failed`)
 console.log('==================================================\n')

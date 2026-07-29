@@ -692,10 +692,51 @@ export interface BalanceSheetResponse {
 
 export async function getBalanceSheet(): Promise<BalanceSheetResponse> {
   const res = await get<any>('/Accounting/balance-sheet')
-  if (res && res.success && res.data) {
-    return res.data
+  const rawData = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res
+
+  const mapGroup = (g: any): BalanceSheetGroup => {
+    const rawChildren = Array.isArray(g?.children) ? g.children : Array.isArray(g?.Children) ? g.Children : []
+    return {
+      id: g?.id ?? g?.Id ?? Math.random(),
+      code: String(g?.code ?? g?.Code ?? ''),
+      name: String(g?.name ?? g?.Name ?? ''),
+      balance: typeof g?.balance === 'number' ? g.balance : typeof g?.Balance === 'number' ? g.Balance : 0,
+      children: rawChildren.map((c: any) => ({
+        id: c?.id ?? c?.Id ?? Math.random(),
+        code: String(c?.code ?? c?.Code ?? ''),
+        name: String(c?.name ?? c?.Name ?? ''),
+        balance: typeof c?.balance === 'number' ? c.balance : typeof c?.Balance === 'number' ? c.Balance : 0,
+        classification: String(c?.classification ?? c?.Classification ?? ''),
+      })),
+    }
   }
-  return res
+
+  const rawAssets = Array.isArray(rawData?.assets) ? rawData.assets : Array.isArray(rawData?.Assets) ? rawData.Assets : []
+  const rawLiabilities = Array.isArray(rawData?.liabilities) ? rawData.liabilities : Array.isArray(rawData?.Liabilities) ? rawData.Liabilities : []
+  const rawEquity = Array.isArray(rawData?.equity) ? rawData.equity : Array.isArray(rawData?.Equity) ? rawData.Equity : []
+
+  const assets = rawAssets.map(mapGroup)
+  const liabilities = rawLiabilities.map(mapGroup)
+  const equity = rawEquity.map(mapGroup)
+
+  const total_assets = typeof rawData?.total_assets === 'number' ? rawData.total_assets : typeof rawData?.totalAssets === 'number' ? rawData.totalAssets : assets.reduce((s: number, g: BalanceSheetGroup) => s + g.balance, 0)
+  const total_liabilities = typeof rawData?.total_liabilities === 'number' ? rawData.total_liabilities : typeof rawData?.totalLiabilities === 'number' ? rawData.totalLiabilities : liabilities.reduce((s: number, g: BalanceSheetGroup) => s + g.balance, 0)
+  const total_equity = typeof rawData?.total_equity === 'number' ? rawData.total_equity : typeof rawData?.totalEquity === 'number' ? rawData.totalEquity : equity.reduce((s: number, g: BalanceSheetGroup) => s + g.balance, 0)
+  const total_liabilities_equity = typeof rawData?.total_liabilities_equity === 'number' ? rawData.total_liabilities_equity : total_liabilities + total_equity
+  const difference = typeof rawData?.difference === 'number' ? rawData.difference : Math.abs(total_assets - total_liabilities_equity)
+  const is_balanced = typeof rawData?.is_balanced === 'boolean' ? rawData.is_balanced : difference === 0
+
+  return {
+    assets,
+    liabilities,
+    equity,
+    total_assets,
+    total_liabilities,
+    total_equity,
+    total_liabilities_equity,
+    difference,
+    is_balanced,
+  }
 }
 
 /* ─── Journal Entries ───────────────────────────────────────────────────── */
