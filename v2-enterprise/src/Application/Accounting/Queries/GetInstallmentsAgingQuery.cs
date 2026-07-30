@@ -20,6 +20,10 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
         public int PendingCount { get; set; }
         public int OverdueCount { get; set; }
 
+        public decimal GrossAccountsReceivable { get; set; }
+        public decimal CustomerCreditBalances { get; set; }
+        public decimal NetCustomerPosition => AccountingAmount.RoundMoney(GrossAccountsReceivable - CustomerCreditBalances);
+
         public List<InstallmentAgingItemDto> Items { get; set; } = new List<InstallmentAgingItemDto>();
     }
 
@@ -57,6 +61,38 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
         {
             var branchId = _currentUserService.BranchId;
             var asOf = request.AsOfDate ?? DateTime.UtcNow;
+
+            // جلب حسابات ذمم المدينين (الزبائن) لحساب إجمالي الذمم والأرصدة الدائنة secara مستقل
+            var customerAccounts = await _context.Accounts
+                .Where(a => a.IsActive && a.BranchId == branchId && a.AccountCode.StartsWith("1301") && a.AccountCode != "1301")
+                .ToListAsync(cancellationToken);
+
+            var customerAccountIds = customerAccounts.Select(a => a.Id).ToList();
+
+            var customerLines = await _context.JournalLines
+                .Include(l => l.JournalEntry)
+                .Where(l => l.JournalEntry != null && l.JournalEntry.IsPosted && l.JournalEntry.BranchId == branchId && customerAccountIds.Contains(l.AccountId))
+                .ToListAsync(cancellationToken);
+
+            decimal grossAccountsReceivable = 0;
+            decimal customerCreditBalances = 0;
+
+            foreach (var acc in customerAccounts)
+            {
+                var lines = customerLines.Where(l => l.AccountId == acc.Id).ToList();
+                var dr = lines.Sum(l => l.Debit);
+                var cr = lines.Sum(l => l.Credit);
+                var closingNet = AccountingAmount.RoundMoney(dr - cr);
+
+                if (closingNet > 0)
+                {
+                    grossAccountsReceivable += closingNet;
+                }
+                else if (closingNet < 0)
+                {
+                    customerCreditBalances += Math.Abs(closingNet);
+                }
+            }
 
             // جلب الأقساط النشطة للفرع الحالي
             var installments = await _context.Installments
@@ -130,6 +166,8 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
                 PaidCount = paidCount,
                 PendingCount = pendingCount,
                 OverdueCount = overdueCount,
+                GrossAccountsReceivable = AccountingAmount.RoundMoney(grossAccountsReceivable),
+                CustomerCreditBalances = AccountingAmount.RoundMoney(customerCreditBalances),
                 Items = items.OrderBy(i => i.DueDate).ToList()
             };
         }

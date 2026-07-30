@@ -75,23 +75,34 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
             decimal totalRevenues = 0;
             decimal totalExpenses = 0;
 
+            // تجميع الأرصدة الدائنة لحسابات الزبائن لإعادة تصنيفها كـ مطلوبات متداولة (أرصدة دائنة للعملاء)
+            decimal totalCustomerCreditBalances = 0;
+
             foreach (var account in accounts)
             {
                 var lines = journalLines.Where(l => l.AccountId == account.Id).ToList();
                 var totalDebit = AccountingAmount.RoundMoney(lines.Sum(l => l.Debit));
                 var totalCredit = AccountingAmount.RoundMoney(lines.Sum(l => l.Credit));
 
+                // فحص إذا كان الحساب حساب زبون فرعي تحت ذمم المدينين (1301)
+                bool isCustomerArSubledger = account.AccountCode.StartsWith("1301") && account.AccountCode != "1301";
+
                 switch (account.Type)
                 {
                     case AccountType.Asset:
-                        var assetBalance = AccountingAmount.RoundMoney(totalDebit - totalCredit);
-                        if (assetBalance != 0)
+                        var netAssetBalance = AccountingAmount.RoundMoney(totalDebit - totalCredit);
+                        if (isCustomerArSubledger && netAssetBalance < 0)
+                        {
+                            // إعادة تصنيف: رصيد دائن لزبون يُستبعد من الأصول ويُعرض في الخصوم المتداولة (أرصدة دائنة للعملاء)
+                            totalCustomerCreditBalances += Math.Abs(netAssetBalance);
+                        }
+                        else if (netAssetBalance != 0)
                         {
                             assetsList.Add(new BalanceSheetItemDto
                             {
                                 AccountCode = account.AccountCode,
                                 AccountName = account.Name,
-                                Amount = assetBalance
+                                Amount = netAssetBalance
                             });
                         }
                         break;
@@ -130,6 +141,17 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
                         totalExpenses += AccountingAmount.RoundMoney(totalDebit - totalCredit);
                         break;
                 }
+            }
+
+            // إضافة بند "أرصدة دائنة للعملاء" كالتزام متداول إذا وجدت أرصدة دائنة للزبائن
+            if (totalCustomerCreditBalances > 0)
+            {
+                liabilitiesList.Add(new BalanceSheetItemDto
+                {
+                    AccountCode = "2109",
+                    AccountName = "أرصدة دائنة للعملاء",
+                    Amount = AccountingAmount.RoundMoney(totalCustomerCreditBalances)
+                });
             }
 
             var netProfitOrLoss = AccountingAmount.RoundMoney(totalRevenues - totalExpenses);

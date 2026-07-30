@@ -32,6 +32,9 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
         public decimal TotalPaidAmount { get; set; }
         public decimal TotalRemaining { get; set; }
         public decimal TotalOverdue { get; set; }
+        public decimal AccountBalance { get; set; }
+        public string PositionStatus { get; set; } = "Zero"; // Debit | Credit | Zero
+        public string PositionLabel { get; set; } = "الحساب متزن";
         public DateTime? LastPaymentDate { get; set; }
         public string Currency { get; set; } = "IQD";
     }
@@ -262,6 +265,34 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 })
                 .ToListAsync(cancellationToken);
 
+            // حساب الرصيد الإجمالي لدفتر أستاذ الزبون لتحديد المركز المالي الصريح
+            decimal accountBalance = 0;
+            string positionStatus = "Zero";
+            string positionLabel = "الحساب متزن (0.00 د.ع)";
+
+            if (customer.AccountId != Guid.Empty)
+            {
+                var ledgerLines = await _context.JournalLines
+                    .Include(l => l.JournalEntry)
+                    .Where(l => l.AccountId == customer.AccountId && l.JournalEntry != null && l.JournalEntry.IsPosted && l.JournalEntry.EntryDate <= endDate)
+                    .ToListAsync(cancellationToken);
+
+                var dr = ledgerLines.Sum(l => l.Debit);
+                var cr = ledgerLines.Sum(l => l.Credit);
+                accountBalance = dr - cr;
+
+                if (accountBalance > 0)
+                {
+                    positionStatus = "Debit";
+                    positionLabel = "الزبون مدين للمعرض";
+                }
+                else if (accountBalance < 0)
+                {
+                    positionStatus = "Credit";
+                    positionLabel = "المعرض مدين للزبون";
+                }
+            }
+
             var summaryDto = new StatementSummaryDto
             {
                 SalesCount = salesList.Count,
@@ -269,6 +300,9 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 TotalPaidAmount = salesList.Sum(s => s.PaidAmount),
                 TotalRemaining = salesList.Sum(s => s.RemainingAmount),
                 TotalOverdue = salesList.Sum(s => s.InstallmentPlan?.OverdueAmount ?? 0),
+                AccountBalance = accountBalance,
+                PositionStatus = positionStatus,
+                PositionLabel = positionLabel,
                 LastPaymentDate = payments.OrderByDescending(p => p.CreatedAt).FirstOrDefault()?.CreatedAt,
                 Currency = "IQD"
             };
