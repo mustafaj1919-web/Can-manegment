@@ -98,9 +98,23 @@ namespace CarShowroomManagementV2.API.Controllers
                 salesCount = c.SalesCount,
                 purchasesCount = c.PurchasesCount,
                 documentsCount = c.DocumentsCount
-            }).ToList();
+            });
 
-            return Ok(new { success = true, total, page, per_page, items = data, data });
+            return Ok(new
+            {
+                total,
+                page,
+                per_page,
+                items = data
+            });
+        }
+
+        // 2.ب استعلام السيارات المباعة سابقاً للزبون لإعادة الشراء (Buyback)
+        [HttpGet("{customerId}/purchased-vehicles")]
+        public async Task<IActionResult> GetPurchasedVehicles(Guid customerId)
+        {
+            var result = await Mediator.Send(new GetCustomerPurchasedVehiclesQuery { CustomerId = customerId });
+            return Ok(new { success = true, data = result });
         }
 
         // 2.ب جلب عميل واحد بمعرّفه

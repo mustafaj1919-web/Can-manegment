@@ -93,15 +93,39 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 branchId,
                 cancellationToken);
 
-            // 2. التحقق من عدم تكرار رقم الشاصي عالمياً
-            var vehicleExists = await _context.Vehicles
+            // 2. التحقق من رقم الشاصي مع دعم إعادة الشراء (Buyback) للسيارات المباعة سابقاً
+            var existingVehicle = await _context.Vehicles
                 .IgnoreQueryFilters()
-                .AnyAsync(v => v.ChassisNumber == request.ChassisNumber, cancellationToken);
-
-            if (vehicleExists)
-                throw new InvalidOperationException($"رقم الشاصي '{request.ChassisNumber}' مسجل مسبقاً في النظام ولا يمكن تكراره.");
+                .FirstOrDefaultAsync(v => v.ChassisNumber == request.ChassisNumber, cancellationToken);
 
             Vehicle? vehicle = null;
+
+            if (existingVehicle != null)
+            {
+                if (request.SourceType == PurchaseSourceType.Customer)
+                {
+                    // التحقق من صلاحية إعادة الشراء من الزبون (Buyback Eligibility)
+                    if (existingVehicle.Status == "Available" || !existingVehicle.IsSold)
+                    {
+                        throw new InvalidOperationException($"السيارة برقم الشاصي '{request.ChassisNumber}' موجودة حالياً في المخزون ولا يمكن إعادتها.");
+                    }
+
+                    var lastSale = await _context.SalesContracts
+                        .IgnoreQueryFilters()
+                        .Where(sc => sc.VehicleId == existingVehicle.Id && sc.CustomerId == request.CustomerId && sc.Status != "Cancelled")
+                        .OrderByDescending(sc => sc.SaleDate)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (lastSale == null)
+                    {
+                        throw new InvalidOperationException($"لم يتم العثور على عقد بيع سابق مؤكد للسيارة رقم '{request.ChassisNumber}' لصالح هذا الزبون.");
+                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException($"رقم الشاصي '{request.ChassisNumber}' مسجل مسبقاً في النظام ولا يمكن تكراره.");
+                }
+            }
 
             var dbContext = _context as DbContext;
             if (dbContext == null)
@@ -116,8 +140,27 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 var purchaseCost = AccountingAmount.RoundMoney(request.PurchaseCost);
                 var targetSellingPrice = AccountingAmount.RoundMoney(request.TargetSellingPrice);
 
-                vehicle = new Vehicle
+                if (existingVehicle != null)
                 {
+                    // تحديث حالة وتكلفة السيارة المعادة إلى المخزون (Buyback)
+                    existingVehicle.IsSold = false;
+                    existingVehicle.Status = "Available";
+                    existingVehicle.PurchaseCost = purchaseCost;
+                    existingVehicle.BookValue = purchaseCost;
+                    if (targetSellingPrice > 0) existingVehicle.TargetSellingPrice = targetSellingPrice;
+                    if (!string.IsNullOrWhiteSpace(request.Color)) existingVehicle.Color = request.Color;
+                    if (!string.IsNullOrWhiteSpace(request.PlateNumber)) existingVehicle.PlateNumber = request.PlateNumber;
+                    if (request.Mileage.HasValue) existingVehicle.Mileage = request.Mileage.Value;
+                    if (!string.IsNullOrWhiteSpace(request.Condition)) existingVehicle.Condition = request.Condition;
+                    if (!string.IsNullOrWhiteSpace(request.Notes)) existingVehicle.Notes = request.Notes;
+
+                    _context.Vehicles.Update(existingVehicle);
+                    vehicle = existingVehicle;
+                }
+                else
+                {
+                    vehicle = new Vehicle
+                    {
                     Id = Guid.NewGuid(),
                     Brand = request.Brand,
                     Model = request.Model,
@@ -143,10 +186,9 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     ImportCountry = request.ImportCountry,
                     SeatCount = request.SeatCount,
                     SeatMaterial = request.SeatMaterial,
-                    Currency = request.Currency ?? "USD",
-                    Notes = request.Notes
-                };
-                _context.Vehicles.Add(vehicle);
+                    };
+                    _context.Vehicles.Add(vehicle);
+                }
 
                 await _context.SaveChangesAsync(cancellationToken);
 

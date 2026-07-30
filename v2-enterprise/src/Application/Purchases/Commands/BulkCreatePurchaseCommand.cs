@@ -141,15 +141,38 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
             var actualAmountPaid = (hasImmediatePayment && cashOrBankAccountId.HasValue) ? paidAmount : 0m;
 
-            var existingChassis = await _context.Vehicles
+            var existingVehicles = await _context.Vehicles
                 .IgnoreQueryFilters()
                 .Where(v => request.ChassisNumbers.Contains(v.ChassisNumber))
-                .Select(v => v.ChassisNumber)
                 .ToListAsync(cancellationToken);
 
-            if (existingChassis.Any())
+            var existingChassisMap = existingVehicles.ToDictionary(v => v.ChassisNumber, StringComparer.OrdinalIgnoreCase);
+
+            if (existingVehicles.Any())
             {
-                throw new InvalidOperationException($"أرقام الشاصي التالية مسجلة مسبقاً في النظام: {string.Join(", ", existingChassis)}");
+                if (request.SourceType == PurchaseSourceType.Customer)
+                {
+                    foreach (var v in existingVehicles)
+                    {
+                        if (v.Status == "Available" || !v.IsSold)
+                        {
+                            throw new InvalidOperationException($"السيارة برقم الشاصي '{v.ChassisNumber}' موجودة حالياً في المخزون ولا يمكن إعادتها.");
+                        }
+
+                        var lastSale = await _context.SalesContracts
+                            .IgnoreQueryFilters()
+                            .AnyAsync(sc => sc.VehicleId == v.Id && sc.CustomerId == request.CustomerId && sc.Status != "Cancelled", cancellationToken);
+
+                        if (!lastSale)
+                        {
+                            throw new InvalidOperationException($"لم يتم العثور على عقد بيع سابق مؤكد للسيارة رقم '{v.ChassisNumber}' لصالح هذا الزبون.");
+                        }
+                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException($"أرقام الشاصي التالية مسجلة مسبقاً في النظام: {string.Join(", ", existingVehicles.Select(v => v.ChassisNumber))}");
+                }
             }
 
             var dbContext = _context as DbContext;
@@ -174,34 +197,52 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     var notes = overrideInfo?.Notes;
                     var sellingPrice = AccountingAmount.RoundMoney(overrideInfo?.TargetSellingPrice ?? request.TargetSellingPrice);
 
-                    var vehicle = new Vehicle
+                    Vehicle vehicle;
+                    if (existingChassisMap.TryGetValue(chassis, out var existingV))
                     {
-                        Id = Guid.NewGuid(),
-                        Brand = request.Brand,
-                        Model = request.Model,
-                        ChassisNumber = chassis,
-                        Color = color,
-                        Year = request.Year,
-                        PurchaseCost = purchaseCost,
-                        BookValue = purchaseCost,
-                        TargetSellingPrice = sellingPrice,
-                        Status = "Available",
-                        IsSold = false,
-                        BranchId = branchId,
-                        Trim = request.Trim,
-                        Condition = request.Condition,
-                        PlateNumber = plateNumber,
-                        Mileage = 0,
-                        EngineSize = request.EngineSize,
-                        Cylinders = request.Cylinders,
-                        Transmission = request.Transmission,
-                        FuelType = request.FuelType,
-                        ImportCountry = request.ImportCountry,
-                        SeatCount = request.SeatCount,
-                        Currency = "USD",
-                        Notes = notes
-                    };
-                    _context.Vehicles.Add(vehicle);
+                        existingV.IsSold = false;
+                        existingV.Status = "Available";
+                        existingV.PurchaseCost = purchaseCost;
+                        existingV.BookValue = purchaseCost;
+                        if (sellingPrice > 0) existingV.TargetSellingPrice = sellingPrice;
+                        if (!string.IsNullOrWhiteSpace(color)) existingV.Color = color;
+                        if (!string.IsNullOrWhiteSpace(plateNumber)) existingV.PlateNumber = plateNumber;
+                        if (!string.IsNullOrWhiteSpace(notes)) existingV.Notes = notes;
+
+                        _context.Vehicles.Update(existingV);
+                        vehicle = existingV;
+                    }
+                    else
+                    {
+                        vehicle = new Vehicle
+                        {
+                            Id = Guid.NewGuid(),
+                            Brand = request.Brand,
+                            Model = request.Model,
+                            ChassisNumber = chassis,
+                            Color = color,
+                            Year = request.Year,
+                            PurchaseCost = purchaseCost,
+                            BookValue = purchaseCost,
+                            TargetSellingPrice = sellingPrice,
+                            Status = "Available",
+                            IsSold = false,
+                            BranchId = branchId,
+                            Trim = request.Trim,
+                            Condition = request.Condition,
+                            PlateNumber = plateNumber,
+                            Mileage = 0,
+                            EngineSize = request.EngineSize,
+                            Cylinders = request.Cylinders,
+                            Transmission = request.Transmission,
+                            FuelType = request.FuelType,
+                            ImportCountry = request.ImportCountry,
+                            SeatCount = request.SeatCount,
+                            Currency = "USD",
+                            Notes = notes
+                        };
+                        _context.Vehicles.Add(vehicle);
+                    }
 
                     var detailedCost = new VehicleCost
                     {

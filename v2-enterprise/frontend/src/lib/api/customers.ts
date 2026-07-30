@@ -416,6 +416,35 @@ export async function checkScannerAvailable(): Promise<{ available: boolean; sca
   })
 }
 
+export interface CustomerPurchasedVehicle {
+  vehicleId: string
+  saleContractId: string
+  saleContractNumber: string
+  saleDate: string
+  make: string
+  model: string
+  trim?: string | null
+  year: number
+  color?: string | null
+  vin: string
+  chassisNumber: string
+  plateNumber?: string | null
+  previousSalePrice: number
+  branchId: string
+  branchName: string
+  currentOwnershipStatus: string
+  eligibleForBuyback: boolean
+  ineligibilityReason?: string | null
+}
+
+export async function getCustomerPurchasedVehicles(customerId: string): Promise<CustomerPurchasedVehicle[]> {
+  const res = await get<any>(`/Customers/${customerId}/purchased-vehicles`)
+  if (res?.success && Array.isArray(res.data)) {
+    return res.data
+  }
+  return Array.isArray(res) ? res : []
+}
+
 export async function uploadCustomerPhoto(id: string | number, file: File): Promise<{ success: boolean; photo_url?: string }> {
   const formData = new FormData()
   formData.append('file', file)

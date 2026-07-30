@@ -23,6 +23,10 @@ import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { QuickSupplierDialog } from '@/components/purchases/QuickSupplierDialog'
 import { OcrScannerDialog, type OcrResultData } from '@/components/ui/OcrScannerDialog'
+import { CustomerSearchCombobox } from '@/components/purchases/CustomerSearchCombobox'
+import { CustomerVehicleHistorySelector } from '@/components/purchases/CustomerVehicleHistorySelector'
+import { PurchaseConfirmationDialog } from '@/components/purchases/PurchaseConfirmationDialog'
+import { CustomerPurchasedVehicle } from '@/lib/api/customers'
 
 const PAYMENT_METHODS = [
   { value: 'Cash', label: 'نقداً' },
@@ -691,6 +695,10 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
   const queryClient = useQueryClient()
   const [sourceType, setSourceType] = useState<'Supplier' | 'Customer'>('Supplier')
   const [sellerId, setSellerId] = useState('')
+  const [selectedVehicleHistory, setSelectedVehicleHistory] = useState<CustomerPurchasedVehicle | null>(null)
+  const [buybackMode, setBuybackMode] = useState<'history' | 'manual'>('history')
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
   const [trim, setTrim] = useState('')
@@ -756,6 +764,43 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
     ? sellers.find((s) => String(s.id) === sellerId)
     : customers.find((c) => String(c.id) === sellerId)
 
+  function handleHistoricalVehicleSelect(v: CustomerPurchasedVehicle | null) {
+    setSelectedVehicleHistory(v)
+    if (v) {
+      setBrand(v.make || '')
+      setModel(v.model || '')
+      setTrim(v.trim || '')
+      setYear(String(v.year || new Date().getFullYear()))
+      setColor(v.color || '')
+      setVin(v.vin || v.chassisNumber || '')
+      setPlateNumber(v.plateNumber || '')
+      toast.success(`تم اختيار السيارة ${v.make} ${v.model} (${v.vin}) من عقد بيع سابق #${v.saleContractNumber}`)
+    } else {
+      setBrand('')
+      setModel('')
+      setTrim('')
+      setYear(String(new Date().getFullYear()))
+      setColor('')
+      setVin('')
+      setPlateNumber('')
+    }
+  }
+
+  function handleSourceTypeChange(type: 'Supplier' | 'Customer') {
+    setSourceType(type)
+    setSellerId('')
+    setSelectedVehicleHistory(null)
+    setBuybackMode('history')
+    setBrand('')
+    setModel('')
+    setTrim('')
+    setYear(String(new Date().getFullYear()))
+    setColor('')
+    setVin('')
+    setPlateNumber('')
+    setErrors({})
+  }
+
   const mutation = useMutation({
     mutationFn: createPurchase,
     onSuccess: (res) => {
@@ -785,9 +830,14 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
     return Object.keys(nextErrors).length === 0
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleFormSubmitClick(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
+    setIsConfirmOpen(true)
+  }
+
+  function handleConfirmSubmit() {
+    setIsConfirmOpen(false)
     mutation.mutate({
       source_type: sourceType,
       brand: brand.trim(),
@@ -816,14 +866,14 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleFormSubmitClick} className="space-y-5">
       <SectionCard title="جهة الشراء والبائع">
         <div className="mb-4">
           <Label className="mb-2 block text-xs text-muted-foreground">نوع جهة الشراء *</Label>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => { setSourceType('Supplier'); setSellerId(''); setErrors(e => ({ ...e, sellerId: '' })) }}
+              onClick={() => handleSourceTypeChange('Supplier')}
               className={cn(
                 'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-all',
                 sourceType === 'Supplier'
@@ -835,7 +885,7 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
             </button>
             <button
               type="button"
-              onClick={() => { setSourceType('Customer'); setSellerId(''); setErrors(e => ({ ...e, sellerId: '' })) }}
+              onClick={() => handleSourceTypeChange('Customer')}
               className={cn(
                 'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-all',
                 sourceType === 'Customer'
@@ -843,7 +893,7 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
                   : 'border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
               )}
             >
-              <span>زبون (شراء من أفراد)</span>
+              <span>زبون (إعادة شراء / أفراد)</span>
             </button>
           </div>
         </div>
@@ -854,52 +904,58 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
           </div>
         )}
 
-        {(sourceType === 'Supplier' ? sellersLoading : customersLoading) ? (
-          <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
-        ) : (sourceType === 'Supplier' ? sellers.length === 0 : customers.length === 0) ? (
-          <div className="py-6 text-center">
-            <AlertCircle className="mx-auto mb-2 h-6 w-6 text-cyan-400/60" />
-            <p className="text-sm text-muted-foreground">
-              {sourceType === 'Supplier' ? 'لا يوجد موردون مسجّلون بعد — أضِف موردًا للبدء.' : 'لا يوجد زبائن مسجّلون بعد — أضِف زبوناً للبدء.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">
-                {sourceType === 'Supplier' ? 'اختر المورد *' : 'اختر الزبون البائع *'}
-              </Label>
-              <Select value={sellerId} onValueChange={setSellerId}>
-                <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
-                  <SelectValue placeholder={sourceType === 'Supplier' ? 'اختر المورد' : 'اختر الزبون'} />
-                </SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {sourceType === 'Supplier'
-                    ? sellers.map((seller) => (
-                        <SelectItem key={seller.id} value={String(seller.id)}>
-                          {(seller.full_name || seller.name)} — {seller.phone || '-'}
-                        </SelectItem>
-                      ))
-                    : customers.map((cust) => (
-                        <SelectItem key={cust.id} value={String(cust.id)}>
-                          {(cust.full_name || cust.name)} — {cust.phone || '-'}
-                        </SelectItem>
-                      ))
-                  }
-                </SelectContent>
-              </Select>
-              <FieldError msg={errors.sellerId} />
-            </div>
-            {selectedSeller && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border/40 bg-secondary/20 p-3 text-xs">
-                <span className="text-muted-foreground">رقم الهاتف</span>
-                <span className="text-foreground">{selectedSeller.phone || '-'}</span>
-                <span className="text-muted-foreground">رقم الهوية / الكود</span>
-                <span className="text-foreground">{selectedSeller.id_number || selectedSeller.idNumber || '-'}</span>
-              </div>
+        <div className="space-y-4">
+          <div>
+            <Label className="mb-1.5 block text-xs text-muted-foreground">
+              {sourceType === 'Supplier' ? 'اختر المورد *' : 'ابحث واختر الزبون البائع *'}
+            </Label>
+
+            {sourceType === 'Supplier' ? (
+              sellersLoading ? (
+                <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
+              ) : (
+                <Select value={sellerId} onValueChange={setSellerId}>
+                  <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
+                    <SelectValue placeholder="اختر المورد" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {sellers.map((seller) => (
+                      <SelectItem key={seller.id} value={String(seller.id)}>
+                        {(seller.full_name || seller.name)} — {seller.phone || '-'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )
+            ) : (
+              <CustomerSearchCombobox
+                value={sellerId}
+                initialCustomers={customers}
+                onChange={(cust) => {
+                  setSellerId(cust ? String(cust.id) : '')
+                  setSelectedVehicleHistory(null)
+                  setErrors((e) => ({ ...e, sellerId: '' }))
+                }}
+                error={errors.sellerId}
+              />
             )}
+            <FieldError msg={errors.sellerId} />
           </div>
-        )}
+
+          {/* Customer History Buyback Selector */}
+          {sourceType === 'Customer' && sellerId && (
+            <CustomerVehicleHistorySelector
+              customerId={sellerId}
+              customerName={selectedSeller ? (selectedSeller.full_name || selectedSeller.name) : ''}
+              selectedVehicleId={selectedVehicleHistory?.vehicleId}
+              onSelectVehicle={handleHistoricalVehicleSelect}
+              onModeChange={(mode) => {
+                setBuybackMode(mode)
+                if (mode === 'manual') setSelectedVehicleHistory(null)
+              }}
+            />
+          )}
+        </div>
       </SectionCard>
 
       <SectionCard title="السيارة" contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -923,26 +979,45 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
           <FieldError msg={errors.color} />
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">رقم الشاصي *</Label>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">رقم الشاصي (VIN) *</Label>
           <div className="flex gap-2">
-            <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="VIN — 17 حرف"
-              className={cn('font-numeric bg-secondary/30 border-border/60', errors.vin && 'border-rose-500/60')} />
-            <button
-              type="button" onClick={handleVinDecode}
-              disabled={vinLoading || vin.trim().length !== 17}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-secondary/30 text-muted-foreground transition-colors hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
-              title="فك الترميز القياسي"
-            >
-              {vinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
-            </button>
-            <button
-              type="button" onClick={() => setIsOcrOpen(true)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:text-emerald-400"
-              title="مسح السنوية بالذكاء الاصطناعي (AI OCR)"
-            >
-              <Sparkles className="h-4 w-4" />
-            </button>
+            <Input
+              value={vin}
+              onChange={(e) => setVin(e.target.value)}
+              disabled={Boolean(selectedVehicleHistory)}
+              placeholder="VIN — 17 حرف"
+              className={cn(
+                'font-numeric bg-secondary/30 border-border/60',
+                errors.vin && 'border-rose-500/60',
+                selectedVehicleHistory && 'bg-amber-500/10 text-amber-300 font-bold border-amber-500/40 cursor-not-allowed'
+              )}
+            />
+            {!selectedVehicleHistory && (
+              <>
+                <button
+                  type="button" onClick={handleVinDecode}
+                  disabled={vinLoading || vin.trim().length !== 17}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-secondary/30 text-muted-foreground transition-colors hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="فك الترميز القياسي"
+                >
+                  {vinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button" onClick={() => setIsOcrOpen(true)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:text-emerald-400"
+                  title="مسح السنوية بالذكاء الاصطناعي (AI OCR)"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </button>
+              </>
+            )}
           </div>
+          {selectedVehicleHistory && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2 text-amber-300 text-xs">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-400" />
+              <span>تم اختيار السيارة من عقد بيع سابق (عقد #{selectedVehicleHistory.saleContractNumber})</span>
+            </div>
+          )}
           <FieldError msg={errors.vin} />
         </div>
         <div>
@@ -981,7 +1056,7 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
           <FieldError msg={errors.paymentMethod} />
         </div>
         <div>
-          <Label className="mb-1.5 block text-xs text-muted-foreground">سعر الشراء *</Label>
+          <Label className="mb-1.5 block text-xs text-muted-foreground">سعر إعادة الشراء / الشراء الجديد (IQD) *</Label>
           <Input type="number" min="0" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)}
             className={cn('font-numeric bg-secondary/30 border-border/60', errors.purchasePrice && 'border-rose-500/60')} />
           <FieldError msg={errors.purchasePrice} />
@@ -1050,13 +1125,35 @@ function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoadi
 
       <div className="flex items-center justify-end gap-3">
         <Button type="button" variant="ghost" onClick={() => router.back()} disabled={mutation.isPending}>إلغاء</Button>
-        <Button type="submit" disabled={mutation.isPending || sellersLoading} className="min-w-[150px] gap-2 bg-blue-600 text-white hover:bg-blue-500">
+        <Button type="submit" disabled={mutation.isPending || (sourceType === 'Supplier' ? sellersLoading : false)} className="min-w-[150px] gap-2 bg-amber-600 text-white hover:bg-amber-500">
           {mutation.isPending
             ? <><Loader2 className="h-4 w-4 animate-spin" />جاري الحفظ...</>
-            : <><CheckCircle2 className="h-4 w-4" />حفظ الفاتورة</>
+            : <><CheckCircle2 className="h-4 w-4" />مراجعة وقيد الفاتورة</>
           }
         </Button>
       </div>
+
+      <PurchaseConfirmationDialog
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={handleConfirmSubmit}
+        isSubmitting={mutation.isPending}
+        data={{
+          sourceType,
+          sellerName: selectedSeller ? (selectedSeller.full_name || selectedSeller.name) : 'غير محدد',
+          sellerPhone: selectedSeller?.phone,
+          isBuyback: Boolean(selectedVehicleHistory),
+          previousContractNumber: selectedVehicleHistory?.saleContractNumber,
+          previousSalePrice: selectedVehicleHistory?.previousSalePrice,
+          brand,
+          model,
+          year,
+          chassisNumber: vin,
+          purchasePrice: price,
+          paidAmount: paid,
+          paymentMethod: PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label || paymentMethod,
+        }}
+      />
 
       <OcrScannerDialog
         isOpen={isOcrOpen}
