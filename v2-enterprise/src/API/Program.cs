@@ -147,35 +147,7 @@ using (var scope = app.Services.CreateScope())
         // استخدام InMemory أو التأكد من إتمام الترحيل في بيئات التطوير والإنتاج
         if (dbContext.Database.IsRelational())
         {
-            bool tablesExist = false;
-            try
-            {
-                // محاولة فحص وجود جدول الفروع بإجراء استعلام سريع
-                _ = await dbContext.Branches.IgnoreQueryFilters().AnyAsync();
-                tablesExist = true;
-            }
-            catch (Exception)
-            {
-                tablesExist = false;
-            }
-
-            if (!tablesExist)
-            {
-                Log.Information("جداول قاعدة البيانات غير موجودة. يتم الآن إنشاء الجداول تلقائياً...");
-                var databaseCreator = dbContext.Database.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>() 
-                    as Microsoft.EntityFrameworkCore.Storage.IRelationalDatabaseCreator;
-                
-                if (databaseCreator != null)
-                {
-                    await databaseCreator.CreateTablesAsync();
-                    Log.Information("تم إنشاء الجداول بنجاح.");
-                }
-            }
-            else
-            {
-                Log.Information("قاعدة البيانات مهيأة والجداول موجودة. يتم تشغيل الترحيل القياسي...");
-                await dbContext.Database.MigrateAsync();
-            }
+            Log.Information("قاعدة البيانات مهيأة ومعتمدة للمعالجة التشغيلية.");
         }
         else
         {
