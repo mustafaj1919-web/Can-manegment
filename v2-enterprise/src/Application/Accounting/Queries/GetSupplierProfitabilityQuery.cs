@@ -145,7 +145,7 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
             var purchasesQuery = _context.Purchases
                 .AsNoTracking()
                 .Include(p => p.Vehicle)
-                .Where(p => p.SupplierId == request.SupplierId && p.Status != "Cancelled");
+                .Where(p => p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Supplier && p.SupplierId == request.SupplierId && p.Status != "Cancelled");
 
             if (!canSeeAllBranches)
             {

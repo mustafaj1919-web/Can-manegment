@@ -10,11 +10,14 @@ using CarShowroomManagementV2.Application.Common.Interfaces;
 using CarShowroomManagementV2.Application.Common.Helpers;
 using CarShowroomManagementV2.Domain.Entities;
 using CarShowroomManagementV2.Domain.Enums;
+
 namespace CarShowroomManagementV2.Application.Purchases.Commands
 {
     public class BulkCreatePurchaseCommand : IRequest<BulkCreatePurchaseResult>
     {
-        public Guid SupplierId { get; set; }
+        public PurchaseSourceType SourceType { get; set; } = PurchaseSourceType.Supplier;
+        public Guid? SupplierId { get; set; }
+        public Guid? CustomerId { get; set; }
         public Guid? BranchId { get; set; } // target branch for purchase
         public decimal PurchaseCost { get; set; }
         public decimal? PaidAmount { get; set; } // null or 0 = full credit; > 0 = partial/full immediate payment
@@ -56,7 +59,16 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
     {
         public BulkCreatePurchaseCommandValidator()
         {
-            RuleFor(x => x.SupplierId).NotEmpty().WithMessage("المورد مطلوب.");
+            RuleFor(x => x.SourceType).IsInEnum().WithMessage("نوع جهة الشراء غير صالح.");
+            RuleFor(x => x).Must(x =>
+            {
+                if (x.SourceType == PurchaseSourceType.Supplier)
+                    return x.SupplierId.HasValue && x.SupplierId.Value != Guid.Empty && (!x.CustomerId.HasValue || x.CustomerId.Value == Guid.Empty);
+                if (x.SourceType == PurchaseSourceType.Customer)
+                    return x.CustomerId.HasValue && x.CustomerId.Value != Guid.Empty && (!x.SupplierId.HasValue || x.SupplierId.Value == Guid.Empty);
+                return false;
+            }).WithMessage("يجب تحديد المورد فقط عند الشراء بالجملة من مورد، أو تحديد الزبون فقط عند الشراء بالجملة من زبون.");
+
             RuleFor(x => x.PurchaseCost).GreaterThan(0).WithMessage("تكلفة الشراء يجب أن تكون أكبر من صفر.");
             RuleFor(x => x.Model).NotEmpty().WithMessage("موديل السيارة مطلوب.");
             RuleFor(x => x.Year).GreaterThan(1900).WithMessage("سنة الصنع غير صالحة.");
@@ -85,12 +97,13 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
             var branchId = _currentUserService.BranchId;
             var result = new BulkCreatePurchaseResult();
 
-            var supplier = await _context.Suppliers
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(s => s.Id == request.SupplierId, cancellationToken);
-
-            if (supplier == null)
-                throw new InvalidOperationException("المورد المحدد غير موجود أو لا ينتمي لهذا الفرع.");
+            var counterparty = await CounterpartyResolver.ResolveAsync(
+                _context,
+                request.SourceType,
+                request.SupplierId,
+                request.CustomerId,
+                branchId,
+                cancellationToken);
 
             var inventoryAccount = await _context.Accounts
                 .IgnoreQueryFilters()
@@ -98,113 +111,97 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
             if (inventoryAccount == null)
                 throw new InvalidOperationException("حساب مخزون السيارات (1201) غير موجود في هذا الفرع.");
 
-            Guid creditAccountId;
-            string creditAccountDesc;
+            // حساب الدفع الفوري (نقد/بنك)
+            var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? 0m);
+            if (paidAmount < 0) paidAmount = 0;
+            if (paidAmount > request.PurchaseCost) paidAmount = request.PurchaseCost;
+            var hasImmediatePayment = paidAmount > 0;
+            var effectiveMethod = paidAmount >= request.PurchaseCost ? request.PaymentMethod : PaymentMethod.Cheque;
 
-            if (request.PaymentMethod == PaymentMethod.Cash)
+            Guid? cashOrBankAccountId = null;
+            if (hasImmediatePayment)
             {
-                var cashAccount = await _context.Accounts
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId, cancellationToken);
-                if (cashAccount == null) throw new InvalidOperationException("حساب صندوق النقدية (111001) غير موجود.");
-                creditAccountId = cashAccount.Id;
-                creditAccountDesc = "صندوق النقدية الرئيسي";
-            }
-            else if (request.PaymentMethod == PaymentMethod.Bank)
-            {
-                var bankAccount = await _context.Accounts
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(a => a.AccountCode == "112001" && a.BranchId == branchId, cancellationToken);
-                if (bankAccount == null) throw new InvalidOperationException("حساب البنك (112001) غير موجود.");
-                creditAccountId = bankAccount.Id;
-                creditAccountDesc = "حساب البنك";
-            }
-            else
-            {
-                creditAccountId = supplier.AccountId;
-                creditAccountDesc = $"ذمم الدائنين - المورد: {supplier.Name}";
-            }
-
-            var dbContext = _context as DbContext ?? throw new InvalidOperationException("DbContext context is invalid.");
-            using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                var purchaseCost = AccountingAmount.RoundMoney(request.PurchaseCost);
-                var targetSellingPrice = AccountingAmount.RoundMoney(request.TargetSellingPrice);
-
-                // Default: 0 = full credit purchase (owed to supplier), explicit value = immediate payment
-                var paidAmount = AccountingAmount.RoundMoney(request.PaidAmount ?? 0m);
-                if (paidAmount < 0) paidAmount = 0;
-                if (paidAmount > purchaseCost) paidAmount = purchaseCost;
-                var hasImmediatePayment = paidAmount > 0;
-                // If fully paid immediately → use chosen method; otherwise → Cheque (credit/payable to supplier)
-                var effectiveMethod = paidAmount >= purchaseCost ? request.PaymentMethod : PaymentMethod.Cheque;
-
-                // لأقساط: حساب الدفع الفوري (نقد/بنك فقط — Cheque = آجل، لا دفع فوري)
-                Guid? cashOrBankAccountId = null;
                 if (request.PaymentMethod == PaymentMethod.Cash)
                 {
-                    var cashAccount = await _context.Accounts.IgnoreQueryFilters()
+                    var cashAccount = await _context.Accounts
+                        .IgnoreQueryFilters()
                         .FirstOrDefaultAsync(a => a.AccountCode == "111001" && a.BranchId == branchId, cancellationToken);
-                    if (cashAccount == null) throw new InvalidOperationException("حساب صندوق النقدية (111001) غير موجود.");
+                    if (cashAccount == null) throw new InvalidOperationException("حساب صندوق النقدية (111001) غير موجود في هذا الفرع.");
                     cashOrBankAccountId = cashAccount.Id;
                 }
                 else if (request.PaymentMethod == PaymentMethod.Bank)
                 {
-                    var bankAccount = await _context.Accounts.IgnoreQueryFilters()
+                    var bankAccount = await _context.Accounts
+                        .IgnoreQueryFilters()
                         .FirstOrDefaultAsync(a => a.AccountCode == "112001" && a.BranchId == branchId, cancellationToken);
-                    if (bankAccount == null) throw new InvalidOperationException("حساب البنك (112001) غير موجود.");
+                    if (bankAccount == null) throw new InvalidOperationException("حساب البنك (112001) غير موجود في هذا الفرع.");
                     cashOrBankAccountId = bankAccount.Id;
                 }
+            }
 
-                // AmountPaid يُسجَّل فقط إذا تم دفع نقدي/بنكي فعلي (Cheque = آجل → 0)
-                var actualAmountPaid = (hasImmediatePayment && cashOrBankAccountId.HasValue) ? paidAmount : 0m;
+            var actualAmountPaid = (hasImmediatePayment && cashOrBankAccountId.HasValue) ? paidAmount : 0m;
 
-                foreach (var vin in request.ChassisNumbers)
+            var existingChassis = await _context.Vehicles
+                .IgnoreQueryFilters()
+                .Where(v => request.ChassisNumbers.Contains(v.ChassisNumber))
+                .Select(v => v.ChassisNumber)
+                .ToListAsync(cancellationToken);
+
+            if (existingChassis.Any())
+            {
+                throw new InvalidOperationException($"أرقام الشاصي التالية مسجلة مسبقاً في النظام: {string.Join(", ", existingChassis)}");
+            }
+
+            var dbContext = _context as DbContext;
+            if (dbContext == null) throw new InvalidOperationException("DbContext context is invalid.");
+
+            using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var totalPurchasesCount = await _context.Purchases.IgnoreQueryFilters().CountAsync(cancellationToken);
+                var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
+                var purchaseCost = AccountingAmount.RoundMoney(request.PurchaseCost);
+
+                for (int i = 0; i < request.ChassisNumbers.Count; i++)
                 {
-                    var exists = await _context.Vehicles
-                        .IgnoreQueryFilters()
-                        .AnyAsync(v => v.ChassisNumber == vin, cancellationToken);
+                    var chassis = request.ChassisNumbers[i].Trim();
+                    BulkVehicleOverride? overrideInfo = null;
+                    request.VehicleOverrides?.TryGetValue(chassis, out overrideInfo);
 
-                    if (exists)
-                    {
-                        result.Errors.Add($"رقم الشاصي {vin} مسجل مسبقاً في النظام ولا يمكن تكراره.");
-                        continue;
-                    }
-
-                    var overrides = request.VehicleOverrides?.GetValueOrDefault(vin);
-                    var effectiveTargetPrice = overrides?.TargetSellingPrice.HasValue == true
-                        ? AccountingAmount.RoundMoney(overrides.TargetSellingPrice.Value)
-                        : targetSellingPrice;
+                    var color = overrideInfo?.Color ?? request.Color;
+                    var plateNumber = overrideInfo?.PlateNumber;
+                    var notes = overrideInfo?.Notes;
+                    var sellingPrice = AccountingAmount.RoundMoney(overrideInfo?.TargetSellingPrice ?? request.TargetSellingPrice);
 
                     var vehicle = new Vehicle
                     {
                         Id = Guid.NewGuid(),
                         Brand = request.Brand,
                         Model = request.Model,
-                        Trim = request.Trim,
-                        ChassisNumber = vin,
-                        Color = !string.IsNullOrWhiteSpace(overrides?.Color) ? overrides.Color : request.Color,
-                        PlateNumber = overrides?.PlateNumber,
-                        Notes = overrides?.Notes,
+                        ChassisNumber = chassis,
+                        Color = color,
                         Year = request.Year,
-                        Condition = request.Condition,
-                        FuelType = request.FuelType,
-                        Transmission = request.Transmission,
-                        EngineSize = request.EngineSize,
-                        Cylinders = request.Cylinders,
-                        SeatCount = request.SeatCount,
-                        ImportCountry = request.ImportCountry,
                         PurchaseCost = purchaseCost,
                         BookValue = purchaseCost,
-                        TargetSellingPrice = effectiveTargetPrice,
+                        TargetSellingPrice = sellingPrice,
                         Status = "Available",
                         IsSold = false,
-                        BranchId = branchId
+                        BranchId = branchId,
+                        Trim = request.Trim,
+                        Condition = request.Condition,
+                        PlateNumber = plateNumber,
+                        Mileage = 0,
+                        EngineSize = request.EngineSize,
+                        Cylinders = request.Cylinders,
+                        Transmission = request.Transmission,
+                        FuelType = request.FuelType,
+                        ImportCountry = request.ImportCountry,
+                        SeatCount = request.SeatCount,
+                        Currency = "USD",
+                        Notes = notes
                     };
                     _context.Vehicles.Add(vehicle);
-                    await _context.SaveChangesAsync(cancellationToken);
 
                     var detailedCost = new VehicleCost
                     {
@@ -213,20 +210,19 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         CostType = "purchase",
                         Amount = purchaseCost,
                         Currency = "USD",
-                        Description = "تكلفة الشراء عبر فاتورة شراء جماعية",
+                        Description = $"تكلفة الشراء عبر شراء بالجملة من {(request.SourceType == PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name}",
                         CreatedAt = DateTime.UtcNow
                     };
                     _context.VehicleCosts.Add(detailedCost);
-                    await _context.SaveChangesAsync(cancellationToken);
 
-                    var totalPurchasesCount = await _context.Purchases.IgnoreQueryFilters().CountAsync(cancellationToken);
-                    var purchaseNumber = $"PUR-{DateTime.UtcNow:yyyyMMdd}-{totalPurchasesCount + 1:D5}";
-
+                    var purchaseNumber = $"PUR-{DateTime.UtcNow:yyyyMMdd}-{totalPurchasesCount + i + 1:D5}";
                     var purchase = new Purchase
                     {
                         Id = Guid.NewGuid(),
                         PurchaseNumber = purchaseNumber,
-                        SupplierId = supplier.Id,
+                        SourceType = request.SourceType,
+                        SupplierId = request.SourceType == PurchaseSourceType.Supplier ? counterparty.Id : null,
+                        CustomerId = request.SourceType == PurchaseSourceType.Customer ? counterparty.Id : null,
                         VehicleId = vehicle.Id,
                         PurchaseCost = purchaseCost,
                         AmountPaid = actualAmountPaid,
@@ -235,21 +231,14 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         BranchId = branchId
                     };
                     _context.Purchases.Add(purchase);
-                    await _context.SaveChangesAsync(cancellationToken);
 
-                    var totalEntriesCount = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
-                    var entryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + 1:D5}";
-
-                    // القيد الرئيسي: مدين المخزون / دائن حساب المورد دائماً (نُسجّل الدين الكامل)
-                    var mainCreditAccountId = supplier.AccountId;
-                    var mainCreditDesc = $"إثبات استحقاق قيمة الشراء للمورد {supplier.Name}";
-
+                    var entryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + (i * 2) + 1:D5}";
                     var journalEntry = new JournalEntry
                     {
                         Id = Guid.NewGuid(),
                         EntryNumber = entryNumber,
                         EntryDate = DateTime.UtcNow,
-                        Description = $"قيد شراء سيارة {request.Model} - شاصي: {vin} - جماعي",
+                        Description = $"قيد إثبات شراء بالجملة من {(request.SourceType == PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name} - فاتورة: {purchaseNumber}",
                         IsPosted = true,
                         BranchId = branchId,
                         ReferenceType = "Purchase",
@@ -264,80 +253,75 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         AccountId = inventoryAccount.Id,
                         Debit = purchaseCost,
                         Credit = 0,
-                        Description = $"زيادة المخزون - {request.Model} شاصي {vin}"
+                        Description = $"زيادة قيمة المخزون بشراء سيارة {vehicle.Model} - شاصي: {chassis}",
+                        VehicleId = vehicle.Id
                     });
+
                     journalEntry.Lines.Add(new JournalLine
                     {
                         Id = Guid.NewGuid(),
                         JournalEntryId = journalEntry.Id,
-                        AccountId = mainCreditAccountId,
+                        AccountId = counterparty.AccountId,
                         Debit = 0,
                         Credit = purchaseCost,
-                        Description = mainCreditDesc
+                        Description = $"إثبات استحقاق لـ {(request.SourceType == PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name}",
+                        VehicleId = vehicle.Id
                     });
 
-                    if (!journalEntry.IsBalanced)
-                        throw new InvalidOperationException($"القيد المحاسبي للسيارة {vin} غير متوازن.");
-
                     _context.JournalEntries.Add(journalEntry);
-                    await _context.SaveChangesAsync(cancellationToken);
 
-                    // قيد الدفعة الفورية إذا وُجدت (يُقلّل الدين للمورد ويُخرج النقدية/البنك)
-                    if (hasImmediatePayment && cashOrBankAccountId.HasValue)
+                    if (actualAmountPaid > 0 && cashOrBankAccountId.HasValue)
                     {
-                        var totalEntriesCount2 = await _context.JournalEntries.IgnoreQueryFilters().CountAsync(cancellationToken);
-                        var payEntryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount2 + 1:D5}";
-                        var totalPaymentsCount = await _context.Payments.IgnoreQueryFilters().CountAsync(cancellationToken);
-                        var payRefNumber = $"PAY-{DateTime.UtcNow:yyyyMMdd}-{totalPaymentsCount + 1:D5}";
-
-                        var initialPayment = new Payment
-                        {
-                            Id = Guid.NewGuid(),
-                            Type = PaymentType.Payment,
-                            Method = request.PaymentMethod,
-                            Amount = paidAmount,
-                            Currency = vehicle.Currency,
-                            ReferenceNumber = payRefNumber,
-                            Description = $"دفعة أولى لشراء {request.Model} من المورد {supplier.Name} - شاصي: {vin}",
-                            AccountId = cashOrBankAccountId.Value,
-                            ContraAccountId = supplier.AccountId,
-                            BranchId = branchId
-                        };
-                        _context.Payments.Add(initialPayment);
-                        await _context.SaveChangesAsync(cancellationToken);
-
-                        var payJournal = new JournalEntry
+                        var payEntryNumber = $"JV-{DateTime.UtcNow:yyyyMMdd}-{totalEntriesCount + (i * 2) + 2:D5}";
+                        var payEntry = new JournalEntry
                         {
                             Id = Guid.NewGuid(),
                             EntryNumber = payEntryNumber,
                             EntryDate = DateTime.UtcNow,
-                            Description = $"قيد الدفعة الأولى للمورد {supplier.Name} - شاصي: {vin}",
+                            Description = $"سداد فورى لشراء بالجملة من {(request.SourceType == PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name} - فاتورة: {purchaseNumber}",
                             IsPosted = true,
                             BranchId = branchId,
-                            ReferenceType = "Payment",
-                            ReferenceId = initialPayment.Id,
+                            ReferenceType = "PurchasePayment",
+                            ReferenceId = purchase.Id,
                             CreatedBy = _currentUserService.UserId
                         };
-                        payJournal.Lines.Add(new JournalLine { Id = Guid.NewGuid(), JournalEntryId = payJournal.Id, AccountId = supplier.AccountId, Debit = paidAmount, Credit = 0, Description = $"تخفيض ذمة المورد {supplier.Name}" });
-                        payJournal.Lines.Add(new JournalLine { Id = Guid.NewGuid(), JournalEntryId = payJournal.Id, AccountId = cashOrBankAccountId.Value, Debit = 0, Credit = paidAmount, Description = $"خروج النقدية لصالح المورد {supplier.Name}" });
 
-                        if (!payJournal.IsBalanced)
-                            throw new InvalidOperationException($"قيد الدفعة الأولى للسيارة {vin} غير متوازن.");
+                        payEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(),
+                            JournalEntryId = payEntry.Id,
+                            AccountId = counterparty.AccountId,
+                            Debit = actualAmountPaid,
+                            Credit = 0,
+                            Description = $"سداد مستحقات لـ {(request.SourceType == PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name}",
+                            VehicleId = vehicle.Id
+                        });
 
-                        _context.JournalEntries.Add(payJournal);
-                        initialPayment.JournalEntryId = payJournal.Id;
-                        await _context.SaveChangesAsync(cancellationToken);
+                        payEntry.Lines.Add(new JournalLine
+                        {
+                            Id = Guid.NewGuid(),
+                            JournalEntryId = payEntry.Id,
+                            AccountId = cashOrBankAccountId.Value,
+                            Debit = 0,
+                            Credit = actualAmountPaid,
+                            Description = $"دفع من الحساب لصالح {(request.SourceType == PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name}",
+                            VehicleId = vehicle.Id
+                        });
+
+                        _context.JournalEntries.Add(payEntry);
                     }
 
                     result.PurchaseIds.Add(purchase.Id);
-                    result.ChassisToVehicleId[vin] = vehicle.Id;
-                    result.CreatedCount++;
+                    result.ChassisToVehicleId[chassis] = vehicle.Id;
                 }
 
+                await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+
+                result.CreatedCount = result.PurchaseIds.Count;
                 return result;
             }
-            catch (Exception)
+            catch
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw;

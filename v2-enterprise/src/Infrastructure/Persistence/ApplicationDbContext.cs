@@ -239,6 +239,14 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasOne(p => p.Supplier)
                 .WithMany()
                 .HasForeignKey(p => p.SupplierId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Purchase>()
+                .HasOne(p => p.Customer)
+                .WithMany()
+                .HasForeignKey(p => p.CustomerId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Purchase>()
@@ -246,6 +254,26 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .WithMany()
                 .HasForeignKey(p => p.VehicleId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Purchase>()
+                .HasIndex(p => p.SourceType);
+
+            modelBuilder.Entity<Purchase>()
+                .HasIndex(p => p.SupplierId);
+
+            modelBuilder.Entity<Purchase>()
+                .HasIndex(p => p.CustomerId);
+
+            modelBuilder.Entity<Purchase>()
+                .HasIndex(p => new { p.SourceType, p.SupplierId });
+
+            modelBuilder.Entity<Purchase>()
+                .HasIndex(p => new { p.SourceType, p.CustomerId });
+
+            modelBuilder.Entity<Purchase>()
+                .ToTable(t => t.HasCheckConstraint("CK_Purchases_SourceIntegrity",
+                    "(\"SourceType\" = 1 AND \"SupplierId\" IS NOT NULL AND \"CustomerId\" IS NULL) OR (" +
+                    "\"SourceType\" = 2 AND \"CustomerId\" IS NOT NULL AND \"SupplierId\" IS NULL)"));
 
             // إعدادات الأقساط
             modelBuilder.Entity<InstallmentPlan>()

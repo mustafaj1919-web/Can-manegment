@@ -7,7 +7,9 @@ namespace CarShowroomManagementV2.Domain.Entities
     public class Purchase : AuditableEntity
     {
         public string PurchaseNumber { get; set; } = string.Empty; // رقم فاتورة الشراء الفريد
-        public Guid SupplierId { get; set; }
+        public PurchaseSourceType SourceType { get; set; } = PurchaseSourceType.Supplier; // مصدر الشراء: مورد أو زبون
+        public Guid? SupplierId { get; set; }
+        public Guid? CustomerId { get; set; }
         public Guid VehicleId { get; set; }
         public DateTime PurchaseDate { get; set; } = DateTime.UtcNow;
 
@@ -18,6 +20,7 @@ namespace CarShowroomManagementV2.Domain.Entities
 
         // علاقات التنقل
         public virtual Supplier? Supplier { get; set; }
+        public virtual Customer? Customer { get; set; }
         public virtual Vehicle? Vehicle { get; set; }
     }
 }

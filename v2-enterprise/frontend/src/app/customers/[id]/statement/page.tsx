@@ -178,6 +178,40 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
           </div>
         ))}
 
+        {/* Customer Purchases section */}
+        {statement.customer_purchases && statement.customer_purchases.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-base font-bold text-slate-800 mb-3 border-b pb-2">السيارات المشتراة من الزبون (المعرض مدين للزبون بقيمتها)</h2>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-800 text-white">
+                  <th className="border border-slate-700 px-3 py-2 text-start">رقم الفاتورة</th>
+                  <th className="border border-slate-700 px-3 py-2 text-start">السيارة والشاصي</th>
+                  <th className="border border-slate-700 px-3 py-2 text-start">التاريخ</th>
+                  <th className="border border-slate-700 px-3 py-2 text-end">سعر الشراء</th>
+                  <th className="border border-slate-700 px-3 py-2 text-end">المسدد له</th>
+                  <th className="border border-slate-700 px-3 py-2 text-end">المتبقي له</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statement.customer_purchases.map(cp => (
+                  <tr key={cp.id} className="hover:bg-slate-50">
+                    <td className="border border-slate-200 px-3 py-2 font-mono font-bold">{cp.purchase_number}</td>
+                    <td className="border border-slate-200 px-3 py-2 font-medium">
+                      {cp.vehicle_name}
+                      {cp.chassis_number && <span className="block text-[10px] text-muted-foreground font-mono">{cp.chassis_number}</span>}
+                    </td>
+                    <td className="border border-slate-200 px-3 py-2">{cp.purchase_date ? cp.purchase_date.slice(0, 10) : '—'}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-end font-bold text-slate-800">{formatMoney(cp.purchase_cost, cp.currency)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-end text-emerald-700 font-medium">{formatMoney(cp.amount_paid, cp.currency)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-end text-rose-700 font-bold">{formatMoney(cp.outstanding_amount, cp.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="border-t-2 border-slate-800 pt-4 mt-8 text-xs text-muted-foreground text-center">
           <p>كشف حساب بتاريخ {today} · شركة الأصدقاء لتجارة السيارات</p>

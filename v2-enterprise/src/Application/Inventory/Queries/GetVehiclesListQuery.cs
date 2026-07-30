@@ -93,29 +93,49 @@ namespace CarShowroomManagementV2.Application.Inventory.Queries
                 })
                 .ToListAsync(cancellationToken);
 
-            // جلب المورد لكل سيارة عبر Purchases
+            // جلب مصدر الشراء (مورد أو زبون) لكل سيارة عبر Purchases
             var vehicleIdsList = vehicles.Select(v => v.Id).ToList();
-            var purchaseSupplierMap = await _context.Purchases
+            var purchaseMap = await _context.Purchases
                 .IgnoreQueryFilters()
                 .Where(p => vehicleIdsList.Contains(p.VehicleId))
                 .GroupBy(p => p.VehicleId)
-                .Select(g => new { VehicleId = g.Key, SupplierId = g.OrderByDescending(p => p.Id).Select(p => p.SupplierId).FirstOrDefault() })
+                .Select(g => g.OrderByDescending(p => p.Id).Select(p => new {
+                    p.VehicleId,
+                    p.SourceType,
+                    p.SupplierId,
+                    p.CustomerId
+                }).FirstOrDefault())
                 .ToListAsync(cancellationToken);
 
-            var supplierIds = purchaseSupplierMap.Select(x => x.SupplierId).Distinct().ToList();
+            var supplierIds = purchaseMap.Where(x => x != null && x.SupplierId.HasValue).Select(x => x!.SupplierId!.Value).Distinct().ToList();
+            var customerIds = purchaseMap.Where(x => x != null && x.CustomerId.HasValue).Select(x => x!.CustomerId!.Value).Distinct().ToList();
+
             var supplierNames = await _context.Suppliers
                 .IgnoreQueryFilters()
                 .Where(s => supplierIds.Contains(s.Id))
                 .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
 
-            var supplierMap = purchaseSupplierMap.ToDictionary(x => x.VehicleId, x => x.SupplierId);
+            var customerNames = await _context.Customers
+                .IgnoreQueryFilters()
+                .Where(c => customerIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+
+            var mapByVehicle = purchaseMap.Where(x => x != null).ToDictionary(x => x!.VehicleId, x => x!);
             foreach (var v in vehicles)
             {
-                if (supplierMap.TryGetValue(v.Id, out var sid))
+                if (mapByVehicle.TryGetValue(v.Id, out var info))
                 {
-                    v.SupplierId = sid;
-                    supplierNames.TryGetValue(sid, out var sname);
-                    v.SupplierName = sname;
+                    if (info.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer && info.CustomerId.HasValue)
+                    {
+                        customerNames.TryGetValue(info.CustomerId.Value, out var cname);
+                        v.SupplierName = cname != null ? $"الزبون: {cname}" : null;
+                    }
+                    else if (info.SupplierId.HasValue)
+                    {
+                        v.SupplierId = info.SupplierId.Value;
+                        supplierNames.TryGetValue(info.SupplierId.Value, out var sname);
+                        v.SupplierName = sname;
+                    }
                 }
             }
 

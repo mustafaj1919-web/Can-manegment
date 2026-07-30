@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner'
 import { cn, formatMoney } from '@/lib/utils'
 import { createPurchase, getSellers } from '@/lib/api/purchases'
+import { getCustomers } from '@/lib/api/customers'
 import { bulkCreatePurchase } from '@/lib/api/suppliers'
 import { uploadCarPhotos } from '@/lib/api/inventory'
 import { Button } from '@/components/ui/button'
@@ -235,9 +236,10 @@ function VehicleDetailRow({
 
 // ── Bulk Purchase Form ────────────────────────────────────────────────────────
 
-function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
+function BulkPurchaseForm({ sellers, sellersLoading, customers, customersLoading }: { sellers: any[]; sellersLoading: boolean; customers: any[]; customersLoading: boolean }) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const [sourceType, setSourceType] = useState<'Supplier' | 'Customer'>('Supplier')
   const [sellerId, setSellerId] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
@@ -292,7 +294,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
 
   function validate() {
     const e: Record<string, string> = {}
-    if (!sellerId) e.sellerId = 'اختر المورد'
+    if (!sellerId) e.sellerId = sourceType === 'Supplier' ? 'اختر المورد' : 'اختر الزبون'
     if (!model.trim()) e.model = 'الموديل مطلوب'
     if (!year || isNaN(Number(year))) e.year = 'السنة مطلوبة'
     if (!purchasePrice || Number(purchasePrice) <= 0) e.purchasePrice = 'سعر الشراء مطلوب'
@@ -323,6 +325,7 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
     let res: any
     try {
       res = await bulkMut.mutateAsync({
+        sourceType,
         supplierId: sellerId,
         brand: brand.trim() || undefined,
         model: model.trim(),
@@ -348,24 +351,24 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
     }
 
     // Upload photos if any
-    const chassisMap: Record<string, string> = res?.chassis_to_vehicle_id ?? {}
-    const vinsWithPhotos = uniqueVins.filter(v => (perCarDetails[v]?.photos?.length ?? 0) > 0)
-
-    if (vinsWithPhotos.length > 0) {
+    if (hasAnyPhotos && res?.chassis_to_vehicle_id) {
       setUploading(true)
-      let uploadedCount = 0
-      for (const vin of vinsWithPhotos) {
-        const vehicleId = chassisMap[vin]
-        if (!vehicleId) continue
-        try {
-          await uploadCarPhotos(vehicleId, perCarDetails[vin].photos)
-          uploadedCount++
-        } catch {
-          toast.error(`فشل رفع صور ${vin}`)
+      try {
+        let uploaded = 0
+        for (const vin of uniqueVins) {
+          const d = perCarDetails[vin]
+          const vehicleId = res.chassis_to_vehicle_id[vin]
+          if (d && d.photos.length > 0 && vehicleId) {
+            await uploadCarPhotos(vehicleId, d.photos)
+            uploaded += d.photos.length
+          }
         }
+        if (uploaded > 0) toast.success(`تم رفع ${uploaded} صورة بنجاح`)
+      } catch {
+        toast.error('تم الشراء ولكن حدث خطأ أثناء رفع بعض الصور')
+      } finally {
+        setUploading(false)
       }
-      setUploading(false)
-      if (uploadedCount > 0) toast.success(`تم رفع صور ${uploadedCount} سيارة`)
     }
 
     // إبطال كاش الكيانات والمخزون والمشتريات فوراً لتظهر التحديثات بدون ريفريش
@@ -374,8 +377,8 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
     queryClient.invalidateQueries({ queryKey: ['purchases'] })
     queryClient.invalidateQueries({ queryKey: ['kpi-dashboard'] })
 
-    if (res?.errors?.length > 0) {
-      toast.warning(`تم تسجيل ${res.created_count} سيارة. أخطاء: ${res.errors.join('، ')}`)
+    if (res?.errors && res.errors.length > 0) {
+      toast.warning(`تم تسجيل ${res.created_count} سيارة، مع وجود تنبيهات: ${res.errors.join(', ')}`)
     } else {
       toast.success(res?.message || `تم تسجيل ${res?.created_count ?? uniqueVins.length} سيارة`)
     }
@@ -387,23 +390,60 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
 
   return (
     <div className="space-y-5">
-      {/* Supplier */}
-      <SectionCard title="المورد">
+      {/* Counterparty Selection */}
+      <SectionCard title="جهة الشراء والبائع">
+        <div className="mb-4">
+          <Label className="mb-2 block text-xs text-muted-foreground">نوع جهة الشراء *</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => { setSourceType('Supplier'); setSellerId(''); setErrors(e => ({ ...e, sellerId: '' })) }}
+              className={cn(
+                'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-all',
+                sourceType === 'Supplier'
+                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+                  : 'border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
+              )}
+            >
+              <span>مورد (شركات / تجار)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSourceType('Customer'); setSellerId(''); setErrors(e => ({ ...e, sellerId: '' })) }}
+              className={cn(
+                'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-all',
+                sourceType === 'Customer'
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                  : 'border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
+              )}
+            >
+              <span>زبون (شراء من أفراد)</span>
+            </button>
+          </div>
+        </div>
+
         <div className="flex items-start gap-4">
           <div className="flex-1">
-            {sellersLoading ? (
+            {(sourceType === 'Supplier' ? sellersLoading : customersLoading) ? (
               <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
             ) : (
               <div>
-                <Label className="mb-1.5 block text-xs text-muted-foreground">اختر المورد *</Label>
+                <Label className="mb-1.5 block text-xs text-muted-foreground">
+                  {sourceType === 'Supplier' ? 'اختر المورد *' : 'اختر الزبون البائع *'}
+                </Label>
                 <Select value={sellerId} onValueChange={setSellerId}>
                   <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
-                    <SelectValue placeholder="اختر المورد" />
+                    <SelectValue placeholder={sourceType === 'Supplier' ? 'اختر المورد' : 'اختر الزبون'} />
                   </SelectTrigger>
                   <SelectContent className="max-h-64">
-                    {sellers.map(s => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.full_name || s.name} — {s.phone || '-'}</SelectItem>
-                    ))}
+                    {sourceType === 'Supplier'
+                      ? sellers.map(s => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.full_name || s.name} — {s.phone || '-'}</SelectItem>
+                        ))
+                      : customers.map(c => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.full_name || c.name} — {c.phone || '-'}</SelectItem>
+                        ))
+                    }
                   </SelectContent>
                 </Select>
                 <FieldError msg={errors.sellerId} />
@@ -646,9 +686,10 @@ function BulkPurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellers
 
 // ── Single Purchase Form ──────────────────────────────────────────────────────
 
-function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; sellersLoading: boolean }) {
+function SinglePurchaseForm({ sellers, sellersLoading, customers, customersLoading }: { sellers: any[]; sellersLoading: boolean; customers: any[]; customersLoading: boolean }) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const [sourceType, setSourceType] = useState<'Supplier' | 'Customer'>('Supplier')
   const [sellerId, setSellerId] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
@@ -711,12 +752,13 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
   const paid = Number.parseFloat(paidAmount) || 0
   const remaining = Math.max(price - paid, 0)
 
-  const selectedSeller = sellers.find((s) => String(s.id) === sellerId)
+  const selectedSeller = sourceType === 'Supplier'
+    ? sellers.find((s) => String(s.id) === sellerId)
+    : customers.find((c) => String(c.id) === sellerId)
 
   const mutation = useMutation({
     mutationFn: createPurchase,
     onSuccess: (res) => {
-      // إبطال كاش الكيانات والمخزون والمشتريات فوراً لتظهر التحديثات بدون ريفريش
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['inventory-counts'] })
       queryClient.invalidateQueries({ queryKey: ['purchases'] })
@@ -730,7 +772,7 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
 
   function validate() {
     const nextErrors: Record<string, string> = {}
-    if (!sellerId) nextErrors.sellerId = 'اختر البائع'
+    if (!sellerId) nextErrors.sellerId = sourceType === 'Supplier' ? 'اختر المورد' : 'اختر الزبون'
     if (!brand.trim()) nextErrors.brand = 'الماركة مطلوبة'
     if (!model.trim()) nextErrors.model = 'الموديل مطلوب'
     if (!year || Number.isNaN(Number.parseInt(year, 10))) nextErrors.year = 'سنة الصنع مطلوبة'
@@ -747,6 +789,7 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
     e.preventDefault()
     if (!validate()) return
     mutation.mutate({
+      source_type: sourceType,
       brand: brand.trim(),
       model: model.trim(),
       manufacturing_year: Number.parseInt(year, 10),
@@ -774,31 +817,75 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <SectionCard title="البائع">
-        <div className="mb-3 flex justify-end">
-          <QuickSupplierDialog onSuccess={(id) => { setSellerId(id); setErrors((e) => ({ ...e, sellerId: '' })) }} />
+      <SectionCard title="جهة الشراء والبائع">
+        <div className="mb-4">
+          <Label className="mb-2 block text-xs text-muted-foreground">نوع جهة الشراء *</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => { setSourceType('Supplier'); setSellerId(''); setErrors(e => ({ ...e, sellerId: '' })) }}
+              className={cn(
+                'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-all',
+                sourceType === 'Supplier'
+                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+                  : 'border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
+              )}
+            >
+              <span>مورد (شركات / تجار)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSourceType('Customer'); setSellerId(''); setErrors(e => ({ ...e, sellerId: '' })) }}
+              className={cn(
+                'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-all',
+                sourceType === 'Customer'
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                  : 'border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
+              )}
+            >
+              <span>زبون (شراء من أفراد)</span>
+            </button>
+          </div>
         </div>
-        {sellersLoading ? (
+
+        {sourceType === 'Supplier' && (
+          <div className="mb-3 flex justify-end">
+            <QuickSupplierDialog onSuccess={(id) => { setSellerId(id); setErrors((e) => ({ ...e, sellerId: '' })) }} />
+          </div>
+        )}
+
+        {(sourceType === 'Supplier' ? sellersLoading : customersLoading) ? (
           <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
-        ) : sellers.length === 0 ? (
+        ) : (sourceType === 'Supplier' ? sellers.length === 0 : customers.length === 0) ? (
           <div className="py-6 text-center">
             <AlertCircle className="mx-auto mb-2 h-6 w-6 text-cyan-400/60" />
-            <p className="text-sm text-muted-foreground">لا يوجد موردون مسجّلون بعد — أضِف موردًا للبدء.</p>
+            <p className="text-sm text-muted-foreground">
+              {sourceType === 'Supplier' ? 'لا يوجد موردون مسجّلون بعد — أضِف موردًا للبدء.' : 'لا يوجد زبائن مسجّلون بعد — أضِف زبوناً للبدء.'}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
             <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">اختر البائع *</Label>
+              <Label className="mb-1.5 block text-xs text-muted-foreground">
+                {sourceType === 'Supplier' ? 'اختر المورد *' : 'اختر الزبون البائع *'}
+              </Label>
               <Select value={sellerId} onValueChange={setSellerId}>
                 <SelectTrigger className={cn('bg-secondary/30 border-border/60', errors.sellerId && 'border-rose-500/60')}>
-                  <SelectValue placeholder="اختر البائع" />
+                  <SelectValue placeholder={sourceType === 'Supplier' ? 'اختر المورد' : 'اختر الزبون'} />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
-                  {sellers.map((seller) => (
-                    <SelectItem key={seller.id} value={String(seller.id)}>
-                      {(seller.full_name || seller.name)} — {seller.phone || '-'}
-                    </SelectItem>
-                  ))}
+                  {sourceType === 'Supplier'
+                    ? sellers.map((seller) => (
+                        <SelectItem key={seller.id} value={String(seller.id)}>
+                          {(seller.full_name || seller.name)} — {seller.phone || '-'}
+                        </SelectItem>
+                      ))
+                    : customers.map((cust) => (
+                        <SelectItem key={cust.id} value={String(cust.id)}>
+                          {(cust.full_name || cust.name)} — {cust.phone || '-'}
+                        </SelectItem>
+                      ))
+                  }
                 </SelectContent>
               </Select>
               <FieldError msg={errors.sellerId} />
@@ -807,8 +894,8 @@ function SinglePurchaseForm({ sellers, sellersLoading }: { sellers: any[]; selle
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border/40 bg-secondary/20 p-3 text-xs">
                 <span className="text-muted-foreground">رقم الهاتف</span>
                 <span className="text-foreground">{selectedSeller.phone || '-'}</span>
-                <span className="text-muted-foreground">رقم الهوية</span>
-                <span className="text-foreground">{selectedSeller.id_number || '-'}</span>
+                <span className="text-muted-foreground">رقم الهوية / الكود</span>
+                <span className="text-foreground">{selectedSeller.id_number || selectedSeller.idNumber || '-'}</span>
               </div>
             )}
           </div>
@@ -991,13 +1078,20 @@ export default function NewPurchasePage() {
     staleTime: 60_000,
   })
 
+  const { data: customersData, isLoading: customersLoading } = useQuery({
+    queryKey: ['purchase-customers'],
+    queryFn: () => getCustomers({ per_page: 500 }),
+    staleTime: 60_000,
+  })
+  const customers = customersData?.items || []
+
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <DetailHeader
         backHref="/purchases"
         backLabel="المشتريات"
         title="فاتورة شراء جديدة"
-        subtitle="شراء سيارة من مورد وإضافتها للمخزون"
+        subtitle="شراء سيارة من مورد أو زبون وإضافتها للمخزون"
       />
 
       {/* Mode toggle */}
@@ -1025,8 +1119,8 @@ export default function NewPurchasePage() {
       </div>
 
       {mode === 'single'
-        ? <SinglePurchaseForm sellers={sellers} sellersLoading={sellersLoading} />
-        : <BulkPurchaseForm sellers={sellers} sellersLoading={sellersLoading} />
+        ? <SinglePurchaseForm sellers={sellers} sellersLoading={sellersLoading} customers={customers} customersLoading={customersLoading} />
+        : <BulkPurchaseForm sellers={sellers} sellersLoading={sellersLoading} customers={customers} customersLoading={customersLoading} />
       }
     </div>
   )

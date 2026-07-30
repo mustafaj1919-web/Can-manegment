@@ -48,6 +48,7 @@ export interface BulkVehicleOverride {
 }
 
 export interface BulkPurchasePayload {
+  sourceType?: 'Supplier' | 'Customer'
   supplierId: string
   branchId?: string
   brand?: string
@@ -128,8 +129,11 @@ export async function paySupplier(id: string, payload: { amount: number; currenc
 
 export async function bulkCreatePurchase(payload: BulkPurchasePayload): Promise<BulkPurchaseResult> {
   const methodMap: Record<string, number> = { Cash: 1, Bank: 2, Cheque: 3 }
+  const isCustomer = payload.sourceType === 'Customer'
   const body = {
-    SupplierId: payload.supplierId,
+    SourceType: isCustomer ? 2 : 1,
+    SupplierId: isCustomer ? null : payload.supplierId,
+    CustomerId: isCustomer ? payload.supplierId : null,
     PurchaseCost: payload.purchaseCost,
     PaymentMethod: methodMap[payload.paymentMethod] ?? 1,
     Brand: payload.brand ?? null,

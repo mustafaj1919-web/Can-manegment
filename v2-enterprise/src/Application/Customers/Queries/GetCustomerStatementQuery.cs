@@ -90,11 +90,26 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
         public List<StatementPaymentDto> Payments { get; set; } = new();
     }
 
+    public class StatementCustomerPurchaseDto
+    {
+        public Guid Id { get; set; }
+        public string PurchaseNumber { get; set; } = string.Empty;
+        public DateTime PurchaseDate { get; set; }
+        public string VehicleName { get; set; } = string.Empty;
+        public string ChassisNumber { get; set; } = string.Empty;
+        public decimal PurchaseCost { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal OutstandingAmount => PurchaseCost - AmountPaid;
+        public string Currency { get; set; } = "IQD";
+        public string Status { get; set; } = "Active";
+    }
+
     public class CustomerStatementDto
     {
         public CustomerSummaryDto Customer { get; set; } = null!;
         public StatementSummaryDto Summary { get; set; } = null!;
         public List<StatementSaleItemDto> Sales { get; set; } = new();
+        public List<StatementCustomerPurchaseDto> CustomerPurchases { get; set; } = new();
     }
 
     public class GetCustomerStatementQueryHandler : IRequestHandler<GetCustomerStatementQuery, CustomerStatementDto>
@@ -225,6 +240,28 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 });
             }
 
+            // جلب السيارات المشتراة من الزبون
+            var customerPurchases = await _context.Purchases
+                .Include(p => p.Vehicle)
+                .Where(p => p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer &&
+                            p.CustomerId == customer.Id &&
+                            p.PurchaseDate >= startDate &&
+                            p.PurchaseDate <= endDate &&
+                            p.Status != "Cancelled")
+                .Select(p => new StatementCustomerPurchaseDto
+                {
+                    Id = p.Id,
+                    PurchaseNumber = p.PurchaseNumber,
+                    PurchaseDate = p.PurchaseDate,
+                    VehicleName = p.Vehicle != null ? $"{p.Vehicle.Brand} {p.Vehicle.Model} {p.Vehicle.Year}" : "سيارة غير محددة",
+                    ChassisNumber = p.Vehicle != null ? p.Vehicle.ChassisNumber : string.Empty,
+                    PurchaseCost = p.PurchaseCost,
+                    AmountPaid = p.AmountPaid,
+                    Currency = "IQD",
+                    Status = p.Status
+                })
+                .ToListAsync(cancellationToken);
+
             var summaryDto = new StatementSummaryDto
             {
                 SalesCount = salesList.Count,
@@ -248,7 +285,8 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
             {
                 Customer = customerSummary,
                 Summary = summaryDto,
-                Sales = salesList
+                Sales = salesList,
+                CustomerPurchases = customerPurchases
             };
         }
     }

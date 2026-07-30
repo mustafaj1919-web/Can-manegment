@@ -102,6 +102,31 @@ namespace CarShowroomManagementV2.UnitTests.Purchases
             return supplier;
         }
 
+        private async Task<Customer> SeedCustomerAsync(ApplicationDbContext context, Guid customerId, string name, Guid branchId)
+        {
+            var parent = await context.Accounts.IgnoreQueryFilters().FirstOrDefaultAsync(a => a.AccountCode == "1301" && a.BranchId == branchId);
+            if (parent == null)
+            {
+                parent = await SeedAccountAsync(context, Guid.NewGuid(), "1301", "Accounts Receivable", AccountType.Asset, branchId);
+            }
+
+            var subAccount = await SeedAccountAsync(context, Guid.NewGuid(), "13010001", $"حساب الزبون - {name}", AccountType.Asset, branchId);
+
+            var customer = new Customer
+            {
+                Id = customerId,
+                Name = name,
+                Phone = "07800998877",
+                IdNumber = "CUST-101",
+                CustomerType = "Individual",
+                AccountId = subAccount.Id,
+                BranchId = branchId
+            };
+            context.Customers.Add(customer);
+            await context.SaveChangesAsync();
+            return customer;
+        }
+
         // ── الاختبارات البرمجية ───────────────────────────────────────────────────────────────
 
         [Fact]
@@ -149,6 +174,7 @@ namespace CarShowroomManagementV2.UnitTests.Purchases
             var handler = new CreatePurchaseCommandHandler(context, _currentUserServiceMock.Object);
             var command = new CreatePurchaseCommand
             {
+                SourceType = PurchaseSourceType.Supplier,
                 SupplierId = supplier.Id,
                 PurchaseCost = 20000,
                 PaymentMethod = PaymentMethod.Cheque, // استحقاق دائن للمورد
@@ -186,6 +212,94 @@ namespace CarShowroomManagementV2.UnitTests.Purchases
 
             debitLine!.Account!.AccountCode.Should().Be("1201");
             creditLine!.AccountId.Should().Be(supplier.AccountId);
+        }
+
+        [Fact]
+        public async Task CreatePurchase_FromCustomer_ShouldCreditCustomerAccount_AndGenerateBalancedJournalEntry()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            await SeedBranchAsync(context, _testBranchId, "فرع بغداد", "BR-BG");
+            await SeedAccountAsync(context, Guid.NewGuid(), "1201", "مخزون السيارات للمعرض", AccountType.Asset, _testBranchId);
+            var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد علي", _testBranchId);
+
+            var handler = new CreatePurchaseCommandHandler(context, _currentUserServiceMock.Object);
+            var command = new CreatePurchaseCommand
+            {
+                SourceType = PurchaseSourceType.Customer,
+                CustomerId = customer.Id,
+                PurchaseCost = 35000000,
+                PaymentMethod = PaymentMethod.Cheque, // آجل كامل على حساب الزبون
+                Model = "Toyota Camry",
+                ChassisNumber = "CH-CAMRY-999",
+                Year = 2023,
+                TargetSellingPrice = 38000000
+            };
+
+            // Act
+            var purchaseId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            purchaseId.Should().NotBeEmpty();
+
+            var purchase = await context.Purchases.FirstOrDefaultAsync(p => p.Id == purchaseId);
+            purchase.Should().NotBeNull();
+            purchase!.SourceType.Should().Be(PurchaseSourceType.Customer);
+            purchase.CustomerId.Should().Be(customer.Id);
+            purchase.SupplierId.Should().BeNull();
+
+            // قيد المشتريات: مدين المخزون / دائن حساب الزبون
+            var journalEntry = await context.JournalEntries.Include(je => je.Lines)
+                .FirstOrDefaultAsync(je => je.ReferenceType == "Purchase" && je.ReferenceId == purchaseId);
+            
+            journalEntry.Should().NotBeNull();
+            journalEntry!.IsBalanced.Should().BeTrue();
+            journalEntry.TotalDebit.Should().Be(35000000);
+
+            var creditLine = journalEntry.Lines.FirstOrDefault(l => l.Credit > 0);
+            creditLine!.AccountId.Should().Be(customer.AccountId);
+        }
+
+        [Fact]
+        public async Task CreatePurchase_FromCustomer_WithImmediatePayment_ShouldGeneratePaymentJournalEntry()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            await SeedBranchAsync(context, _testBranchId, "فرع بغداد", "BR-BG");
+            await SeedAccountAsync(context, Guid.NewGuid(), "1201", "مخزون السيارات", AccountType.Asset, _testBranchId);
+            await SeedAccountAsync(context, Guid.NewGuid(), "111001", "صندوق النقدية", AccountType.Asset, _testBranchId);
+            var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "عمر خالد", _testBranchId);
+
+            var handler = new CreatePurchaseCommandHandler(context, _currentUserServiceMock.Object);
+            var command = new CreatePurchaseCommand
+            {
+                SourceType = PurchaseSourceType.Customer,
+                CustomerId = customer.Id,
+                PurchaseCost = 15000000,
+                PaidAmount = 15000000,
+                PaymentMethod = PaymentMethod.Cash,
+                Model = "Kia Sportage",
+                ChassisNumber = "CH-KIA-555",
+                Year = 2022,
+                TargetSellingPrice = 17000000
+            };
+
+            // Act
+            var purchaseId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            var purchase = await context.Purchases.FirstOrDefaultAsync(p => p.Id == purchaseId);
+            purchase!.AmountPaid.Should().Be(15000000);
+
+            // قيد السداد الفوري: مدين حساب الزبون / دائن صندوق النقدية
+            var payJournal = await context.JournalEntries.Include(je => je.Lines)
+                .FirstOrDefaultAsync(je => je.ReferenceType == "PurchasePayment" && je.ReferenceId == purchaseId);
+
+            payJournal.Should().NotBeNull();
+            payJournal!.IsBalanced.Should().BeTrue();
+            
+            var debitLine = payJournal.Lines.FirstOrDefault(l => l.Debit > 0);
+            debitLine!.AccountId.Should().Be(customer.AccountId);
         }
 
         [Fact]

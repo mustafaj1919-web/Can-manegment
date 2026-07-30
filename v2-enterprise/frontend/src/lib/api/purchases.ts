@@ -80,6 +80,7 @@ export interface SellerOption {
 }
 
 export interface CreatePurchasePayload {
+  source_type?: 'Supplier' | 'Customer'
   brand: string
   model: string
   manufacturing_year: number
@@ -143,8 +144,11 @@ export async function getPurchaseById(id: number | string): Promise<PurchaseDeta
 export async function createPurchase(payload: CreatePurchasePayload): Promise<{ id: number | string; invoice_number: string }> {
   const methodMap: Record<string, number> = { Cash: 1, Bank: 2, 'Bank transfer': 2, Cheque: 3 }
   const paidAmount = payload.paid_amount != null && payload.paid_amount >= 0 ? payload.paid_amount : payload.purchase_price
+  const isCustomer = payload.source_type === 'Customer'
   const body = {
-    SupplierId: payload.seller_id,
+    SourceType: isCustomer ? 2 : 1,
+    SupplierId: isCustomer ? null : payload.seller_id,
+    CustomerId: isCustomer ? payload.seller_id : null,
     PurchaseCost: payload.purchase_price,
     PaidAmount: paidAmount,
     PaymentMethod: methodMap[payload.payment_method] ?? 1,

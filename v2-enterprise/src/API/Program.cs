@@ -879,6 +879,10 @@ async Task SeedDefaultDataAsync(ApplicationDbContext context, IdentityService id
             ALTER TABLE ""Suppliers""      ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
             ALTER TABLE ""Suppliers""      ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
             ALTER TABLE ""Suppliers""      ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;
+            ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""SourceType"" integer NOT NULL DEFAULT 1;
+            ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""CustomerId"" uuid;
+            ALTER TABLE ""Purchases""      ALTER COLUMN ""SupplierId"" DROP NOT NULL;
+            UPDATE ""Purchases"" SET ""SourceType"" = 1 WHERE ""SourceType"" IS NULL OR ""SourceType"" = 0;
             ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""IsDeleted""  boolean                  NOT NULL DEFAULT false;
             ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""DeletedAt""  timestamp with time zone;
             ALTER TABLE ""Purchases""      ADD COLUMN IF NOT EXISTS ""DeletedBy""  text;

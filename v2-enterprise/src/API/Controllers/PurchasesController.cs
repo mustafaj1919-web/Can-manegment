@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CarShowroomManagementV2.Application.Purchases.Commands;
 using CarShowroomManagementV2.Application.Common.Interfaces;
+using CarShowroomManagementV2.Application.Common.Helpers;
 using CarShowroomManagementV2.Domain.Entities;
 
 namespace CarShowroomManagementV2.API.Controllers
@@ -38,6 +39,7 @@ namespace CarShowroomManagementV2.API.Controllers
 
             var query = _context.Purchases
                 .Include(p => p.Supplier)
+                .Include(p => p.Customer)
                 .Include(p => p.Vehicle)
                 .AsQueryable();
 
@@ -72,6 +74,7 @@ namespace CarShowroomManagementV2.API.Controllers
             {
                 query = query.Where(p => p.PurchaseNumber.Contains(search) ||
                                           (p.Supplier != null && p.Supplier.Name.Contains(search)) ||
+                                          (p.Customer != null && p.Customer.Name.Contains(search)) ||
                                           (p.Vehicle != null && (p.Vehicle.Model.Contains(search) || p.Vehicle.ChassisNumber.Contains(search))));
             }
 
@@ -84,11 +87,14 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     id = p.Id,
                     invoice_number = p.PurchaseNumber,
+                    source_type = p.SourceType.ToString(),
                     branch_id = p.BranchId,
                     car_id = p.VehicleId,
-                    seller_id = p.SupplierId,
+                    seller_id = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? p.CustomerId : p.SupplierId,
                     car_name = p.Vehicle != null ? $"{p.Vehicle.Model} {p.Vehicle.Year}" : null,
-                    seller_name = p.Supplier != null ? p.Supplier.Name : null,
+                    seller_name = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? (p.Customer != null ? $"الزبون: {p.Customer.Name}" : null) : (p.Supplier != null ? p.Supplier.Name : null),
+                    counterparty_name = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? (p.Customer != null ? p.Customer.Name : null) : (p.Supplier != null ? p.Supplier.Name : null),
+                    counterparty_code = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? (p.Customer != null ? p.Customer.IdNumber : null) : (p.Supplier != null ? p.Supplier.Code : null),
                     purchase_price = p.PurchaseCost,
                     paid_amount = p.AmountPaid,
                     remaining_amount = p.PurchaseCost - p.AmountPaid,
@@ -114,6 +120,7 @@ namespace CarShowroomManagementV2.API.Controllers
         {
             var p = await _context.Purchases
                 .Include(x => x.Supplier)
+                .Include(x => x.Customer)
                 .Include(x => x.Vehicle)
                 .FirstOrDefaultAsync(x => x.Id == id);
 
@@ -122,9 +129,13 @@ namespace CarShowroomManagementV2.API.Controllers
                 return NotFound(new { success = false, message = "فاتورة الشراء غير موجودة." });
             }
 
-            // جلب الدفعات المقبوضة/المصروفة المرتبطة بحساب المورد
+            var counterpartyAccountId = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer
+                ? (p.Customer != null ? p.Customer.AccountId : Guid.Empty)
+                : (p.Supplier != null ? p.Supplier.AccountId : Guid.Empty);
+
+            // جلب الدفعات المقبوضة/المصروفة المرتبطة بحساب الجهة
             var payments = await _context.Payments
-                .Where(x => x.ContraAccountId == p.Supplier!.AccountId)
+                .Where(x => x.ContraAccountId == counterpartyAccountId)
                 .OrderByDescending(x => x.CreatedAt)
                 .Select(x => new
                 {
@@ -141,11 +152,14 @@ namespace CarShowroomManagementV2.API.Controllers
             {
                 id = p.Id,
                 invoice_number = p.PurchaseNumber,
+                source_type = p.SourceType.ToString(),
                 branch_id = p.BranchId,
                 car_id = p.VehicleId,
-                seller_id = p.SupplierId,
+                seller_id = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? p.CustomerId : p.SupplierId,
                 car_name = p.Vehicle != null ? $"{p.Vehicle.Model} {p.Vehicle.Year}" : null,
-                seller_name = p.Supplier != null ? p.Supplier.Name : null,
+                seller_name = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? (p.Customer != null ? $"الزبون: {p.Customer.Name}" : null) : (p.Supplier != null ? p.Supplier.Name : null),
+                counterparty_name = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? (p.Customer != null ? p.Customer.Name : null) : (p.Supplier != null ? p.Supplier.Name : null),
+                counterparty_code = p.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? (p.Customer != null ? p.Customer.IdNumber : null) : (p.Supplier != null ? p.Supplier.Code : null),
                 purchase_price = p.PurchaseCost,
                 paid_amount = p.AmountPaid,
                 remaining_amount = p.PurchaseCost - p.AmountPaid,
@@ -193,14 +207,13 @@ namespace CarShowroomManagementV2.API.Controllers
             return Ok(new { success = true, purchaseId = id, message = "تم تسجيل فاتورة الشراء وتوليد القيد المحاسبي الموزون بنجاح." });
         }
 
-        // 4. تسجيل دفعة جديدة لفاتورة شراء (دفع جزء من المبلغ المتبقي)
+        // 4. تسجيل دفعة جديدة لفاتورة شراء (دفع جزء من المبلغ المتبقي للمورد أو الزبون)
         [HttpPost("{id}/payment")]
         public async Task<IActionResult> AddPayment(Guid id, [FromBody] AddPurchasePaymentRequest request)
         {
             var branchId = _currentUserService.BranchId;
 
             var purchase = await _context.Purchases
-                .Include(p => p.Supplier)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (purchase == null)
@@ -217,9 +230,13 @@ namespace CarShowroomManagementV2.API.Controllers
             if (request.Amount > remaining)
                 return BadRequest(new { success = false, message = $"الدفعة ({request.Amount}) تتجاوز المبلغ المتبقي ({remaining})." });
 
-            var supplier = purchase.Supplier;
-            if (supplier == null)
-                return BadRequest(new { success = false, message = "المورد غير موجود." });
+            var counterparty = await CounterpartyResolver.ResolveAsync(
+                _context,
+                purchase.SourceType,
+                purchase.SupplierId,
+                purchase.CustomerId,
+                branchId,
+                HttpContext.RequestAborted);
 
             // حساب الصندوق أو البنك
             var accountCode = request.PaymentMethod?.ToLower() == "bank" ? "112001" : "111001";
@@ -234,6 +251,7 @@ namespace CarShowroomManagementV2.API.Controllers
             var accountBalance = await _context.JournalLines
                 .Where(l => l.AccountId == cashAccount.Id)
                 .SumAsync(l => l.Debit - l.Credit);
+
             if (accountBalance < request.Amount)
                 return BadRequest(new { success = false, message = $"رصيد الحساب ({cashAccount.AccountCode} - {cashAccount.Name}) غير كافٍ. المتاح: {accountBalance:N0}، المطلوب: {request.Amount:N0}." });
 
@@ -259,9 +277,9 @@ namespace CarShowroomManagementV2.API.Controllers
                     Method = method,
                     Amount = paymentAmount,
                     ReferenceNumber = refNumber,
-                    Description = request.Notes ?? $"دفعة لفاتورة شراء {purchase.PurchaseNumber} - المورد: {supplier.Name}",
+                    Description = request.Notes ?? $"دفعة لفاتورة شراء {purchase.PurchaseNumber} - الجهة: {counterparty.Name}",
                     AccountId = cashAccount.Id,
-                    ContraAccountId = supplier.AccountId,
+                    ContraAccountId = counterparty.AccountId,
                     BranchId = branchId
                 };
                 _context.Payments.Add(payment);
@@ -276,7 +294,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     Id = Guid.NewGuid(),
                     EntryNumber = entryNumber,
                     EntryDate = DateTime.UtcNow,
-                    Description = $"دفعة للمورد {supplier.Name} - فاتورة: {purchase.PurchaseNumber} - سند: {refNumber}",
+                    Description = $"دفعة لـ {(purchase.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name} - فاتورة: {purchase.PurchaseNumber} - سند: {refNumber}",
                     IsPosted = true,
                     BranchId = branchId,
                     ReferenceType = "Payment",
@@ -287,10 +305,10 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     Id = Guid.NewGuid(),
                     JournalEntryId = journal.Id,
-                    AccountId = supplier.AccountId,
+                    AccountId = counterparty.AccountId,
                     Debit = paymentAmount,
                     Credit = 0,
-                    Description = $"تخفيض ذمة المورد {supplier.Name}"
+                    Description = $"تخفيض مستحقات {(purchase.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name}"
                 });
                 journal.Lines.Add(new CarShowroomManagementV2.Domain.Entities.JournalLine
                 {
@@ -299,7 +317,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     AccountId = cashAccount.Id,
                     Debit = 0,
                     Credit = paymentAmount,
-                    Description = $"خروج النقدية لصالح المورد {supplier.Name}"
+                    Description = $"خروج النقدية لصالح {(purchase.SourceType == CarShowroomManagementV2.Domain.Enums.PurchaseSourceType.Customer ? "الزبون" : "المورد")} {counterparty.Name}"
                 });
 
                 _context.JournalEntries.Add(journal);

@@ -223,10 +223,24 @@ export interface CustomerStatementSummary {
   currency: 'IQD'
 }
 
+export interface StatementCustomerPurchase {
+  id: string | number
+  purchase_number: string
+  purchase_date: string | null
+  vehicle_name: string
+  chassis_number: string
+  purchase_cost: number
+  amount_paid: number
+  outstanding_amount: number
+  currency: 'USD' | 'IQD'
+  status: string
+}
+
 export interface CustomerStatement {
   customer: { id: number; name: string; phone: string | null; customer_type: string }
   summary: CustomerStatementSummary
   sales: StatementSaleItem[]
+  customer_purchases?: StatementCustomerPurchase[]
 }
 
 export async function getCustomerStatement(id: number | string): Promise<CustomerStatement> {
@@ -259,6 +273,18 @@ export async function getCustomerStatement(id: number | string): Promise<Custome
       payment_method:   sc.paymentMethod   ?? sc.payment_method   ?? '',
       has_installment:  sc.hasInstallment  ?? sc.has_installment  ?? false,
       installment_plan: sc.installmentPlan ?? sc.installment_plan ?? null,
+    })),
+    customer_purchases: (raw.customerPurchases ?? raw.customer_purchases ?? []).map((cp: any) => ({
+      id:                 cp.id                ?? cp.Id                ?? '',
+      purchase_number:    cp.purchaseNumber    ?? cp.purchase_number    ?? '',
+      purchase_date:      cp.purchaseDate      ?? cp.purchase_date      ?? null,
+      vehicle_name:       cp.vehicleName       ?? cp.vehicle_name       ?? 'سيارة غير محددة',
+      chassis_number:     cp.chassisNumber     ?? cp.chassis_number     ?? '',
+      purchase_cost:      cp.purchaseCost      ?? cp.purchase_cost      ?? 0,
+      amount_paid:        cp.amountPaid        ?? cp.amount_paid        ?? 0,
+      outstanding_amount: cp.outstandingAmount ?? cp.outstanding_amount ?? 0,
+      currency:           cp.currency          ?? 'IQD',
+      status:             cp.status            ?? 'Active',
     })),
   }
 }
