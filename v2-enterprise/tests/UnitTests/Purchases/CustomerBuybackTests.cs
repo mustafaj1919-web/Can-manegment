@@ -525,7 +525,7 @@ namespace CarShowroomManagementV2.UnitTests.Purchases
             reacquiredVeh!.Notes.Should().Be("سيارة فل مواصفات مع الفحص الفني");
         }
 
-        // 15. Correct post-buyback inventory status
+        // 15. Correct post-buyback inventory status (InPreparation for safety)
         [Fact]
         public async Task Test15_CorrectPostBuybackInventoryStatus()
         {
@@ -552,7 +552,7 @@ namespace CarShowroomManagementV2.UnitTests.Purchases
 
             var reacquiredVeh = await context.Vehicles.FindAsync(veh.Id);
             reacquiredVeh!.IsSold.Should().BeFalse();
-            reacquiredVeh.Status.Should().Be("Available");
+            reacquiredVeh.Status.Should().Be("InPreparation");
         }
 
         // 16. Supplier flow remains unchanged

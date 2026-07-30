@@ -154,9 +154,9 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
                 if (existingVehicle != null)
                 {
-                    // تحديث حالة وتكلفة السيارة المعادة إلى المخزون (Buyback)
+                    // تحديث حالة وتكلفة السيارة المعادة إلى المخزون (Buyback - InPreparation لحين الفحص والإعداد)
                     existingVehicle.IsSold = false;
-                    existingVehicle.Status = "Available";
+                    existingVehicle.Status = "InPreparation";
                     existingVehicle.PurchaseCost = purchaseCost;
                     existingVehicle.BookValue = purchaseCost;
                     if (targetSellingPrice > 0) existingVehicle.TargetSellingPrice = targetSellingPrice;
@@ -175,8 +175,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         Id = Guid.NewGuid(),
                         VehicleId = existingVehicle.Id,
                         OldStatus = "Sold",
-                        NewStatus = "Available",
-                        Notes = $"إعادة شراء من الزبون (عقد #{lastSale?.ContractNumber})",
+                        NewStatus = "InPreparation",
+                        Notes = $"إعادة شراء من الزبون قيد الفحص والإعداد (عقد #{lastSale?.ContractNumber})",
                         BranchId = branchId,
                         ChangedBy = _currentUserService.UserId ?? "System",
                         ChangedAt = DateTime.UtcNow
