@@ -257,7 +257,9 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Purchase>()
-                .HasIndex(p => p.PreviousSaleContractId);
+                .HasIndex(p => p.PreviousSaleContractId)
+                .IsUnique()
+                .HasFilter("\"PreviousSaleContractId\" IS NOT NULL AND \"Status\" <> 'Cancelled'");
 
             modelBuilder.Entity<Purchase>()
                 .HasOne(p => p.Vehicle)
