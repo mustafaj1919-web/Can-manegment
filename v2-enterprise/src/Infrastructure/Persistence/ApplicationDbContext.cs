@@ -250,6 +250,16 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Purchase>()
+                .HasOne(p => p.PreviousSaleContract)
+                .WithMany()
+                .HasForeignKey(p => p.PreviousSaleContractId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Purchase>()
+                .HasIndex(p => p.PreviousSaleContractId);
+
+            modelBuilder.Entity<Purchase>()
                 .HasOne(p => p.Vehicle)
                 .WithMany()
                 .HasForeignKey(p => p.VehicleId)

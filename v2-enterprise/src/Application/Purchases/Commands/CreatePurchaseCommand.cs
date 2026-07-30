@@ -98,6 +98,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(v => v.ChassisNumber == request.ChassisNumber, cancellationToken);
 
+            SalesContract? lastSale = null;
+
             Vehicle? vehicle = null;
 
             if (existingVehicle != null)
@@ -110,7 +112,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                         throw new InvalidOperationException($"السيارة برقم الشاصي '{request.ChassisNumber}' موجودة حالياً في المخزون ولا يمكن إعادتها.");
                     }
 
-                    var lastSale = await _context.SalesContracts
+                    lastSale = await _context.SalesContracts
                         .IgnoreQueryFilters()
                         .Where(sc => sc.VehicleId == existingVehicle.Id && sc.CustomerId == request.CustomerId && sc.Status != "Cancelled")
                         .OrderByDescending(sc => sc.SaleDate)
@@ -119,6 +121,16 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     if (lastSale == null)
                     {
                         throw new InvalidOperationException($"لم يتم العثور على عقد بيع سابق مؤكد للسيارة رقم '{request.ChassisNumber}' لصالح هذا الزبون.");
+                    }
+
+                    // حماية المتزامنات (Concurrency Protection): التحقق من أن العقد لم يُستهلك مسبقاً
+                    var alreadyBoughtBack = await _context.Purchases
+                        .IgnoreQueryFilters()
+                        .AnyAsync(p => p.PreviousSaleContractId == lastSale.Id && p.Status != "Cancelled", cancellationToken);
+
+                    if (alreadyBoughtBack)
+                    {
+                        throw new InvalidOperationException("تم إعادة شراء هذه السيارة مسبقاً من قِبل مستخدم آخر ولا يمكن تكرار الشراء.");
                     }
                 }
                 else
@@ -156,6 +168,19 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
 
                     _context.Vehicles.Update(existingVehicle);
                     vehicle = existingVehicle;
+
+                    // توثيق تغير حالة السيارة في سجل التتبع التاريخي
+                    _context.VehicleStatusHistories.Add(new VehicleStatusHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        VehicleId = existingVehicle.Id,
+                        OldStatus = "Sold",
+                        NewStatus = "Available",
+                        Notes = $"إعادة شراء من الزبون (عقد #{lastSale?.ContractNumber})",
+                        BranchId = branchId,
+                        ChangedBy = _currentUserService.UserId ?? "System",
+                        ChangedAt = DateTime.UtcNow
+                    });
                 }
                 else
                 {
@@ -254,6 +279,7 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     SourceType = request.SourceType,
                     SupplierId = request.SourceType == PurchaseSourceType.Supplier ? counterparty.Id : null,
                     CustomerId = request.SourceType == PurchaseSourceType.Customer ? counterparty.Id : null,
+                    PreviousSaleContractId = request.SourceType == PurchaseSourceType.Customer ? lastSale?.Id : null,
                     VehicleId = vehicle.Id,
                     PurchaseCost = purchaseCost,
                     AmountPaid = actualAmountPaid,

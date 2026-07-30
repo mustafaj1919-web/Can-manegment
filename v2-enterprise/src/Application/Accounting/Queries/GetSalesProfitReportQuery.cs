@@ -110,10 +110,13 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
                     .Where(l => l.Account != null && l.Account.AccountCode == "4102")
                     .Sum(l => l.Credit);
 
-                var directProfit = AccountingAmount.RoundMoney(contract.SalePrice - contract.Vehicle!.BookValue);
+                decimal historicalCostBasis = contract.CostBasis > 0
+                    ? contract.CostBasis
+                    : (contract.Vehicle != null && contract.Vehicle.BookValue > 0 ? contract.Vehicle.BookValue : Math.Max(0, contract.SalePrice - contract.Profit));
+                var directProfit = AccountingAmount.RoundMoney(contract.SalePrice - historicalCostBasis);
 
                 totalSalePrice += contract.SalePrice;
-                totalBookValue += contract.Vehicle.BookValue;
+                totalBookValue += historicalCostBasis;
                 totalDirectProfit += directProfit;
                 totalDeferred += deferredProfit;
                 totalRecognized += recognizedProfit;
@@ -134,9 +137,9 @@ namespace CarShowroomManagementV2.Application.Accounting.Queries
                     ContractNumber = contract.ContractNumber,
                     SaleDate = contract.SaleDate,
                     CustomerName = contract.Customer!.Name,
-                    VehicleModel = contract.Vehicle.Model,
+                    VehicleModel = contract.Vehicle!.Model,
                     SalePrice = AccountingAmount.RoundMoney(contract.SalePrice),
-                    BookValue = AccountingAmount.RoundMoney(contract.Vehicle.BookValue),
+                    BookValue = AccountingAmount.RoundMoney(historicalCostBasis),
                     DirectProfit = directProfit,
                     ProfitRatePercentage = profitRate,
                     TotalProfitMarkup = AccountingAmount.RoundMoney(deferredProfit),

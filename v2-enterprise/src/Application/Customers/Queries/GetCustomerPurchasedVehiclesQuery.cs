@@ -55,6 +55,8 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 .IgnoreQueryFilters()
                 .ToDictionaryAsync(b => b.Id, b => b.Name, cancellationToken);
 
+            var validStates = new[] { "Active", "Completed", "Confirmed", "Posted", "Delivered" };
+
             // 1. جلب عقود المبيعات السابقة للزبون الموفر في الفرع المسموح به
             var contracts = await _context.SalesContracts
                 .Include(sc => sc.Vehicle)
@@ -67,11 +69,11 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 return new List<CustomerPurchasedVehicleDto>();
             }
 
-            var vehicleIds = contracts.Select(c => c.VehicleId).Distinct().ToList();
+            var contractIds = contracts.Select(c => c.Id).ToList();
 
-            // 2. جلب جميع المشتريات المرتبطة بهذه السيارات للتحقق مما إذا كان قد تم إعادة شرائها سابقًا
-            var activePurchases = await _context.Purchases
-                .Where(p => vehicleIds.Contains(p.VehicleId) && p.Status != "Cancelled")
+            // 2. جلب جميع عمليات إعادة الشراء المرتبطة مباشرة بعقود المبيعات هذه
+            var activeBuybackPurchases = await _context.Purchases
+                .Where(p => p.PreviousSaleContractId.HasValue && contractIds.Contains(p.PreviousSaleContractId.Value) && p.Status != "Cancelled")
                 .ToListAsync(cancellationToken);
 
             var result = new List<CustomerPurchasedVehicleDto>();
@@ -84,11 +86,11 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 bool eligible = true;
                 string? reason = null;
 
-                if (sc.Status == "Cancelled")
+                if (!validStates.Contains(sc.Status, StringComparer.OrdinalIgnoreCase))
                 {
-                    ownershipStatus = "CancelledSale";
+                    ownershipStatus = "IneligibleSaleStatus";
                     eligible = false;
-                    reason = "عقد البيع ملغى";
+                    reason = sc.Status == "Cancelled" ? "عقد البيع ملغى" : $"حالة عقد البيع غير مكتملة ({sc.Status})";
                 }
                 else if (v == null)
                 {
@@ -104,11 +106,11 @@ namespace CarShowroomManagementV2.Application.Customers.Queries
                 }
                 else
                 {
-                    // فحص إذا كانت هناك عملية شراء تم تسجيلها لهذه السيارة بعد تاريخ البيع
-                    var subsequentPurchase = activePurchases
-                        .FirstOrDefault(p => p.VehicleId == v.Id && p.PurchaseDate >= sc.SaleDate);
+                    // فحص إذا تم قيد شراء يربط عقد البيع هذا مباشرة برقم العقد السابق
+                    var existingBuyback = activeBuybackPurchases
+                        .FirstOrDefault(p => p.PreviousSaleContractId == sc.Id);
 
-                    if (subsequentPurchase != null)
+                    if (existingBuyback != null)
                     {
                         ownershipStatus = "AlreadyReacquired";
                         eligible = false;

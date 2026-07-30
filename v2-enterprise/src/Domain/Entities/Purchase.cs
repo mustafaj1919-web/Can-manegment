@@ -10,6 +10,7 @@ namespace CarShowroomManagementV2.Domain.Entities
         public PurchaseSourceType SourceType { get; set; } = PurchaseSourceType.Supplier; // مصدر الشراء: مورد أو زبون
         public Guid? SupplierId { get; set; }
         public Guid? CustomerId { get; set; }
+        public Guid? PreviousSaleContractId { get; set; } // عقد البيع السابق في حال إعادة الشراء (Buyback)
         public Guid VehicleId { get; set; }
         public DateTime PurchaseDate { get; set; } = DateTime.UtcNow;
 
@@ -21,6 +22,7 @@ namespace CarShowroomManagementV2.Domain.Entities
         // علاقات التنقل
         public virtual Supplier? Supplier { get; set; }
         public virtual Customer? Customer { get; set; }
+        public virtual SalesContract? PreviousSaleContract { get; set; }
         public virtual Vehicle? Vehicle { get; set; }
     }
 }

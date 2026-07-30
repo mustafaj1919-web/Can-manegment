@@ -204,6 +204,7 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     NetPrice = netPrice,
                     DownPayment = downPayment,
                     RemainingBalance = remainingBalance,
+                    CostBasis = vehicle.BookValue,
                     Profit = profit,
                     PaymentMethod = request.PaymentMethod,
                     Status = "Active",

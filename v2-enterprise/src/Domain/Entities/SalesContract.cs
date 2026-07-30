@@ -21,7 +21,8 @@ namespace CarShowroomManagementV2.Domain.Entities
         public decimal DownPayment { get; set; } // الدفعة المقدمة
         public decimal RemainingBalance { get; set; } // المبلغ المتبقي المستحق للتقسيط أو السداد اللاحق
 
-        public decimal Profit { get; set; } // أرباح العملية = سعر البيع - التكلفة الدفترية للسيارة
+        public decimal CostBasis { get; set; } // تكلفة تملك السيارة وقت البيع المعتمدة محاسبياً
+        public decimal Profit { get; set; } // أرباح العملية = سعر البيع - التكلفة الدفترية للسيارة وقت البيع
 
         public PaymentMethod PaymentMethod { get; set; } // Cash or Installment
         public string Status { get; set; } = "Active"; // Active, Cancelled
