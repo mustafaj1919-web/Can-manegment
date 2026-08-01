@@ -18,9 +18,8 @@ import { ContractCard } from './receipt/ContractCard'
 import { PaymentSummaryColumn } from './receipt/PaymentSummaryColumn'
 import { PaymentHero } from './receipt/PaymentHero'
 import { FinancialSummary } from './receipt/FinancialSummary'
-import { InstallmentProgress } from './receipt/InstallmentProgress'
-import { PaymentInformation } from './receipt/PaymentInformation'
-import { VerificationSection } from './receipt/VerificationSection'
+import { NextInstallmentStrip } from './receipt/NextInstallmentStrip'
+import { TransactionStrip } from './receipt/TransactionStrip'
 import { SignatureSection } from './receipt/SignatureSection'
 import { ReceiptFooter } from './receipt/ReceiptFooter'
 
@@ -87,21 +86,13 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
   const isPrintOwner = activeOwnerId === instanceId
   const tafqitText = tafqitArabic(payment.amount, payment.currency)
 
-  const remainingInstallments = contractProgress
-    ? Math.max(0, contractProgress.totalInstallmentsCount - contractProgress.paidInstallmentsCount)
-    : null
-
   const receipt = (
     <article
       dir="rtl"
       lang="ar"
       data-receipt-id={receiptNumber}
-      className="a5-document-root relative bg-white text-[#0B1220] font-receipt select-none w-full sm:w-[210mm] h-[148mm] min-h-[148mm] max-h-[148mm] border border-[#E5E7EB] sm:rounded-[10px] p-4 box-border flex flex-col"
+      className="a5-document-root relative bg-white text-[#111827] font-receipt select-none w-full sm:w-[210mm] h-[148mm] min-h-[148mm] max-h-[148mm] border border-[#E5E7EB] sm:rounded-[6px] p-4 box-border flex flex-col"
     >
-      <div className="absolute inset-x-0 top-0 z-50 bg-[#DC2626] text-white text-[10px] font-black text-center py-0.5 tracking-widest">
-        NEW A5 RECEIPT BUILD
-      </div>
-
       <ReceiptHeader
         company={company}
         receiptNumber={cleanReceiptNumber}
@@ -112,6 +103,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
         isError={isCancelledOrReversed}
       />
 
+      {/* Identity strip: customer / vehicle / contract / current installment */}
       <section className="flex divide-x divide-[#E5E7EB] py-2 border-b border-[#E5E7EB]">
         <CustomerCard customer={customer} />
         <VehicleCard vehicle={vehicle} />
@@ -120,29 +112,31 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
           contractDetails={contractDetails}
           currency={payment.currency}
         />
-        <PaymentSummaryColumn payment={payment} remainingInstallments={remainingInstallments} />
+        <PaymentSummaryColumn payment={payment} />
       </section>
 
-      <PaymentHero
-        amount={payment.amount}
-        currency={payment.currency}
-        tafqitText={tafqitText}
-        statusLabel={statusLabel}
-      />
+      {/* Payment hero band: financial summary (right) + amount hero (left) */}
+      <section className="flex items-stretch py-2.5 border-b border-[#E5E7EB]">
+        <div className="flex-1 min-w-0 pe-4">
+          <FinancialSummary progress={contractProgress} currency={payment.currency} />
+        </div>
+        <div className="w-px self-stretch bg-[#E5E7EB]" />
+        <div className="flex-1 min-w-0 ps-4">
+          <PaymentHero
+            amount={payment.amount}
+            currency={payment.currency}
+            tafqitText={tafqitText}
+            statusLabel={statusLabel}
+            isError={isCancelledOrReversed}
+          />
+        </div>
+      </section>
 
-      <FinancialSummary progress={contractProgress} currency={payment.currency} />
+      <NextInstallmentStrip next={nextInstallment} progress={contractProgress} currency={payment.currency} />
 
-      {contractProgress && (
-        <InstallmentProgress progress={contractProgress} next={nextInstallment} currency={payment.currency} />
-      )}
+      <TransactionStrip payment={payment} cashierName={verification?.receivedBy} verification={verification} />
 
-      <PaymentInformation payment={payment} cashierName={verification?.receivedBy} />
-
-      <section className="flex items-center justify-between gap-4 pt-1.5 mt-auto border-t border-[#E5E7EB]">
-        <VerificationSection
-          qrCodeUrl={verification?.qrCodeUrl}
-          journalEntryNumber={verification?.journalEntryNumber}
-        />
+      <section className="pt-1.5 mt-auto border-t border-[#E5E7EB]">
         <SignatureSection
           cashierName={verification?.receivedBy}
           customerName={customer.name}
@@ -162,13 +156,13 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
       <style jsx global>{`
         @media print {
           @page {
-            size: 210mm 148mm landscape;
+            size: A5 landscape;
             margin: 0;
           }
 
           html, body {
             background: #ffffff !important;
-            color: #0B1220 !important;
+            color: #111827 !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 210mm !important;
@@ -193,7 +187,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
 
           #print-root .a5-document-root {
             position: static !important;
-            display: block !important;
+            display: flex !important;
             visibility: visible !important;
             border: none !important;
             border-radius: 0 !important;

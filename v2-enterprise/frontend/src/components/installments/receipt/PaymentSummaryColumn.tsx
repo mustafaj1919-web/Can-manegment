@@ -6,27 +6,27 @@ import { Field } from './Field'
 
 interface PaymentSummaryColumnProps {
   payment: CurrentPaymentInfo
-  remainingInstallments?: number | null
 }
 
-/** Fourth column of the information matrix — a brief "how was this paid" summary.
- *  Detailed transaction references (bank, approval code, collector) live further down
- *  in PaymentInformation; this column only orients the reader at a glance. */
-export function PaymentSummaryColumn({ payment, remainingInstallments }: PaymentSummaryColumnProps) {
+/** Fourth column of the identity strip — "which installment is this" at a glance.
+ *  Detailed transaction references (bank, approval code, collector) live in the
+ *  transaction strip further down; this column only orients the reader. */
+export function PaymentSummaryColumn({ payment }: PaymentSummaryColumnProps) {
   const installmentLabel = payment.installmentNumber
-    ? `${payment.installmentNumber} / ${payment.totalInstallments ?? '—'}`
+    ? `${String(payment.installmentNumber).padStart(2, '0')} / ${payment.totalInstallments ?? '—'}`
+    : null
+  const installmentSubLabel = payment.installmentNumber
+    ? `القسط ${payment.installmentNumber} من ${payment.totalInstallments ?? '—'}`
     : null
 
   return (
-    <InfoCard title="الدفعة">
-      <Field label="طريقة الدفع" value={mapPaymentMethodArabic(payment.paymentMethod)} span={2} emphasis />
-      <Field label="رقم القسط" value={installmentLabel} mono dir="ltr" />
-      <Field label="تاريخ الاستحقاق" value={payment.dueDate} mono dir="ltr" />
-      {remainingInstallments !== null && remainingInstallments !== undefined && remainingInstallments > 0 && (
-        <p className="col-span-2 text-[8.5px] text-[#9CA3AF] font-medium truncate mt-0.5">
-          الأقساط المتبقية: {remainingInstallments}
-        </p>
+    <InfoCard title="القسط الحالي">
+      <Field label="رقم القسط" value={installmentLabel} mono dir="ltr" span={2} emphasis />
+      {installmentSubLabel && (
+        <p className="col-span-2 text-[8.5px] text-[#9CA3AF] font-medium truncate mt-0.5">{installmentSubLabel}</p>
       )}
+      <Field label="طريقة الدفع" value={mapPaymentMethodArabic(payment.paymentMethod)} />
+      <Field label="تاريخ الاستحقاق" value={payment.dueDate} mono dir="ltr" />
     </InfoCard>
   )
 }

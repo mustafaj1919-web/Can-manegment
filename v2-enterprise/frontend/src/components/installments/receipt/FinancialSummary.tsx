@@ -7,13 +7,14 @@ interface FinancialSummaryProps {
   currency: string
 }
 
-function Row({ label, value, color, muted }: { label: string; value: string; color?: string; muted?: boolean }) {
+function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-dotted border-[#D1D5DB] py-[1px] leading-tight">
-      <span className={`text-[9px] ${muted ? 'text-[#9CA3AF]' : 'text-[#4B5563]'} font-medium truncate`}>{label}</span>
+    <div className="flex items-baseline justify-between gap-3 leading-tight">
+      <span className="text-[9px] text-[#667085] font-medium">{label}</span>
       <span
-        className={`text-[10px] font-numeric tabular-nums shrink-0 ${muted ? 'font-medium' : 'font-semibold'}`}
-        style={{ color: color ?? '#0B1220' }}
+        className="text-[11px] font-numeric font-semibold tabular-nums shrink-0"
+        style={{ color: color ?? '#111827' }}
+        dir="ltr"
       >
         {value}
       </span>
@@ -21,53 +22,48 @@ function Row({ label, value, color, muted }: { label: string; value: string; col
   )
 }
 
+/** Opposite side of the payment hero — the contract's running balance. Three lines,
+ *  one thin bar. Discount/penalty/tax only ever appear as one extra muted line each,
+ *  and only when the backend actually reports a non-zero adjustment. */
 export function FinancialSummary({ progress, currency }: FinancialSummaryProps) {
   if (!progress) {
     return (
-      <section className="py-2.5 text-center text-[10px] text-[#9CA3AF]">
+      <div className="flex items-center justify-center min-w-0 text-[9.5px] text-[#667085]">
         لا توجد بيانات ملخص متاحة لهذا العقد
-      </section>
+      </div>
     )
   }
 
   const fmt = (v: number) => formatCurrencyAmount(v, currency)
-  const hasAdjustments = Boolean(progress.discount || progress.penalty || progress.tax)
 
   return (
-    <section className="py-1">
-      <span className="block text-[8px] font-bold text-[#081F4D] uppercase tracking-[0.1em] mb-0.5 leading-none">
-        الملخص المالي
-      </span>
+    <div className="flex flex-col justify-center min-w-0 gap-[3px]">
+      <Row label="قيمة العقد الإجمالية" value={fmt(progress.totalAmount)} />
+      <Row label="المدفوع حتى الآن" value={fmt(progress.totalPaid)} color="#059669" />
+      {progress.discount ? <Row label="الخصم" value={`- ${fmt(progress.discount)}`} /> : null}
+      {progress.penalty ? <Row label="الغرامة" value={`+ ${fmt(progress.penalty)}`} color="#DC2626" /> : null}
+      {progress.tax ? <Row label="الضريبة" value={fmt(progress.tax)} /> : null}
 
-      <div className="grid grid-cols-2 gap-x-8">
-        <div>
-          <Row label="قيمة العقد الإجمالية" value={fmt(progress.totalAmount)} />
-          <Row label="المدفوع سابقاً" value={fmt(progress.previouslyPaid)} />
-          <Row label="الدفعة الحالية" value={fmt(progress.paidThisTime)} color="#0B8F55" />
-          {progress.discount ? <Row label="الخصم" value={`- ${fmt(progress.discount)}`} muted /> : null}
-        </div>
-        <div>
-          <Row label="إجمالي المدفوع" value={fmt(progress.totalPaid)} color="#0B8F55" />
-          {progress.penalty ? <Row label="الغرامة" value={`+ ${fmt(progress.penalty)}`} color="#B91C1C" muted /> : null}
-          {progress.tax ? <Row label="الضريبة" value={fmt(progress.tax)} muted /> : null}
-          {hasAdjustments && (
-            <Row label="الصافي المدفوع" value={fmt(progress.netPaid ?? progress.totalPaid)} color="#0B8F55" />
-          )}
-        </div>
-      </div>
-
-      {/* Balance due — the statement's bottom line */}
-      <div className="flex items-end justify-between mt-0.5 pt-0.5 border-t-[1.5px] border-[#081F4D]">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[10px] font-bold text-[#0B1220] leading-none">الرصيد المتبقي المستحق</span>
-          <span className="text-[9px] font-numeric font-semibold text-[#0B8F55] leading-none">
-            {formatPercent(progress.completionPercentage)} مسدد
-          </span>
-        </div>
-        <span className="text-[18px] font-bold font-numeric tabular-nums text-[#B45309] leading-none">
+      <div className="flex items-baseline justify-between gap-3 leading-tight pt-[3px] mt-[2px] border-t border-[#E5E7EB]">
+        <span className="text-[9.5px] text-[#111827] font-bold">المبلغ المتبقي</span>
+        <span className="text-[16px] font-numeric font-bold tabular-nums shrink-0 text-[#059669]" dir="ltr">
           {fmt(progress.remainingBalance)}
         </span>
       </div>
-    </section>
+
+      <div className="mt-1">
+        <div className="flex items-center justify-between text-[8px] font-bold text-[#667085] mb-[3px] leading-none">
+          <span>نسبة السداد</span>
+          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(progress.completionPercentage)}</span>
+        </div>
+        <div className="w-full h-[4px] bg-[#E5E7EB] rounded-full overflow-hidden">
+          <div className="h-full bg-[#059669] rounded-full" style={{ width: `${progress.completionPercentage}%` }} />
+        </div>
+        <div className="flex items-center justify-between text-[7.5px] text-[#9CA3AF] font-medium mt-[3px] leading-none">
+          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(progress.completionPercentage)} مدفوع</span>
+          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(Math.round((100 - progress.completionPercentage) * 10) / 10)} متبقي</span>
+        </div>
+      </div>
+    </div>
   )
 }

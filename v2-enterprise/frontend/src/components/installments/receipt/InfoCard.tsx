@@ -12,7 +12,7 @@ interface InfoCardProps {
 export function InfoCard({ title, children }: InfoCardProps) {
   return (
     <div className="flex-1 min-w-0 px-4 first:ps-0 last:pe-0">
-      <span className="block text-[8px] font-bold text-[#081F4D] uppercase tracking-[0.1em] mb-1.5 leading-none">
+      <span className="block text-[8px] font-bold text-[#0B2347] uppercase tracking-[0.1em] mb-1.5 leading-none">
         {title}
       </span>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1">{children}</div>

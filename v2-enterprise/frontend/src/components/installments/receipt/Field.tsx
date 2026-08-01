@@ -20,7 +20,7 @@ export function Field({ label, value, mono, dir, span = 1, emphasis }: FieldProp
         {label}
       </p>
       <p
-        className={`leading-tight truncate text-[#0B1220] ${emphasis ? 'text-[13px] font-bold' : 'text-[11px] font-medium'} ${mono ? 'font-numeric tabular-nums' : ''}`}
+        className={`leading-tight truncate text-[#111827] ${emphasis ? 'text-[13px] font-bold' : 'text-[11px] font-medium'} ${mono ? 'font-numeric tabular-nums' : ''}`}
         dir={dir}
         title={typeof value === 'string' ? value : undefined}
       >

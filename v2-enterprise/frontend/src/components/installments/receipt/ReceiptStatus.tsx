@@ -8,7 +8,7 @@ interface ReceiptStatusProps {
 /** Restrained status tag — a thin-bordered seal rather than a filled UI pill, matching
  *  the "PAID" / "VOID" stamps on a formal financial document. */
 export function ReceiptStatus({ label, isError }: ReceiptStatusProps) {
-  const color = isError ? '#DC2626' : '#0B8F55'
+  const color = isError ? '#DC2626' : '#059669'
 
   return (
     <span
