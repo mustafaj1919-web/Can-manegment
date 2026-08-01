@@ -50,7 +50,9 @@ export function formatCurrencyAmount(amount?: number | null, currency: string = 
 
 export function formatPercent(value?: number | null): string {
   if (value === undefined || value === null || Number.isNaN(value)) return '0%'
-  return `${value}%`
+  const rounded = Math.round(value * 10) / 10
+  const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+  return `${text}%`
 }
 
 /** Splits an ISO-ish date string into localized (ar-IQ) date and time parts for receipt display. */

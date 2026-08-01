@@ -45,12 +45,20 @@ export function TransactionStrip({ payment, cashierName, verification }: Transac
             <p className="text-[7px] font-bold text-[#0B2347] uppercase tracking-[0.06em]">تحقق إلكتروني</p>
             <p className="text-[7px] text-[#9CA3AF] max-w-[24mm]">امسح رمز QR للتحقق من صحة الوصل</p>
           </div>
-          <img
-            src={verification.qrCodeUrl}
-            alt="رمز التحقق"
-            className="shrink-0"
-            style={{ width: '20mm', height: '20mm' }}
-          />
+          {/* White quiet-zone padding — the source QR image itself has no built-in margin
+              (margin=0 upstream), so the border around it must never sit flush against
+              the modules or a scanner can misread the edge. Sized to the image's native
+              120x120 resolution (not stretched further) to stay crisp on a real printer. */}
+          <div className="shrink-0 bg-white p-[1.2mm]" style={{ width: '18mm', height: '18mm' }}>
+            <img
+              src={verification.qrCodeUrl}
+              alt="رمز التحقق"
+              width={120}
+              height={120}
+              className="w-full h-full block"
+              style={{ imageRendering: 'crisp-edges' }}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -35,33 +35,36 @@ export function FinancialSummary({ progress, currency }: FinancialSummaryProps) 
   }
 
   const fmt = (v: number) => formatCurrencyAmount(v, currency)
+  // Defensive clamp only — the backend is the source of truth for this number; this just
+  // stops a transient out-of-range value from drawing a bar wider than its own track.
+  const pct = Math.min(100, Math.max(0, progress.completionPercentage))
 
   return (
-    <div className="flex flex-col justify-center min-w-0 gap-[3px]">
+    <div className="flex flex-col justify-center min-w-0 gap-[2px]">
       <Row label="قيمة العقد الإجمالية" value={fmt(progress.totalAmount)} />
       <Row label="المدفوع حتى الآن" value={fmt(progress.totalPaid)} color="#059669" />
       {progress.discount ? <Row label="الخصم" value={`- ${fmt(progress.discount)}`} /> : null}
       {progress.penalty ? <Row label="الغرامة" value={`+ ${fmt(progress.penalty)}`} color="#DC2626" /> : null}
       {progress.tax ? <Row label="الضريبة" value={fmt(progress.tax)} /> : null}
 
-      <div className="flex items-baseline justify-between gap-3 leading-tight pt-[3px] mt-[2px] border-t border-[#E5E7EB]">
+      <div className="flex items-baseline justify-between gap-3 leading-tight pt-[3px] mt-[1px] border-t border-[#E5E7EB]">
         <span className="text-[9.5px] text-[#111827] font-bold">المبلغ المتبقي</span>
         <span className="text-[16px] font-numeric font-bold tabular-nums shrink-0 text-[#059669]" dir="ltr">
           {fmt(progress.remainingBalance)}
         </span>
       </div>
 
-      <div className="mt-1">
+      <div className="mt-[3px]">
         <div className="flex items-center justify-between text-[8px] font-bold text-[#667085] mb-[3px] leading-none">
           <span>نسبة السداد</span>
-          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(progress.completionPercentage)}</span>
+          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(pct)}</span>
         </div>
         <div className="w-full h-[4px] bg-[#E5E7EB] rounded-full overflow-hidden">
-          <div className="h-full bg-[#059669] rounded-full" style={{ width: `${progress.completionPercentage}%` }} />
+          <div className="h-full bg-[#059669] rounded-full" style={{ width: `${pct}%` }} />
         </div>
         <div className="flex items-center justify-between text-[7.5px] text-[#9CA3AF] font-medium mt-[3px] leading-none">
-          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(progress.completionPercentage)} مدفوع</span>
-          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(Math.round((100 - progress.completionPercentage) * 10) / 10)} متبقي</span>
+          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(pct)} مدفوع</span>
+          <span className="font-numeric tabular-nums" dir="ltr">{formatPercent(100 - pct)} متبقي</span>
         </div>
       </div>
     </div>

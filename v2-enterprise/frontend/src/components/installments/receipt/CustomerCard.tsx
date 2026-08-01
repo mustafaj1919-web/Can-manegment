@@ -10,7 +10,7 @@ interface CustomerCardProps {
 export function CustomerCard({ customer }: CustomerCardProps) {
   return (
     <InfoCard title="العميل">
-      <Field label="اسم العميل" value={customer.name} span={2} emphasis />
+      <Field label="اسم العميل" value={customer.name} span={2} emphasis clamp2 />
       <Field label="رقم الهاتف" value={customer.phone} mono dir="ltr" />
       <Field label="الرقم الوطني" value={customer.nationalIdMasked} mono dir="ltr" />
       {customer.salesRepName && (

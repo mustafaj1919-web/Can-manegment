@@ -53,14 +53,14 @@ export function ReceiptHeader({
         </div>
 
         {/* Document control metadata */}
-        <div className="text-end shrink-0 space-y-[2px] min-w-[108px] leading-none">
+        <div className="text-end shrink-0 space-y-[2px] min-w-0 max-w-[38mm] leading-none">
           <div className="flex justify-end mb-0.5">
             <ReceiptStatus label={statusLabel} isError={isError} />
           </div>
-          <div className="text-[9.5px] font-numeric font-semibold text-[#111827]" dir="ltr">
+          <div className="text-[9.5px] font-numeric font-semibold text-[#111827] truncate" dir="ltr">
             {receiptNumber}
           </div>
-          <div className="text-[8.5px] font-numeric text-[#667085]" dir="ltr">
+          <div className="text-[8.5px] font-numeric text-[#667085] truncate" dir="ltr">
             {issuedAtDate}{issuedAtTime ? ` — ${issuedAtTime}` : ''}
           </div>
           {branchName && (

@@ -26,7 +26,7 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
 
   return (
     <InfoCard title="المركبة">
-      <Field label="نوع المركبة" value={displayName} span={2} emphasis />
+      <Field label="نوع المركبة" value={displayName} span={2} emphasis clamp2 />
       <Field label="رقم الهيكل" value={vehicle.vin} mono dir="ltr" />
       <Field label="رقم اللوحة" value={vehicle.plateNumber} mono dir="ltr" />
       {metaLine && (

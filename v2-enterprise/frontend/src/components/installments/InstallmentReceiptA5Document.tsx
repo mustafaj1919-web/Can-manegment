@@ -41,11 +41,18 @@ interface InstallmentReceiptA5DocumentProps {
   data: InstallmentReceiptViewModel
 }
 
+const RAW_GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Only ever shortens a *raw database GUID* fallback (id with no human-assigned reference
+ *  yet) into a compact "12345678-ABCD" form. Real business identifiers — contract/receipt
+ *  numbers like "RCPT-20260801-BGD-00000002871" — are returned as-is and left to the
+ *  layout's own single-line ellipsis; naively splitting on every hyphen would silently
+ *  drop whichever segments come after the second one. */
 function shortenId(value?: string | null): string | undefined {
   if (!value) return value ?? undefined
-  if (value.length > 18 && value.includes('-')) {
-    const [prefix, suffix] = value.split('-')
-    return `${prefix}-${suffix?.toUpperCase()}`
+  if (RAW_GUID_PATTERN.test(value)) {
+    const [prefix, , , , suffix] = value.split('-')
+    return `${prefix}-${suffix?.slice(0, 4).toUpperCase()}`
   }
   return value
 }
@@ -104,7 +111,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
       />
 
       {/* Identity strip: customer / vehicle / contract / current installment */}
-      <section className="flex divide-x divide-[#E5E7EB] py-2 border-b border-[#E5E7EB]">
+      <section className="a5-section flex divide-x divide-[#E5E7EB] py-1.5 border-b border-[#E5E7EB]">
         <CustomerCard customer={customer} />
         <VehicleCard vehicle={vehicle} />
         <ContractCard
@@ -116,7 +123,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
       </section>
 
       {/* Payment hero band: financial summary (right) + amount hero (left) */}
-      <section className="flex items-stretch py-2.5 border-b border-[#E5E7EB]">
+      <section className="a5-section flex items-stretch py-2 border-b border-[#E5E7EB]">
         <div className="flex-1 min-w-0 pe-4">
           <FinancialSummary progress={contractProgress} currency={payment.currency} />
         </div>
@@ -132,11 +139,15 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
         </div>
       </section>
 
-      <NextInstallmentStrip next={nextInstallment} progress={contractProgress} currency={payment.currency} />
+      <div className="a5-section">
+        <NextInstallmentStrip next={nextInstallment} progress={contractProgress} currency={payment.currency} />
+      </div>
 
-      <TransactionStrip payment={payment} cashierName={verification?.receivedBy} verification={verification} />
+      <div className="a5-section">
+        <TransactionStrip payment={payment} cashierName={verification?.receivedBy} verification={verification} />
+      </div>
 
-      <section className="pt-1.5 mt-auto border-t border-[#E5E7EB]">
+      <section className="a5-section pt-1.5 mt-auto border-t border-[#E5E7EB]">
         <SignatureSection
           cashierName={verification?.receivedBy}
           customerName={customer.name}
@@ -207,6 +218,11 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
             page-break-after: avoid !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+
+          #print-root .a5-section {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
         }
       `}</style>

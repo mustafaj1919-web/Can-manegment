@@ -13,8 +13,14 @@ interface NextInstallmentStripProps {
 export function NextInstallmentStrip({ next, progress, currency }: NextInstallmentStripProps) {
   if (progress?.isCompleted) {
     return (
-      <div className="flex items-center justify-center py-1 text-[9.5px] font-bold text-[#059669]">
-        العقد مسدد بالكامل — لا يوجد قسط قادم
+      <div className="flex items-center justify-center gap-2 py-1 leading-none">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" className="shrink-0 text-[#059669]">
+          <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="text-[10px] font-bold text-[#059669]">اكتمل سداد العقد</span>
+        <span className="text-[7px] font-bold text-[#059669] uppercase tracking-[0.12em] border border-[#059669] rounded-[3px] px-1 py-[1px]">
+          PAID IN FULL
+        </span>
       </div>
     )
   }
