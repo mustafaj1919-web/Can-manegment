@@ -143,6 +143,79 @@ namespace CarShowroomManagementV2.API.Controllers
             });
         }
 
+        // 4.ب جلب بيانات وصل السداد الكاملة لعرضه/طباعته (A5)
+        [HttpGet("{id}/receipt")]
+        public async Task<IActionResult> GetReceipt(Guid id)
+        {
+            var branchId = _currentUserService.BranchId;
+
+            var payment = await _context.Payments
+                .Include(p => p.JournalEntry)
+                .FirstOrDefaultAsync(p => p.Id == id && p.BranchId == branchId);
+
+            if (payment == null)
+                return NotFound(new { success = false, message = "الوصل غير موجود." });
+
+            var customer = await _context.Customers
+                .FirstOrDefaultAsync(c => c.AccountId == payment.ContraAccountId);
+
+            SalesContract? sale = null;
+            Vehicle? vehicle = null;
+            if (customer != null)
+            {
+                sale = await _context.SalesContracts
+                    .Include(sc => sc.Vehicle)
+                    .Where(sc => sc.CustomerId == customer.Id && sc.Status != "Cancelled")
+                    .OrderByDescending(sc => sc.SaleDate)
+                    .FirstOrDefaultAsync();
+                vehicle = sale?.Vehicle;
+            }
+
+            int? installmentNumber = null;
+            var numberMatch = System.Text.RegularExpressions.Regex.Match(payment.Description ?? "", @"القسط رقم (\d+)");
+            if (numberMatch.Success) installmentNumber = int.Parse(numberMatch.Groups[1].Value);
+
+            return Ok(new
+            {
+                payment = new
+                {
+                    id = payment.Id,
+                    amount = payment.Amount,
+                    currency = payment.Currency,
+                    status = payment.Status,
+                    payment_method = payment.Method.ToString(),
+                    payment_date = payment.CreatedAt,
+                    created_at = payment.CreatedAt,
+                    reference_number = payment.ReferenceNumber,
+                    notes = payment.Description
+                },
+                schedule = installmentNumber.HasValue ? new { installment_number = installmentNumber.Value } as object : null,
+                sale = sale != null ? new
+                {
+                    invoice_number = sale.ContractNumber,
+                    sale_date = sale.SaleDate
+                } as object : null,
+                customer = customer != null ? new
+                {
+                    id = customer.Id,
+                    name = customer.FullName ?? customer.Name,
+                    phone = customer.Phone,
+                    national_id = customer.IdNumber
+                } as object : null,
+                car = vehicle != null ? new
+                {
+                    brand = vehicle.Brand,
+                    model = vehicle.Model,
+                    year = vehicle.Year,
+                    vin = vehicle.ChassisNumber,
+                    plate_number = vehicle.PlateNumber,
+                    color = vehicle.Color
+                } as object : null,
+                journal_entry_number = payment.JournalEntry?.EntryNumber,
+                cancellation_reason = payment.Status == "cancelled" ? "تم إلغاء هذا السند" : null
+            });
+        }
+
         // 4. إنشاء سند قبض أو صرف مالي (بحسابات بالمعرّف مباشرة)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreatePaymentCommand command)
