@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getGeneralLedger, GeneralLedgerRow, GeneralLedgerParams } from '@/lib/api/general-ledger'
 import { exportXlsx } from '@/lib/export'
+import { fetchPaginatedExportData } from '@/lib/financialExport'
 import { toast } from 'sonner'
 
 import { GeneralLedgerPageHeader } from '@/components/accounting/general-ledger/GeneralLedgerPageHeader'
@@ -33,6 +34,7 @@ export default function GeneralLedgerPage() {
 
   const [selectedRow, setSelectedRow] = useState<GeneralLedgerRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [lastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('ar-IQ'))
 
   // React Query Server-Side Data Fetching
@@ -99,35 +101,108 @@ export default function GeneralLedgerPage() {
 
   // Export Excel Infrastructure
   const handleExportExcel = async () => {
-    if (rows.length === 0) {
-      toast.error('لا توجد حركات لمحاسبية لتصديرها')
-      return
+    if (isExporting) return
+    setIsExporting(true)
+
+    try {
+      const fetchParams = {
+        account_code: selectedAccount,
+        start_date: startDate,
+        end_date: endDate,
+        document_type: docTypeFilter,
+        status: statusFilter,
+        search: searchQuery.trim() || undefined,
+      }
+
+      const { items: exportedItems, totalMatching, truncated } = await fetchPaginatedExportData<GeneralLedgerRow>({
+        fetchPage: async (p) => {
+          const res = await getGeneralLedger({
+            ...fetchParams,
+            page: p.page,
+            per_page: p.per_page,
+          })
+          return { items: res.items, total: res.total }
+        },
+        baseParams: fetchParams,
+        getId: (r) => `${r.journal_ref}_${r.account_code}_${r.debit}_${r.credit}_${r.date}`,
+        pageSize: 200,
+        maxRows: 5000,
+      })
+
+      if (totalMatching === 0 || exportedItems.length === 0) {
+        toast.error('لا توجد حركات لمحاسبية لتصديرها')
+        return
+      }
+
+      const canonicalSummary = summary
+
+      const headers = [
+        'رمز الحساب',
+        'اسم الحساب',
+        'التاريخ',
+        'رقم القيد',
+        'رقم المستند',
+        'نوع المستند',
+        'الوصف والبيان',
+        'الفرع',
+        'المدين',
+        'الدائن',
+        'الرصيد الجاري',
+        'المستخدم',
+        'الحالة'
+      ]
+
+      const exportRows = exportedItems.map(r => [
+        r.account_code,
+        r.account_name,
+        r.date ? new Date(r.date).toLocaleDateString('ar-IQ') : '',
+        r.journal_ref,
+        r.document_number,
+        r.document_type,
+        r.description,
+        r.branch_name,
+        Number(r.debit || 0),
+        Number(r.credit || 0),
+        Number(r.running_balance || 0),
+        r.created_by,
+        r.status === 'posted' ? 'مرحل' : r.status === 'reversed' ? 'معكوس' : 'مسودة'
+      ])
+
+      // Canonical summary row
+      exportRows.push([
+        'الملخص العام (افتتاحي / حركات / ختامي)',
+        '',
+        '',
+        '',
+        '',
+        '',
+        `الافتتاحي: ${canonicalSummary.opening_balance}`,
+        '',
+        Number(canonicalSummary.total_debit || 0),
+        Number(canonicalSummary.total_credit || 0),
+        Number(canonicalSummary.closing_balance || 0),
+        `صافي الحركة: ${canonicalSummary.net_movement}`,
+        ''
+      ])
+
+      const dateSuffix = startDate || endDate 
+        ? `${startDate || ''}_to_${endDate || ''}`
+        : new Date().toISOString().split('T')[0]
+      const filename = `general-ledger-${dateSuffix}.xlsx`
+
+      await exportXlsx(filename, headers, exportRows)
+
+      if (truncated) {
+        toast.warning(`تم تصدير أول 5,000 سجل من أصل ${totalMatching.toLocaleString('ar-IQ')} سجل. يرجى تضييق نطاق البحث أو الفترة لتصدير جميع النتائج.`)
+      } else {
+        toast.success(`تم تصدير ${exportedItems.length} حركة محاسبية بنجاح!`)
+      }
+    } catch (err) {
+      console.error('[GeneralLedger Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setIsExporting(false)
     }
-
-    const headers = [
-      'التاريخ', 'رقم القيد', 'رقم المستند', 'نوع المستند',
-      'رمز الحساب', 'اسم الحساب', 'الوصف والبيان', 'الفرع',
-      'المدين', 'الدائن', 'الرصيد الجاري', 'المستخدم', 'الحالة'
-    ]
-
-    const exportData = rows.map(r => [
-      new Date(r.date).toLocaleDateString('ar-IQ'),
-      r.journal_ref,
-      r.document_number,
-      r.document_type,
-      r.account_code,
-      r.account_name,
-      r.description,
-      r.branch_name,
-      r.debit,
-      r.credit,
-      r.running_balance,
-      r.created_by,
-      r.status === 'posted' ? 'مرحل' : r.status === 'reversed' ? 'معكوس' : 'مسودة'
-    ])
-
-    await exportXlsx(`دفتر_الأستاذ_العام_${new Date().toISOString().split('T')[0]}`, headers, exportData)
-    toast.success('تم تصدير دفتر الأستاذ العام بنجاح!')
   }
 
   // Print View Infrastructure
@@ -148,6 +223,7 @@ export default function GeneralLedgerPage() {
         onExportPdf={handleExportExcel}
         onPrint={handlePrint}
         onRefresh={() => refetch()}
+        isExporting={isExporting}
         isRefreshing={isLoading}
         lastSyncTime={lastSyncTime}
       />

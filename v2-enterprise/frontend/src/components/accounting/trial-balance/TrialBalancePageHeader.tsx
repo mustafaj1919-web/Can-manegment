@@ -18,6 +18,7 @@ interface TrialBalancePageHeaderProps {
   onRefresh: () => void
   onToggleComparison: () => void
   isComparing?: boolean
+  isExporting?: boolean
   isRefreshing?: boolean
   lastSyncTime?: string
   currentBranch?: string
@@ -30,6 +31,7 @@ export function TrialBalancePageHeader({
   onRefresh,
   onToggleComparison,
   isComparing = false,
+  isExporting = false,
   isRefreshing = false,
   lastSyncTime = 'منذ لحظات',
   currentBranch = 'الفرع الرئيسي',
@@ -51,16 +53,16 @@ export function TrialBalancePageHeader({
               المحاسبة
             </Link>
             <ChevronLeft className="h-3.5 w-3.5 text-[#98A2B3] rotate-180" />
-            <span className="text-[#175CD3] font-bold">ميزان المراجعة المحاسبي</span>
+            <span className="text-[#175CD3] font-bold">ميزان المراجعة</span>
           </nav>
 
           {/* Title & Subtitle */}
           <div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#101828]">
-              ميزان المراجعة المحاسبي
+              ميزان المراجعة (Trial Balance)
             </h1>
             <p className="text-xs sm:text-sm text-[#475467] mt-0.5">
-              مراجعة أرصدة وحركات الحسابات المحاسبية والتحقق التام من توازن المبالغ المدينة والدائنة
+              تحليل أرصدة الحسابات وحركات الفترة والتحقق التلقائي من التوازن المحاسبي المزدوج (6 أعمدة)
             </p>
           </div>
 
@@ -68,7 +70,7 @@ export function TrialBalancePageHeader({
           <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
             <span className="inline-flex items-center gap-1.5 rounded-md bg-[#F2F4F7] border border-[#D0D5DD] px-2.5 py-1 text-[#344054] font-medium">
               <Calendar className="h-3.5 w-3.5 text-[#667085]" />
-              <span>الفترة المحاسبية: 2026</span>
+              <span>السنة المالية: 2026</span>
             </span>
 
             <span className="inline-flex items-center gap-1.5 rounded-md bg-[#F2F4F7] border border-[#D0D5DD] px-2.5 py-1 text-[#344054] font-medium">
@@ -78,7 +80,7 @@ export function TrialBalancePageHeader({
 
             <span className="inline-flex items-center gap-1.5 rounded-md bg-[#F2F4F7] border border-[#D0D5DD] px-2.5 py-1 text-[#344054] font-medium">
               <DollarSign className="h-3.5 w-3.5 text-[#667085]" />
-              <span>العملة الأساسية: د.ع (IQD)</span>
+              <span>العملة: د.ع (IQD)</span>
             </span>
 
             <span className="inline-flex items-center gap-1.5 text-[11px] text-[#667085] pr-1">
@@ -109,10 +111,11 @@ export function TrialBalancePageHeader({
             type="button"
             size="sm"
             onClick={onExportExcel}
-            className="h-9 gap-2 bg-[#175CD3] text-white hover:bg-[#1570EF] font-bold text-xs shadow-xs"
+            disabled={isExporting}
+            className="h-9 gap-2 bg-[#175CD3] text-white hover:bg-[#1570EF] font-bold text-xs shadow-xs disabled:opacity-50"
           >
             <FileSpreadsheet className="h-4 w-4 text-white" />
-            <span>تصدير Excel</span>
+            <span>{isExporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
           </Button>
 
           {/* Overflow Menu */}

@@ -20,6 +20,7 @@ interface ChartOfAccountsPageHeaderProps {
   onExportExcel: () => void
   onRecomputeBalances: () => void
   isRecomputing: boolean
+  isExporting?: boolean
   lastSyncTime: string
   branchLabel?: string
 }
@@ -29,6 +30,7 @@ export function ChartOfAccountsPageHeader({
   onExportExcel,
   onRecomputeBalances,
   isRecomputing,
+  isExporting = false,
   lastSyncTime,
   branchLabel = 'جميع الفروع',
 }: ChartOfAccountsPageHeaderProps) {
@@ -44,49 +46,42 @@ export function ChartOfAccountsPageHeader({
           المحاسبة والتقارير
         </Link>
         <ChevronLeft className="h-3.5 w-3.5 text-[#98A2B3] rotate-180" />
-        <span className="font-semibold text-[#101828]">دليل الحسابات</span>
+        <span className="text-[#175CD3] font-semibold">دليل الحسابات</span>
       </div>
 
-      {/* Main Title Row: Title & Action Buttons aligned vertically */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        {/* Title & Subtitle Block */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#101828]">
-              دليل الحسابات
-            </h1>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D0D5DD] bg-[#F9FAFB] px-2.5 py-0.5 text-xs font-semibold text-[#344054]">
-              <ShieldCheck className="h-3.5 w-3.5 text-[#175CD3]" />
-              <span>السنة المالية 2026</span>
-            </span>
-          </div>
-
-          <p className="text-sm font-normal text-[#667085]">
-            إدارة الهيكل المحاسبي والحسابات والأرصدة المالية لنظام ERP المركزي
+      {/* Main Header & Actions */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#101828]">
+            دليل الحسابات الشامل
+          </h1>
+          <p className="text-sm text-[#475467] mt-1">
+            الهيكل المحاسبي العام الموحد لجميع الفروع والشركات، وإدارة دليل الحسابات بالتصنيف العراقي والمعايير الدولية (IFRS)
           </p>
         </div>
 
-        {/* Action Buttons Block (Aligned with Title on Desktop) */}
-        <div className="flex items-center gap-2.5 shrink-0 self-start lg:self-center">
+        {/* Primary Actions */}
+        <div className="flex items-center gap-2.5">
           <Button
             type="button"
             onClick={onAddAccount}
             size="sm"
-            className="bg-[#175CD3] hover:bg-[#1570EF] text-white font-semibold text-sm h-10 px-4 gap-2 shadow-xs border border-[#175CD3] rounded-md"
+            className="bg-[#175CD3] hover:bg-[#1570EF] text-white font-semibold text-sm h-10 px-4 gap-2 rounded-md shadow-xs"
           >
             <Plus className="h-4 w-4" />
-            <span>حساب جديد</span>
+            <span>إضافة حساب جديد</span>
           </Button>
 
           <Button
             type="button"
             variant="outline"
             onClick={onExportExcel}
+            disabled={isExporting}
             size="sm"
-            className="border-[#D0D5DD] hover:bg-[#F9FAFB] text-[#344054] font-semibold text-sm h-10 px-4 gap-2 rounded-md"
+            className="border-[#D0D5DD] hover:bg-[#F9FAFB] text-[#344054] font-semibold text-sm h-10 px-4 gap-2 rounded-md disabled:opacity-50"
           >
             <FileSpreadsheet className="h-4 w-4 text-[#067647]" />
-            <span>تصدير Excel</span>
+            <span>{isExporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
           </Button>
 
           <DropdownMenu dir="rtl">

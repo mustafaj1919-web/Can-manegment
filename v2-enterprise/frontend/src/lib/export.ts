@@ -39,6 +39,13 @@ export function exportCsv(
   triggerDownload(blob, `${filename}.csv`)
 }
 
+export function normalizeFilename(filename?: string): string {
+  let name = (filename || '').trim()
+  if (!name) return 'export.xlsx'
+  if (name.toLowerCase().endsWith('.xlsx')) return name
+  return `${name}.xlsx`
+}
+
 /**
  * Exports data as a proper .xlsx file using write-excel-file.
  * The library is dynamically imported so it is not included in the initial bundle.
@@ -49,6 +56,8 @@ export async function exportXlsx(
   rows: (string | number | boolean | Date | null | undefined)[][]
 ): Promise<void> {
   const { default: writeXlsxFile } = await import('write-excel-file/browser')
+  
+  const normalizedFilename = normalizeFilename(filename)
   
   const sheetData = [
     headers.map((h) => ({ value: h, fontWeight: 'bold' as const, type: String })),
@@ -79,7 +88,10 @@ export async function exportXlsx(
     ),
   ]
   
-  // write-excel-file uses wrapper types (String, Number) but accepts primitives at runtime.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (writeXlsxFile as any)(sheetData, { fileName: `${filename}.xlsx` })
+  const writer = writeXlsxFile(sheetData, { rightToLeft: true })
+  if (!writer || typeof writer.toFile !== 'function') {
+    throw new Error('فشل إنشاء ملف Excel: لم يتم التعرف على واجهة الكتابة (writeXlsxFile)')
+  }
+  
+  await writer.toFile(normalizedFilename)
 }

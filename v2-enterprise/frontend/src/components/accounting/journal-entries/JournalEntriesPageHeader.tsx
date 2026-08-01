@@ -17,6 +17,7 @@ interface JournalEntriesPageHeaderProps {
   onExportPdf: () => void
   onPrint: () => void
   onRefresh: () => void
+  isExporting?: boolean
   isRefreshing?: boolean
   lastSyncTime?: string
   currentBranch?: string
@@ -28,6 +29,7 @@ export function JournalEntriesPageHeader({
   onExportPdf,
   onPrint,
   onRefresh,
+  isExporting = false,
   isRefreshing = false,
   lastSyncTime = 'منذ لحظات',
   currentBranch = 'الفرع الرئيسي',
@@ -96,10 +98,11 @@ export function JournalEntriesPageHeader({
             variant="outline"
             size="sm"
             onClick={onExportExcel}
-            className="h-9 gap-2 border-[#D0D5DD] bg-white text-[#344054] hover:bg-[#F9FAFB] hover:text-[#101828] font-bold text-xs shadow-2xs"
+            disabled={isExporting}
+            className="h-9 gap-2 border-[#D0D5DD] bg-white text-[#344054] hover:bg-[#F9FAFB] hover:text-[#101828] font-bold text-xs shadow-2xs disabled:opacity-50"
           >
             <FileSpreadsheet className="h-4 w-4 text-[#027A48]" />
-            <span>تصدير Excel</span>
+            <span>{isExporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
           </Button>
 
           {/* Primary Action: New Journal Entry */}

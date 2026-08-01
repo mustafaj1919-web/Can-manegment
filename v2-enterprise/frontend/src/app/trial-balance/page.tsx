@@ -8,7 +8,7 @@ import { TrialBalanceSummaryStrip } from '@/components/accounting/trial-balance/
 import { TrialBalanceToolbar, TableDensity, ViewMode } from '@/components/accounting/trial-balance/TrialBalanceToolbar'
 import { TrialBalanceTable } from '@/components/accounting/trial-balance/TrialBalanceTable'
 import { TrialBalanceDrawer } from '@/components/accounting/trial-balance/TrialBalanceDrawer'
-import { exportCsv } from '@/lib/export'
+import { exportXlsx } from '@/lib/export'
 import { useToast } from '@/lib/hooks/useToast'
 
 export default function TrialBalancePage() {
@@ -26,6 +26,7 @@ export default function TrialBalancePage() {
   const [isComparing, setIsComparing] = useState<boolean>(false)
   const [selectedAccount, setSelectedAccount] = useState<TrialBalanceAccount | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false)
+  const [isExporting, setIsExporting] = useState<boolean>(false)
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set(['1', '11', '111', '2', '3', '4', '5']))
 
   const [columnsVisibility, setColumnsVisibility] = useState<Record<string, boolean>>({
@@ -60,46 +61,23 @@ export default function TrialBalancePage() {
     is_balanced: true,
   }, [data])
 
-  // Filter Accounts Based on User Criteria
+  // Filter accounts over dataset according to screen presentation state
   const filteredAccounts = useMemo(() => {
-    return rawAccounts.filter(acc => {
-      // 1. Search Query Filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase()
-        const matchCode = acc.code.toLowerCase().includes(q)
-        const matchName = acc.name.toLowerCase().includes(q)
-        if (!matchCode && !matchName) return false
-      }
+    return rawAccounts.filter(a => {
+      const matchSearch = !searchQuery.trim() || 
+        a.code.includes(searchQuery.trim()) || 
+        a.name.includes(searchQuery.trim())
 
-      // 2. Account Type Filter
-      if (accountTypeFilter !== 'all' && acc.type !== accountTypeFilter) {
-        return false
-      }
+      const matchType = accountTypeFilter === 'all' || a.type === accountTypeFilter
+      
+      const matchZero = !hideZeroBalances || 
+        Math.abs(a.balance) > 0.001 || 
+        Math.abs(a.debit || 0) > 0.001 || 
+        Math.abs(a.credit || 0) > 0.001
 
-      // 3. Account Level Filter
-      if (accountLevelFilter !== 'all') {
-        const len = acc.code.length
-        if (accountLevelFilter === '1' && len !== 1) return false
-        if (accountLevelFilter === '2' && len !== 2) return false
-        if (accountLevelFilter === '3' && len !== 3) return false
-        if (accountLevelFilter === '4' && len < 4) return false
-      }
-
-      // 4. Zero Balance Filter
-      if (hideZeroBalances) {
-        const isZero =
-          acc.opening_debit === 0 &&
-          acc.opening_credit === 0 &&
-          acc.period_debit === 0 &&
-          acc.period_credit === 0 &&
-          acc.closing_debit === 0 &&
-          acc.closing_credit === 0
-        if (isZero) return false
-      }
-
-      return true
+      return matchSearch && matchType && matchZero
     })
-  }, [rawAccounts, searchQuery, accountTypeFilter, accountLevelFilter, hideZeroBalances])
+  }, [rawAccounts, searchQuery, accountTypeFilter, hideZeroBalances])
 
   // Count active filters
   const activeFilterCount = useMemo(() => {
@@ -122,7 +100,7 @@ export default function TrialBalancePage() {
     setHideZeroBalances(false)
   }
 
-  // Toggle Hierarchy Folder Node
+  // Row Expand/Collapse Handler
   const handleToggleExpand = (code: string) => {
     setExpandedCodes(prev => {
       const next = new Set(prev)
@@ -146,29 +124,161 @@ export default function TrialBalancePage() {
     setIsDrawerOpen(true)
   }
 
-  // Export Handlers
-  const handleExportExcel = () => {
+  // Export Handlers — 6-Column Model XLSX Export
+  const handleExportExcel = async () => {
     if (filteredAccounts.length === 0) {
-      toast.error('لا توجد بيانات للتصدير')
+      toast.error('لا توجد بيانات مطابقة لتصديرها')
       return
     }
 
-    const headers = ['رمز الحساب', 'اسم الحساب', 'نوع الحساب', 'افتتاحي مدين', 'افتتاحي دائن', 'حركة الفترة مدين', 'حركة الفترة دائن', 'ختامي مدين', 'ختامي دائن', 'صافي الرصيد']
-    const rows = filteredAccounts.map(a => [
-      a.code,
-      a.name,
-      a.type,
-      a.opening_debit,
-      a.opening_credit,
-      a.period_debit,
-      a.period_credit,
-      a.closing_debit,
-      a.closing_credit,
-      a.balance,
-    ])
+    if (isExporting) return
+    setIsExporting(true)
 
-    exportCsv(`mizan_al_marajaa_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows)
-    toast.success('تم تصدير ملف ميزان المراجعة بنجاح')
+    try {
+      const headers = [
+        'رمز الحساب',
+        'اسم الحساب',
+        'نوع الحساب',
+        'الافتتاحي مدين',
+        'الافتتاحي دائن',
+        'الحركة مدين',
+        'الحركة دائن',
+        'الختامي مدين',
+        'الختامي دائن'
+      ]
+
+      let sumOpeningDebit = 0
+      let sumOpeningCredit = 0
+      let sumPeriodDebit = 0
+      let sumPeriodCredit = 0
+      let sumClosingDebit = 0
+      let sumClosingCredit = 0
+
+      const rows = filteredAccounts.map(a => {
+        const opDebit = Number(a.opening_debit ?? (a.debit || 0))
+        const opCredit = Number(a.opening_credit ?? (a.credit || 0))
+        const perDebit = Number(a.period_debit ?? 0)
+        const perCredit = Number(a.period_credit ?? 0)
+        const clDebit = Number(a.closing_debit ?? (a.debit || 0))
+        const clCredit = Number(a.closing_credit ?? (a.credit || 0))
+
+        sumOpeningDebit += opDebit
+        sumOpeningCredit += opCredit
+        sumPeriodDebit += perDebit
+        sumPeriodCredit += perCredit
+        sumClosingDebit += clDebit
+        sumClosingCredit += clCredit
+
+        return [
+          a.code,
+          a.name,
+          a.type,
+          opDebit,
+          opCredit,
+          perDebit,
+          perCredit,
+          clDebit,
+          clCredit,
+        ]
+      })
+
+      // Section Totals: Opening Balance
+      const opDebitTotal = backendTotals.opening_debit || sumOpeningDebit
+      const opCreditTotal = backendTotals.opening_credit || sumOpeningCredit
+      const opDiff = opDebitTotal - opCreditTotal
+
+      rows.push([
+        'إجمالي الرصيد الافتتاحي',
+        '',
+        '',
+        opDebitTotal,
+        opCreditTotal,
+        '',
+        '',
+        '',
+        ''
+      ])
+      rows.push([
+        'فرق الافتتاحي (مدين - دائن)',
+        '',
+        '',
+        opDiff,
+        '',
+        '',
+        '',
+        '',
+        Math.abs(opDiff) < 0.001 ? 'متوازن' : 'غير متوازن'
+      ])
+
+      // Section Totals: Period Movements
+      const perDebitTotal = backendTotals.period_debit || sumPeriodDebit
+      const perCreditTotal = backendTotals.period_credit || sumPeriodCredit
+      const perDiff = perDebitTotal - perCreditTotal
+
+      rows.push([
+        'إجمالي حركات الفترة',
+        '',
+        '',
+        '',
+        '',
+        perDebitTotal,
+        perCreditTotal,
+        '',
+        ''
+      ])
+      rows.push([
+        'فرق الحركة (مدين - دائن)',
+        '',
+        '',
+        '',
+        '',
+        perDiff,
+        '',
+        '',
+        Math.abs(perDiff) < 0.001 ? 'متوازن' : 'غير متوازن'
+      ])
+
+      // Section Totals: Closing Balance
+      const clDebitTotal = backendTotals.closing_debit || sumClosingDebit
+      const clCreditTotal = backendTotals.closing_credit || sumClosingCredit
+      const clDiff = backendTotals.difference ?? (clDebitTotal - clCreditTotal)
+
+      rows.push([
+        'إجمالي الرصيد الختامي',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        clDebitTotal,
+        clCreditTotal
+      ])
+      rows.push([
+        'فرق الختامي النهائي',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        clDiff,
+        Math.abs(clDiff) < 0.001 ? 'متوازن' : 'غير متوازن'
+      ])
+
+      const dateSuffix = startDate || endDate 
+        ? `${startDate || ''}_to_${endDate || ''}`
+        : new Date().toISOString().split('T')[0]
+      const filename = `mizan-al-marajaa-${dateSuffix}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+      toast.success(`تم تصدير ميزان المراجعة (${filteredAccounts.length} حساب) بنجاح!`)
+    } catch (err) {
+      console.error('[TrialBalance Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const handleExportPdf = () => {
@@ -188,6 +298,7 @@ export default function TrialBalancePage() {
           onToggleComparison={() => setIsComparing(prev => !prev)}
           isComparing={isComparing}
           isRefreshing={isFetching}
+          isExporting={isExporting}
         />
 
         {/* 2. Authoritative Financial Summary Strip */}

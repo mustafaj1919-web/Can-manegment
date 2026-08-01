@@ -17,6 +17,7 @@ interface GeneralLedgerPageHeaderProps {
   onExportPdf: () => void
   onPrint: () => void
   onRefresh: () => void
+  isExporting?: boolean
   isRefreshing?: boolean
   lastSyncTime?: string
   currentBranch?: string
@@ -27,6 +28,7 @@ export function GeneralLedgerPageHeader({
   onExportPdf,
   onPrint,
   onRefresh,
+  isExporting = false,
   isRefreshing = false,
   lastSyncTime = 'منذ لحظات',
   currentBranch = 'الفرع الرئيسي',
@@ -106,10 +108,11 @@ export function GeneralLedgerPageHeader({
             type="button"
             size="sm"
             onClick={onExportExcel}
-            className="h-9 gap-2 bg-[#175CD3] text-white hover:bg-[#1570EF] font-bold text-xs shadow-xs"
+            disabled={isExporting}
+            className="h-9 gap-2 bg-[#175CD3] text-white hover:bg-[#1570EF] font-bold text-xs shadow-xs disabled:opacity-50"
           >
             <FileSpreadsheet className="h-4 w-4 text-white" />
-            <span>تصدير Excel</span>
+            <span>{isExporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
           </Button>
 
           {/* Overflow Menu */}

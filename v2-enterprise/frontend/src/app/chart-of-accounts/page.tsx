@@ -257,6 +257,8 @@ export default function ChartOfAccountsPage() {
     setDrawerOpen(true)
   }
 
+  const [isExporting, setIsExporting] = useState(false)
+
   // Excel Export
   const handleExportExcel = async () => {
     if (!data?.flat || data.flat.length === 0) {
@@ -264,29 +266,66 @@ export default function ChartOfAccountsPage() {
       return
     }
 
-    const headers = ['رمز الحساب', 'اسم الحساب', 'المستوى', 'النوع', 'التصنيف', 'المدين', 'الدائن', 'الرصيد', 'الحالة']
-    const rows = data.flat.map(node => {
-      const indent = '  '.repeat(Math.max(0, node.depth))
-      const displayName = node.depth > 0 ? `${indent}└ ${node.name}` : node.name
-      const debit = node.subtree_debit ?? node.debit ?? 0
-      const credit = node.subtree_credit ?? node.credit ?? 0
-      const balance = node.subtree_balance ?? node.balance ?? 0
+    if (isExporting) return
+    setIsExporting(true)
 
-      return [
-        node.code,
-        displayName,
-        node.level,
-        node.type_label || node.type,
-        node.classification_label || node.classification || '—',
-        debit,
-        credit,
-        balance,
-        node.is_active ? 'نشط' : 'مؤرشف'
+    try {
+      // Build code-to-account lookup map for clean Parent Account representation
+      const accountMap = new Map<string, string>()
+      data.flat.forEach(node => {
+        accountMap.set(String(node.code), node.name)
+      })
+
+      const headers = [
+        'رمز الحساب',
+        'اسم الحساب',
+        'الحساب الأب',
+        'المستوى',
+        'نوع الحساب',
+        'التصنيف',
+        'المدين',
+        'الدائن',
+        'الرصيد الصافي',
+        'الحالة'
       ]
-    })
 
-    await exportXlsx(`دليل_الحسابات_${new Date().toISOString().split('T')[0]}`, headers, rows)
-    toast.success('تم تصدير دليل الحسابات بنجاح!')
+      const rows = data.flat.map(node => {
+        // Clean name without '└' characters
+        const cleanName = node.name.trim()
+        
+        // Find parent account code/name if parent_code or parent_id exists
+        const parentCode = (node as any).parent_code || (node as any).parentId || (node as any).parent_id || ''
+        const parentName = parentCode ? (accountMap.get(String(parentCode)) || parentCode) : '—'
+
+        const debit = Number(node.subtree_debit ?? node.debit ?? 0)
+        const credit = Number(node.subtree_credit ?? node.credit ?? 0)
+        const balance = Number(node.subtree_balance ?? node.balance ?? 0)
+
+        return [
+          node.code,
+          cleanName,
+          parentName,
+          node.level,
+          node.type_label || node.type,
+          node.classification_label || node.classification || '—',
+          debit,
+          credit,
+          balance,
+          node.is_active ? 'نشط' : 'مؤرشف'
+        ]
+      })
+
+      // Double-Counting Safeguard: DO NOT append a naive SUM row of parent + child rollup balances.
+
+      const dateStr = new Date().toISOString().split('T')[0]
+      await exportXlsx(`دليل_الحسابات_${dateStr}.xlsx`, headers, rows)
+      toast.success(`تم تصدير دليل الحسابات (${data.flat.length} حساب) بنجاح!`)
+    } catch (err) {
+      console.error('[ChartOfAccounts Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const isBalanced = trialBalance?.status === 'balanced'
@@ -304,6 +343,7 @@ export default function ChartOfAccountsPage() {
         onExportExcel={handleExportExcel}
         onRecomputeBalances={() => recomputeMut.mutate()}
         isRecomputing={recomputeMut.isPending}
+        isExporting={isExporting}
         lastSyncTime={lastSyncTime}
       />
 
