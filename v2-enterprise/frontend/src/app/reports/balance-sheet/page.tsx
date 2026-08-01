@@ -8,6 +8,7 @@ import { cn, formatMoney } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { exportXlsx } from '@/lib/export'
+import { toast } from 'sonner'
 
 /* ─── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -95,48 +96,69 @@ export default function BalanceSheetPage() {
 
   const handleExport = async () => {
     if (!data) return
+    if (exporting) return
     setExporting(true)
+
     try {
       const headers = ['التصنيف الرئيسي', 'التصنيف الفرعي', 'رمز الحساب', 'اسم الحساب', 'المبلغ (د.ع)']
       const rows: (string | number)[][] = []
 
-      // Helper to push section groups
+      // Double-Counting Safeguard helper: only push leaf accounts to avoid double-counting rollup group balances
       const pushSection = (sectionName: string, groups: any[]) => {
         const safeGroups = Array.isArray(groups) ? groups : []
         safeGroups.forEach(g => {
           if (!g) return
-          // Push group header row
-          rows.push([sectionName, g.name ?? '', g.code ?? '', 'حساب رئيسي', g.balance ?? 0])
-          // Push children accounts
           const safeChildren = Array.isArray(g.children) ? g.children : []
-          safeChildren.forEach((c: any) => {
-            if (!c) return
-            rows.push([sectionName, g.name ?? '', c.code ?? '', c.name ?? '', c.balance ?? 0])
-          })
+          if (safeChildren.length > 0) {
+            safeChildren.forEach((c: any) => {
+              if (!c) return
+              rows.push([sectionName, g.name ?? '', c.code ?? '', c.name ?? '', Number(c.balance ?? 0)])
+            })
+          } else {
+            // Leaf group without sub-children
+            rows.push([sectionName, g.name ?? '', g.code ?? '', g.name ?? '', Number(g.balance ?? 0)])
+          }
         })
       }
 
-      // Add Assets
+      // Section 1: Assets (الموجودات)
       pushSection('الموجودات (الأصول)', assets)
-      rows.push(['إجمالي الموجودات (الأصول)', '', '', '', data.total_assets])
+      rows.push(['إجمالي الموجودات (الأصول)', '', '', '', Number(data.total_assets || 0)])
       rows.push(['', '', '', '', ''])
 
-      // Add Liabilities
+      // Section 2: Liabilities (المطلوبات - includes Customer Credit Balances / أرصدة دائنة للعملاء)
       pushSection('المطلوبات (الخصوم)', liabilities)
-      rows.push(['إجمالي المطلوبات (الخصوم)', '', '', '', data.total_liabilities])
+      rows.push(['إجمالي المطلوبات (الخصوم)', '', '', '', Number(data.total_liabilities || 0)])
       rows.push(['', '', '', '', ''])
 
-      // Add Equity
+      // Section 3: Equity (حقوق الملكية)
       pushSection('حقوق الملكية', equity)
-      rows.push(['إجمالي حقوق الملكية', '', '', '', data.total_equity])
+      rows.push(['إجمالي حقوق الملكية', '', '', '', Number(data.total_equity || 0)])
       rows.push(['', '', '', '', ''])
 
-      // Add Summary Balance Check
-      rows.push(['حالة الميزانية', data.is_balanced ? 'متوازنة' : 'غير متوازنة', 'الفرق', '', data.difference])
+      // Total Liabilities + Equity
+      const totalLiabEquity = Number(data.total_liabilities || 0) + Number(data.total_equity || 0)
+      rows.push(['إجمالي المطلوبات وحقوق الملكية', '', '', '', totalLiabEquity])
+      rows.push(['', '', '', '', ''])
 
-      await exportXlsx(`الميزانية_العمومية`, headers, rows)
+      // Authoritative Balance Sheet Reconciliation Check
+      const isBalanced = data.is_balanced ?? Math.abs(data.total_assets - totalLiabEquity) < 0.001
+      const diffVal = Number(data.difference ?? (data.total_assets - totalLiabEquity))
+
+      rows.push([
+        isBalanced ? 'حالة الميزانية: متوازنة' : 'حالة الميزانية: غير متوازنة (تحذير)',
+        '',
+        '',
+        'فرق التوازن (الأصول - المطلوبات والملكية)',
+        diffVal
+      ])
+
+      const dateStr = new Date().toISOString().split('T')[0]
+      await exportXlsx(`balance-sheet-${dateStr}.xlsx`, headers, rows)
+      toast.success('تم تصدير الميزانية العمومية بنجاح!')
     } catch (err) {
-      console.error(err)
+      console.error('[BalanceSheet Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
     } finally {
       setExporting(false)
     }

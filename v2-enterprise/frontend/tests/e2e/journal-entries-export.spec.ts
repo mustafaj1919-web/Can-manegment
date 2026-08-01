@@ -128,4 +128,112 @@ test.describe('Batch 1 Financial Excel Export Physical Download Suite', () => {
     fs.unlinkSync(tempPath)
   })
 
+  test('5. Physical Download: Export Excel on /reports/profit-loss', async ({ page }) => {
+    await login(page)
+    await navTo(page, '/reports/profit-loss')
+
+    const exportBtn = page.getByRole('button', { name: /تصدير/i }).first()
+    await expect(exportBtn).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 15_000 })
+    await exportBtn.click()
+
+    const download = await downloadPromise
+    const suggestedFilename = download.suggestedFilename()
+
+    expect(suggestedFilename.endsWith('.xlsx')).toBe(true)
+
+    const tempPath = path.join(process.cwd(), 'tests', 'results', `test-pl-${Date.now()}.xlsx`)
+    await download.saveAs(tempPath)
+
+    expect(fs.existsSync(tempPath)).toBe(true)
+    const buffer = fs.readFileSync(tempPath)
+    expect(buffer.length).toBeGreaterThan(0)
+    expect(buffer[0]).toBe(0x50)
+    expect(buffer[1]).toBe(0x4b)
+
+    fs.unlinkSync(tempPath)
+  })
+
+  test('6. Physical Download: Export Excel on /reports/balance-sheet', async ({ page }) => {
+    await login(page)
+    await navTo(page, '/reports/balance-sheet')
+
+    const exportBtn = page.getByRole('button', { name: /تصدير/i }).first()
+    await expect(exportBtn).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 15_000 })
+    await exportBtn.click()
+
+    const download = await downloadPromise
+    const suggestedFilename = download.suggestedFilename()
+
+    expect(suggestedFilename.endsWith('.xlsx')).toBe(true)
+
+    const tempPath = path.join(process.cwd(), 'tests', 'results', `test-bs-${Date.now()}.xlsx`)
+    await download.saveAs(tempPath)
+
+    expect(fs.existsSync(tempPath)).toBe(true)
+    const buffer = fs.readFileSync(tempPath)
+    expect(buffer.length).toBeGreaterThan(0)
+    expect(buffer[0]).toBe(0x50)
+    expect(buffer[1]).toBe(0x4b)
+
+    fs.unlinkSync(tempPath)
+  })
+
+  test('7. Physical Download: Export Excel on /reports/cashbox-movement', async ({ page }) => {
+    await login(page)
+    await navTo(page, '/reports/cashbox-movement')
+
+    const exportBtn = page.getByRole('button', { name: /تصدير/i }).first()
+    await expect(exportBtn).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 15_000 })
+    await exportBtn.click()
+
+    const download = await downloadPromise
+    const suggestedFilename = download.suggestedFilename()
+
+    expect(suggestedFilename.endsWith('.xlsx')).toBe(true)
+
+    const tempPath = path.join(process.cwd(), 'tests', 'results', `test-cb-${Date.now()}.xlsx`)
+    await download.saveAs(tempPath)
+
+    expect(fs.existsSync(tempPath)).toBe(true)
+    const buffer = fs.readFileSync(tempPath)
+    expect(buffer.length).toBeGreaterThan(0)
+    expect(buffer[0]).toBe(0x50)
+    expect(buffer[1]).toBe(0x4b)
+
+    fs.unlinkSync(tempPath)
+  })
+
+  test('8. Physical Download: Export Excel on /reports/bank-movement', async ({ page }) => {
+    await login(page)
+    await navTo(page, '/reports/bank-movement')
+
+    const exportBtn = page.getByRole('button', { name: /تصدير/i }).first()
+    await expect(exportBtn).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 15_000 })
+    await exportBtn.click()
+
+    const download = await downloadPromise
+    const suggestedFilename = download.suggestedFilename()
+
+    expect(suggestedFilename.endsWith('.xlsx')).toBe(true)
+
+    const tempPath = path.join(process.cwd(), 'tests', 'results', `test-bm-${Date.now()}.xlsx`)
+    await download.saveAs(tempPath)
+
+    expect(fs.existsSync(tempPath)).toBe(true)
+    const buffer = fs.readFileSync(tempPath)
+    expect(buffer.length).toBeGreaterThan(0)
+    expect(buffer[0]).toBe(0x50)
+    expect(buffer[1]).toBe(0x4b)
+
+    fs.unlinkSync(tempPath)
+  })
+
 })

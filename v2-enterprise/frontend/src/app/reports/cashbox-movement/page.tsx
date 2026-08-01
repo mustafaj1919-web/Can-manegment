@@ -9,6 +9,7 @@ import { exportXlsx } from '@/lib/export'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from 'sonner'
 
 function money(v: number) { return formatMoney(v, 'IQD') }
 
@@ -31,18 +32,46 @@ export default function CashboxMovementPage() {
     retry: 1,
   })
 
+  const [exporting, setExporting] = useState(false)
+
   async function handleExport() {
-    if (!data?.rows?.length) return
-    const headers = ['التاريخ', 'المرجع', 'البيان', 'وارد', 'صادر', 'الرصيد']
-    const rows = data.rows.map(r => [
-      r.date ? new Date(r.date).toLocaleDateString('ar-IQ') : '',
-      r.journal_ref ?? '',
-      r.description ?? '',
-      r.inflow,
-      r.outflow,
-      r.balance,
-    ])
-    await exportXlsx(`cashbox-${accountCode}`, headers, rows)
+    if (!data) return
+    if (exporting) return
+    setExporting(true)
+
+    try {
+      const headers = ['التاريخ', 'رقم القيد / المرجع', 'البيان', 'وارد (مدين)', 'صادر (دائن)', 'الرصيد الجاري']
+      const rowItems = Array.isArray(data.rows) ? data.rows : []
+      const rows: (string | number)[][] = rowItems.map(r => [
+        r.date ? new Date(r.date).toLocaleDateString('ar-IQ') : '',
+        r.journal_ref ?? '',
+        r.description ?? '',
+        Number(r.inflow || 0),
+        Number(r.outflow || 0),
+        Number(r.balance || 0),
+      ])
+
+      // Authoritative summary row
+      rows.push([
+        'إجمالي حركات الفترة والرصيد الختامي',
+        '',
+        '',
+        Number(data.total_inflow || 0),
+        Number(data.total_outflow || 0),
+        Number(data.final_balance || 0),
+      ])
+
+      const dateSuffix = `${startDate}_to_${endDate}`
+      const filename = `cashbox-movement-${accountCode}-${dateSuffix}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+      toast.success(`تم تصدير حركة الصندوق (${rowItems.length} حركة) بنجاح!`)
+    } catch (err) {
+      console.error('[CashboxMovement Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const hasData = !isLoading && !isError && data
@@ -64,9 +93,9 @@ export default function CashboxMovementPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="glass" size="sm" onClick={handleExport} disabled={!hasData || !data?.rows?.length} className="gap-2 h-8">
+          <Button variant="glass" size="sm" onClick={handleExport} disabled={!hasData || exporting} className="gap-2 h-8">
             <Download className="h-3.5 w-3.5" />
-            تصدير
+            <span>{exporting ? 'جاري التصدير...' : 'تصدير'}</span>
           </Button>
           <Button variant="glass" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 h-8">
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />

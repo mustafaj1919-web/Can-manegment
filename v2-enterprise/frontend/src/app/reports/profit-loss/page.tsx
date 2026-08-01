@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { exportXlsx } from '@/lib/export'
+import { toast } from 'sonner'
 
 export default function ProfitLossPage() {
   const today = new Date()
@@ -38,35 +39,41 @@ export default function ProfitLossPage() {
 
   const handleExport = async () => {
     if (!data) return
+    if (exporting) return
     setExporting(true)
+
     try {
-      const headers = ['نوع البند', 'رمز الحساب', 'اسم الحساب', 'المبلغ (د.ع)']
+      const headers = ['رمز الحساب', 'اسم الحساب', 'نوع البند', 'المبلغ (د.ع)']
       const rows: (string | number)[][] = []
       
-      // Add Revenues
+      // Section 1: Revenues
       revenues.forEach(r => {
-        rows.push(['إيراد', r.accountCode, r.accountName, r.amount])
+        rows.push([r.accountCode || '', r.accountName || '', 'إيراد', Number(r.amount || 0)])
       })
-      rows.push(['إجمالي الإيرادات', '', '', totalRevenues])
+      rows.push(['إجمالي الإيرادات', '', '', Number(totalRevenues)])
       
       // Empty separator row
       rows.push(['', '', '', ''])
 
-      // Add Expenses
+      // Section 2: Expenses
       expenses.forEach(e => {
-        rows.push(['مصروف', e.accountCode, e.accountName, e.amount])
+        rows.push([e.accountCode || '', e.accountName || '', 'مصروف', Number(e.amount || 0)])
       })
-      rows.push(['إجمالي المصروفات', '', '', totalExpenses])
+      rows.push(['إجمالي المصروفات', '', '', Number(totalExpenses)])
       
       // Empty separator row
       rows.push(['', '', '', ''])
 
-      // Add Net Profit
-      rows.push([netProfit >= 0 ? 'صافي الربح' : 'صافي الخسارة', '', '', netProfit])
+      // Section 3: Net Profit / Loss Result
+      const resultLabel = netProfit >= 0 ? 'صافي الربح للفترة' : 'صافي الخسارة للفترة (خسارة)'
+      rows.push([resultLabel, '', '', Number(netProfit)])
 
-      await exportXlsx(`قائمة_الأرباح_والخسائر_${applied.from}_إلى_${applied.to}`, headers, rows)
+      const filename = `profit-loss-${applied.from}-to-${applied.to}.xlsx`
+      await exportXlsx(filename, headers, rows)
+      toast.success('تم تصدير قائمة الأرباح والخسائر بنجاح!')
     } catch (err) {
-      console.error(err)
+      console.error('[ProfitLoss Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
     } finally {
       setExporting(false)
     }
