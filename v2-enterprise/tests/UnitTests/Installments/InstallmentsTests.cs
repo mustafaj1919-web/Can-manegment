@@ -275,6 +275,128 @@ namespace CarShowroomManagementV2.UnitTests.Installments
         }
 
         [Fact]
+        public async Task PayInstallment_ShouldUseContractsFrozenCurrency_UnaffectedByLaterVehicleCurrencyEdits()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            await SeedBranchAsync(context, _testBranchId, "فرع بغداد", "BR-BG");
+            await SeedAccountingSetupAsync(context, _testBranchId);
+
+            var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
+            var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Honda Civic", "CH-CIVIC-USD-1", 10000, _testBranchId);
+            vehicle.Currency = "USD";
+            context.Vehicles.Update(vehicle);
+            await context.SaveChangesAsync();
+
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var saleHandler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
+            var payHandler = new PayInstallmentCommandHandler(context, _currentUserServiceMock.Object);
+
+            var saleCommand = new CreateSaleContractCommand
+            {
+                CustomerId = customer.Id,
+                VehicleId = vehicle.Id,
+                SalePrice = 12000,
+                PaymentMethod = PaymentMethod.Cheque,
+                DownPayment = 2000,
+                InstallmentPeriodMonths = 10,
+                ProfitRatePercentage = 10
+            };
+
+            var contractId = await saleHandler.Handle(saleCommand, CancellationToken.None);
+
+            // Simulate a later, unrelated vehicle edit that drifts its currency — this is
+            // exactly the real-world scenario that produced the reported bug (contract stayed
+            // USD, but the vehicle's currency was later changed to IQD).
+            vehicle.Currency = "IQD";
+            context.Vehicles.Update(vehicle);
+            await context.SaveChangesAsync();
+
+            var plan = await context.InstallmentPlans.Include(p => p.Installments)
+                .FirstOrDefaultAsync(p => p.SalesContractId == contractId);
+            var installment = plan!.Installments.First();
+
+            // Act
+            var paymentCommand = new PayInstallmentCommand
+            {
+                InstallmentId = installment.Id,
+                Amount = 1100,
+                PaymentMethod = PaymentMethod.Cash,
+                DebitAccountCode = "111001"
+            };
+            var result = await payHandler.Handle(paymentCommand, CancellationToken.None);
+
+            // Assert: the payment must keep the contract's frozen currency (USD), not the
+            // vehicle's current (drifted) currency (IQD).
+            var payment = await context.Payments.FindAsync(result.PaymentId);
+            payment!.Currency.Should().Be("USD");
+        }
+
+        [Fact]
+        public async Task PayInstallment_LegacyContractWithNoFrozenCurrency_ShouldFallBackToVehicleCurrency_NotHardcodedDefault()
+        {
+            // Regression test for a real bug: PayInstallmentCommandHandler was missing
+            // .Include(sc => sc.Vehicle) on its SalesContracts query, so contract.Vehicle was
+            // always null and every payment silently fell back to a hardcoded "USD", regardless
+            // of the vehicle's actual currency. This test simulates a legacy contract row with
+            // no frozen Currency (as if created before the Currency column existed) to prove the
+            // fallback correctly reads the vehicle's real currency via the Include, instead of
+            // coincidentally landing on the "USD" hardcoded default.
+
+            // Arrange
+            var context = GetSqliteDbContext();
+            await SeedBranchAsync(context, _testBranchId, "فرع بغداد", "BR-BG");
+            await SeedAccountingSetupAsync(context, _testBranchId);
+
+            var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
+            var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Honda Civic", "CH-CIVIC-IQD-1", 10000, _testBranchId);
+            vehicle.Currency = "IQD";
+            context.Vehicles.Update(vehicle);
+            await context.SaveChangesAsync();
+
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var saleHandler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
+            var payHandler = new PayInstallmentCommandHandler(context, _currentUserServiceMock.Object);
+
+            var saleCommand = new CreateSaleContractCommand
+            {
+                CustomerId = customer.Id,
+                VehicleId = vehicle.Id,
+                SalePrice = 12000,
+                PaymentMethod = PaymentMethod.Cheque,
+                DownPayment = 2000,
+                InstallmentPeriodMonths = 10,
+                ProfitRatePercentage = 10
+            };
+
+            var contractId = await saleHandler.Handle(saleCommand, CancellationToken.None);
+
+            // Simulate a legacy row with no frozen currency snapshot
+            var contract = await context.SalesContracts.FindAsync(contractId);
+            contract!.Currency = null;
+            context.SalesContracts.Update(contract);
+            await context.SaveChangesAsync();
+
+            var plan = await context.InstallmentPlans.Include(p => p.Installments)
+                .FirstOrDefaultAsync(p => p.SalesContractId == contractId);
+            var installment = plan!.Installments.First();
+
+            // Act
+            var paymentCommand = new PayInstallmentCommand
+            {
+                InstallmentId = installment.Id,
+                Amount = 1100,
+                PaymentMethod = PaymentMethod.Cash,
+                DebitAccountCode = "111001"
+            };
+            var result = await payHandler.Handle(paymentCommand, CancellationToken.None);
+
+            // Assert
+            var payment = await context.Payments.FindAsync(result.PaymentId);
+            payment!.Currency.Should().Be("IQD"); // must read the real vehicle currency via Include, not fall through to "USD"
+        }
+
+        [Fact]
         public async Task CreateSale_WhenAccountingFails_ShouldRollbackFully()
         {
             // Arrange

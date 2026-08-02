@@ -98,7 +98,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     purchase_price = p.PurchaseCost,
                     paid_amount = p.AmountPaid,
                     remaining_amount = p.PurchaseCost - p.AmountPaid,
-                    currency = p.Vehicle != null ? p.Vehicle.Currency : "IQD",
+                    currency = p.Currency ?? (p.Vehicle != null ? p.Vehicle.Currency : "IQD"),
                     payment_method = p.PaymentMethod.ToString(),
                     status = p.Status,
                     purchase_date = p.PurchaseDate
@@ -141,7 +141,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 {
                     id = x.Id,
                     amount = x.Amount,
-                    currency = p.Vehicle != null ? p.Vehicle.Currency : "IQD",
+                    currency = x.Currency ?? p.Currency ?? (p.Vehicle != null ? p.Vehicle.Currency : "IQD"),
                     payment_method = x.Method.ToString(),
                     payment_date = x.CreatedAt,
                     notes = x.Description
@@ -163,7 +163,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 purchase_price = p.PurchaseCost,
                 paid_amount = p.AmountPaid,
                 remaining_amount = p.PurchaseCost - p.AmountPaid,
-                currency = p.Vehicle != null ? p.Vehicle.Currency : "IQD",
+                currency = p.Currency ?? (p.Vehicle != null ? p.Vehicle.Currency : "IQD"),
                 payment_method = p.PaymentMethod.ToString(),
                 status = p.Status,
                 purchase_date = p.PurchaseDate,

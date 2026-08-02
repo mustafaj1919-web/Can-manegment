@@ -100,7 +100,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     total_amount = total,
                     paid_amount = paid,
                     remaining_amount = remaining,
-                    currency = vehicle != null ? vehicle.Currency : "IQD",
+                    currency = sc?.Currency ?? p.Purchase?.Currency ?? vehicle?.Currency ?? "IQD",
                     number_of_months = p.InstallmentPeriodMonths,
                     installment_amount = p.MonthlyInstallmentAmount,
                     installment_due_day = 1,
@@ -302,7 +302,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     id = p.Id,
                     schedule_id = schedId,
                     amount = p.Amount,
-                    currency = p.Currency ?? (vehicle != null ? vehicle.Currency : "IQD"),
+                    currency = p.Currency ?? sc?.Currency ?? plan.Purchase?.Currency ?? vehicle?.Currency ?? "IQD",
                     payment_method = p.Method.ToString(),
                     payment_date = p.CreatedAt,
                     notes = p.Description,
@@ -334,7 +334,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 paid_amount = paid,
                 remaining_amount = isPlanCancelled ? 0 : remaining,
                 overdue_amount = isPlanCancelled ? 0 : plan.Installments.Where(i => i.Status == "Overdue" || (i.Status != "Paid" && i.Status != "Cancelled" && i.DueDate < DateTime.UtcNow.Date)).Sum(i => i.Amount - i.PaidAmount),
-                currency = vehicle != null ? vehicle.Currency : "IQD"
+                currency = sc?.Currency ?? plan.Purchase?.Currency ?? vehicle?.Currency ?? "IQD"
             } : null;
 
             var detail = new
@@ -352,7 +352,7 @@ namespace CarShowroomManagementV2.API.Controllers
                 total_amount = plan.TotalPlanAmount,
                 paid_amount = paid,
                 remaining_amount = remaining,
-                currency = vehicle != null ? vehicle.Currency : "IQD",
+                currency = sc?.Currency ?? plan.Purchase?.Currency ?? vehicle?.Currency ?? "IQD",
                 number_of_months = plan.InstallmentPeriodMonths,
                 installment_amount = plan.MonthlyInstallmentAmount,
                 installment_start_date = plan.CreatedAt,
@@ -368,7 +368,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     amount = i.Amount,
                     paid_amount = i.PaidAmount,
                     remaining_amount = i.Amount - i.PaidAmount,
-                    currency = vehicle != null ? vehicle.Currency : "IQD",
+                    currency = sc?.Currency ?? plan.Purchase?.Currency ?? vehicle?.Currency ?? "IQD",
                     status = i.Status,
                     payment_date = i.PaymentDate
                 }).ToList(),

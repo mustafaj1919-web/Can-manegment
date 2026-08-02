@@ -19,6 +19,9 @@ namespace CarShowroomManagementV2.Domain.Entities
         public PaymentMethod PaymentMethod { get; set; } // طريقة الدفع المعتمدة للشراء
         public string Status { get; set; } = "Active"; // Active, Cancelled
 
+        // العملة المعتمدة لفاتورة الشراء وقت الإنشاء — لا تتأثر بتغيّر عملة السيارة لاحقاً
+        public string? Currency { get; set; }
+
         // علاقات التنقل
         public virtual Supplier? Supplier { get; set; }
         public virtual Customer? Customer { get; set; }

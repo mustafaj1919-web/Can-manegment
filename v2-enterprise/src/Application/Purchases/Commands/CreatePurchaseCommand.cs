@@ -285,7 +285,8 @@ namespace CarShowroomManagementV2.Application.Purchases.Commands
                     AmountPaid = actualAmountPaid,
                     PaymentMethod = effectiveMethod,
                     Status = "Active",
-                    BranchId = branchId
+                    BranchId = branchId,
+                    Currency = !string.IsNullOrWhiteSpace(request.Currency) ? request.Currency : vehicle.Currency
                 };
                 _context.Purchases.Add(purchase);
                 await _context.SaveChangesAsync(cancellationToken);

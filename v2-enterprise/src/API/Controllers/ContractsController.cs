@@ -83,7 +83,7 @@ namespace CarShowroomManagementV2.API.Controllers
                     customer_name = customer != null ? (customer.FullName ?? customer.Name) : "عميل غير معروف",
                     customer_id = sc.CustomerId,
                     selling_price = sc.SalePrice,
-                    currency = vehicle != null ? vehicle.Currency : "IQD",
+                    currency = sc.Currency ?? (vehicle != null ? vehicle.Currency : "IQD"),
                     paid_amount = sc.DownPayment + planPaid,
                     remaining_amount = planRemaining,
                     number_of_months = plan?.InstallmentPeriodMonths,

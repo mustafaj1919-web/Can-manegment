@@ -199,6 +199,7 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                 contract = await _context.SalesContracts
                     .IgnoreQueryFilters()
                     .Include(sc => sc.Customer)
+                    .Include(sc => sc.Vehicle)
                     .FirstOrDefaultAsync(sc => sc.Id == plan.SalesContractId, cancellationToken);
             }
 
@@ -238,6 +239,7 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                 purchase = await _context.Purchases
                     .IgnoreQueryFilters()
                     .Include(p => p.Supplier)
+                    .Include(p => p.Vehicle)
                     .FirstOrDefaultAsync(p => p.Id == plan.PurchaseId, cancellationToken);
 
                 if (purchase == null) throw new InvalidOperationException("فاتورة الشراء المرتبطة بالأقساط غير موجودة.");
@@ -366,7 +368,9 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                 var referenceNumber = $"REC-{DateTime.UtcNow:yyyyMMdd}-{totalPaymentsCount + 1:D5}";
                 var invoiceRef = contract?.ContractNumber ?? purchase?.PurchaseNumber ?? "";
 
-                var planCurrency = isPurchasePlan ? purchase?.Vehicle?.Currency : contract?.Vehicle?.Currency;
+                var planCurrency = isPurchasePlan
+                    ? (purchase?.Currency ?? purchase?.Vehicle?.Currency)
+                    : (contract?.Currency ?? contract?.Vehicle?.Currency);
 
                 var payment = new Payment
                 {

@@ -201,6 +201,50 @@ namespace CarShowroomManagementV2.UnitTests.Sales
         }
 
         [Fact]
+        public async Task CreateSaleContract_ShouldFreezeVehicleCurrencyAtCreationTime_UnaffectedByLaterVehicleEdits()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            await SeedBranchAsync(context, _testBranchId, "الفرع الرئيسي", "BR-01");
+            await SeedAccountingSetupAsync(context, _testBranchId);
+
+            var customer = await SeedCustomerAsync(context, Guid.NewGuid(), "أحمد البغدادي", _testBranchId);
+            var vehicle = await SeedVehicleAsync(context, Guid.NewGuid(), "Kia Sorento", "CH-KIA-333", 15000, _testBranchId);
+            vehicle.Currency = "USD";
+            context.Vehicles.Update(vehicle);
+            await context.SaveChangesAsync();
+
+            var eInvoiceService = new CarShowroomManagementV2.Infrastructure.Services.EInvoiceService();
+            var handler = new CreateSaleContractCommandHandler(context, _currentUserServiceMock.Object, eInvoiceService);
+
+            var command = new CreateSaleContractCommand
+            {
+                CustomerId = customer.Id,
+                VehicleId = vehicle.Id,
+                SalePrice = 18000,
+                DownPayment = 18000,
+                PaymentMethod = PaymentMethod.Cash
+            };
+
+            // Act
+            var contractId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert: contract snapshots the vehicle's currency at creation time
+            var contract = await context.SalesContracts.FindAsync(contractId);
+            contract!.Currency.Should().Be("USD");
+
+            // Simulate a later, unrelated vehicle edit that changes its currency
+            // (e.g. a data-correction elsewhere in the app) — the historical contract's
+            // currency must NOT drift when re-read after this.
+            vehicle.Currency = "IQD";
+            context.Vehicles.Update(vehicle);
+            await context.SaveChangesAsync();
+
+            var contractAfterVehicleEdit = await context.SalesContracts.FindAsync(contractId);
+            contractAfterVehicleEdit!.Currency.Should().Be("USD");
+        }
+
+        [Fact]
         public async Task CreateSaleContract_AttemptingToSellSoldVehicle_ShouldThrowException()
         {
             // Arrange

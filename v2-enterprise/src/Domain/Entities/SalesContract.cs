@@ -24,6 +24,9 @@ namespace CarShowroomManagementV2.Domain.Entities
         public decimal CostBasis { get; set; } // تكلفة تملك السيارة وقت البيع المعتمدة محاسبياً
         public decimal Profit { get; set; } // أرباح العملية = سعر البيع - التكلفة الدفترية للسيارة وقت البيع
 
+        // العملة المعتمدة لهذا العقد وقت الإنشاء — لا تتأثر بتغيّر عملة السيارة لاحقاً
+        public string? Currency { get; set; }
+
         public PaymentMethod PaymentMethod { get; set; } // Cash or Installment
         public string Status { get; set; } = "Active"; // Active, Cancelled
         public Guid? SalesRepId { get; set; } // مندوب المبيعات (موظف) المسؤول عن العقد

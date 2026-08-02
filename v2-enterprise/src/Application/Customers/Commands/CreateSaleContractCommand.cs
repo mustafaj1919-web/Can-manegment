@@ -206,6 +206,7 @@ namespace CarShowroomManagementV2.Application.Customers.Commands
                     RemainingBalance = remainingBalance,
                     CostBasis = vehicle.BookValue,
                     Profit = profit,
+                    Currency = vehicle.Currency,
                     PaymentMethod = request.PaymentMethod,
                     Status = "Active",
                     BranchId = branchId,

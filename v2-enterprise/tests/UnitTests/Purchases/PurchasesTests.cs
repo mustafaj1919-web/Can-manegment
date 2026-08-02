@@ -303,6 +303,41 @@ namespace CarShowroomManagementV2.UnitTests.Purchases
         }
 
         [Fact]
+        public async Task CreatePurchase_WithExplicitCurrency_ShouldFreezeItOnThePurchaseRecord()
+        {
+            // Arrange
+            var context = GetSqliteDbContext();
+            await SeedBranchAsync(context, _testBranchId, "فرع بغداد", "BR-BG");
+            await SeedAccountAsync(context, Guid.NewGuid(), "1201", "مخزون السيارات للمعرض", AccountType.Asset, _testBranchId);
+            var supplier = await SeedSupplierAsync(context, Guid.NewGuid(), "مورد سيارات الخليج", "SUP-GULF", _testBranchId);
+
+            var handler = new CreatePurchaseCommandHandler(context, _currentUserServiceMock.Object);
+            var command = new CreatePurchaseCommand
+            {
+                SourceType = PurchaseSourceType.Supplier,
+                SupplierId = supplier.Id,
+                PurchaseCost = 14000,
+                PaymentMethod = PaymentMethod.Cheque,
+                Model = "Hyundai Tucson",
+                ChassisNumber = "CH-TUCSON-USD-1",
+                Year = 2024,
+                TargetSellingPrice = 17000,
+                Currency = "USD"
+            };
+
+            // Act
+            var purchaseId = await handler.Handle(command, CancellationToken.None);
+
+            // Assert: purchase keeps the requested currency even though a new Vehicle
+            // defaults to "IQD" (Vehicle.cs) — request.Currency must win.
+            var purchase = await context.Purchases.FirstOrDefaultAsync(p => p.Id == purchaseId);
+            purchase!.Currency.Should().Be("USD");
+
+            var vehicle = await context.Vehicles.FirstOrDefaultAsync(v => v.ChassisNumber == "CH-TUCSON-USD-1");
+            vehicle!.Currency.Should().Be("IQD"); // unrelated default, confirms Purchase.Currency didn't just mirror it
+        }
+
+        [Fact]
         public async Task QueryPurchasesAndSuppliers_ShouldFilterByBranchAutomatically()
         {
             // Arrange
