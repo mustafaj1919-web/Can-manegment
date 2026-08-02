@@ -77,6 +77,18 @@ export interface InstallmentPlanDetail extends InstallmentPlanEmbed {
     payment_method: string | null
     payment_date: string | null
     notes: string | null
+    archive?: {
+      exists: boolean
+      is_archived: boolean
+      archive_id: string | null
+      receipt_number: string | null
+      archive_status: string | null
+      archive_method: string | null
+      storage_reference?: string | null
+      document_file_name?: string | null
+      archived_by: string | null
+      archived_at: string | null
+    }
   }>
   customer_statement: {
     customer_id: string
@@ -138,6 +150,23 @@ export async function getInstallments(params: {
 
 export async function getInstallmentPlan(planId: number | string): Promise<InstallmentPlanDetail> {
   return get<InstallmentPlanDetail>(`/Installments/${planId}`)
+}
+
+export async function archivePaymentReceipt(
+  paymentId: string,
+  payload: {
+    archive_method?: string
+    storage_reference?: string
+    document_file_name?: string
+    notes?: string
+  } = {}
+) {
+  return post(`/Payments/${paymentId}/archive`, {
+    ArchiveMethod: payload.archive_method || 'ManuallyConfirmed',
+    StorageReference: payload.storage_reference || null,
+    DocumentFileName: payload.document_file_name || null,
+    Notes: payload.notes || null,
+  })
 }
 
 export async function payInstallmentSchedule(

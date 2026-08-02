@@ -308,6 +308,16 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasForeignKey(i => i.InstallmentPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Payment>()
+                .HasOne(p => p.Installment)
+                .WithMany()
+                .HasForeignKey(p => p.InstallmentId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.InstallmentId);
+
             // Global Branch Query Filters — bypassed for Owner/Admin/Accountant (CanSeeAllBranches)
             modelBuilder.Entity<Account>()
                 .HasQueryFilter(a => _currentUserService.CanSeeAllBranches || a.BranchId == _currentUserService.BranchId);
@@ -474,8 +484,8 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
             {
                 if (entry.State == EntityState.Modified)
                 {
-                    var originalSupplierId = entry.OriginalValues.GetValue<Guid>("SupplierId");
-                    var currentSupplierId = entry.CurrentValues.GetValue<Guid>("SupplierId");
+                    var originalSupplierId = entry.OriginalValues.GetValue<Guid?>("SupplierId");
+                    var currentSupplierId = entry.CurrentValues.GetValue<Guid?>("SupplierId");
                     var originalVehicleId = entry.OriginalValues.GetValue<Guid>("VehicleId");
                     var currentVehicleId = entry.CurrentValues.GetValue<Guid>("VehicleId");
 

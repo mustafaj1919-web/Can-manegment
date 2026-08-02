@@ -269,21 +269,58 @@ namespace CarShowroomManagementV2.API.Controllers
             var paid = plan.Installments.Where(i => i.Status == "Paid").Sum(i => i.PaidAmount);
             var remaining = Math.Max(0, plan.TotalPlanAmount - plan.Installments.Sum(i => i.PaidAmount));
 
-            // جلب سجل الدفعات المباشرة المرتبطة بالعميل (باستثناء السندات الملغاة)
-            var payments = customer != null ? await _context.Payments
-                .Where(p => p.ContraAccountId == customer.AccountId && p.Status != "cancelled")
+            // جلب سجل الدفعات المباشرة المرتبطة بالعميل أو المورد مع حالة الأرشفة ورابط القسط
+            var contraAccId = customer?.AccountId ?? supplier?.AccountId;
+            var rawPayments = contraAccId.HasValue ? await _context.Payments
+                .Where(p => p.ContraAccountId == contraAccId.Value && p.Status != "cancelled")
                 .OrderByDescending(p => p.CreatedAt)
-                .Select(p => new
+                .ToListAsync() : new List<Payment>();
+
+            var paymentIds = rawPayments.Select(p => p.Id).ToList();
+
+            var archiveMap = await _context.ReceiptArchiveRecords
+                .Where(r => paymentIds.Contains(r.PaymentId))
+                .ToDictionaryAsync(r => r.PaymentId);
+
+            var planInstallmentIds = plan.Installments.Select(i => i.Id).ToHashSet();
+
+            var payments = rawPayments.Select(p => {
+                archiveMap.TryGetValue(p.Id, out var arc);
+
+                Guid? schedId = p.InstallmentId;
+                if (schedId.HasValue && !planInstallmentIds.Contains(schedId.Value))
+                {
+                    schedId = null;
+                }
+
+                var statusStr = arc?.ArchiveStatus;
+                var isArchived = string.Equals(statusStr, "Uploaded", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(statusStr, "ManuallyConfirmed", StringComparison.OrdinalIgnoreCase);
+
+                return new
                 {
                     id = p.Id,
-                    schedule_id = (Guid?)null,
+                    schedule_id = schedId,
                     amount = p.Amount,
                     currency = p.Currency ?? (vehicle != null ? vehicle.Currency : "IQD"),
                     payment_method = p.Method.ToString(),
                     payment_date = p.CreatedAt,
-                    notes = p.Description
-                })
-                .ToListAsync() : new();
+                    notes = p.Description,
+                    archive = new
+                    {
+                        exists = arc != null,
+                        is_archived = isArchived,
+                        archive_id = arc?.Id,
+                        receipt_number = arc?.ReceiptNumber ?? p.ReferenceNumber,
+                        archive_status = arc?.ArchiveStatus,
+                        archive_method = arc?.ArchiveMethod,
+                        storage_reference = arc?.StorageReference,
+                        document_file_name = arc?.DocumentFileName,
+                        archived_by = arc?.ConfirmedByUserName,
+                        archived_at = arc?.ConfirmedAt
+                    }
+                };
+            }).ToList();
 
             var isPlanCancelled = plan.Status == "Cancelled" || (sc != null && sc.Status == "Cancelled");
 
@@ -450,9 +487,27 @@ namespace CarShowroomManagementV2.API.Controllers
     public class PaySchedulePayloadDto
     {
         public decimal Amount { get; set; }
-        public string? PaymentMethod { get; set; } = "Cash";
+        public string? PaymentMethod { get; set; }
         public Guid? AccountId { get; set; }
         public string? IdempotencyKey { get; set; }
         public string? Notes { get; set; }
+    }
+
+    public static class InstallmentsControllerHelpers
+    {
+        public static Guid? ExtractScheduleIdFromHash(string? hash)
+        {
+            if (string.IsNullOrWhiteSpace(hash)) return null;
+            var parts = hash.Split('|');
+            foreach (var part in parts)
+            {
+                if (part.StartsWith("ScheduleId=", StringComparison.OrdinalIgnoreCase))
+                {
+                    var val = part.Substring("ScheduleId=".Length);
+                    if (Guid.TryParse(val, out var g)) return g;
+                }
+            }
+            return null;
+        }
     }
 }

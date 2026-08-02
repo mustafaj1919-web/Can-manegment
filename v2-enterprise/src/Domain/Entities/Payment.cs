@@ -20,9 +20,12 @@ namespace CarShowroomManagementV2.Domain.Entities
         public string Status { get; set; } = "posted"; // posted | cancelled
         public Guid? ReversalOfId { get; set; } // إن كان هذا السند عكسًا لسند آخر
 
+        public Guid? InstallmentId { get; set; } // القسط المرتبط (إن وجد)
+
         // علاقات التنقل
         public virtual Account? Account { get; set; }
         public virtual Account? ContraAccount { get; set; }
         public virtual JournalEntry? JournalEntry { get; set; }
+        public virtual Installment? Installment { get; set; }
     }
 }

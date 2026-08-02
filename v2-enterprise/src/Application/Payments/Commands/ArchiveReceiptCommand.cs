@@ -12,10 +12,14 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
     public class ArchiveReceiptResponseDto
     {
         public bool Success { get; set; } = true;
+        public Guid ArchiveId { get; set; }
         public Guid PaymentId { get; set; }
         public string ReceiptNumber { get; set; } = string.Empty;
+        public bool IsArchived { get; set; } = true;
         public string ArchiveStatus { get; set; } = "ManuallyConfirmed";
         public string ArchiveMethod { get; set; } = "ManuallyConfirmed";
+        public string? StorageReference { get; set; }
+        public string? DocumentFileName { get; set; }
         public string ConfirmedByUserName { get; set; } = string.Empty;
         public DateTime ConfirmedAt { get; set; } = DateTime.UtcNow;
     }
@@ -62,11 +66,17 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
                 throw new InvalidOperationException("السند المالي غير موجود أو لا ينتمي لهذا الفرع.");
             }
 
+            if (string.Equals(payment.Status, "cancelled", StringComparison.OrdinalIgnoreCase) || payment.ReversalOfId.HasValue)
+            {
+                throw new InvalidOperationException("لا يمكن أرشفة وصل لسند مالي ملغى أو معكوس.");
+            }
+
             var archiveRecord = await _context.ReceiptArchiveRecords
                 .FirstOrDefaultAsync(r => r.PaymentId == request.PaymentId, cancellationToken);
 
             var now = DateTime.UtcNow;
             var currentUserName = _currentUserService.UserId ?? "موظف النظام";
+            var receiptNo = !string.IsNullOrWhiteSpace(payment.ReferenceNumber) ? payment.ReferenceNumber : $"RCP-{payment.Id.ToString().Substring(0, 8).ToUpper()}";
 
             if (archiveRecord == null)
             {
@@ -74,7 +84,7 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
                 {
                     Id = Guid.NewGuid(),
                     PaymentId = payment.Id,
-                    ReceiptNumber = payment.ReferenceNumber,
+                    ReceiptNumber = receiptNo,
                     BranchId = branchId,
                     ArchiveStatus = request.ArchiveMethod,
                     ArchiveMethod = request.ArchiveMethod,
@@ -102,13 +112,20 @@ namespace CarShowroomManagementV2.Application.Payments.Commands
 
             await _context.SaveChangesAsync(cancellationToken);
 
+            var isArchived = string.Equals(archiveRecord.ArchiveStatus, "Uploaded", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(archiveRecord.ArchiveStatus, "ManuallyConfirmed", StringComparison.OrdinalIgnoreCase);
+
             return new ArchiveReceiptResponseDto
             {
                 Success = true,
+                ArchiveId = archiveRecord.Id,
                 PaymentId = payment.Id,
-                ReceiptNumber = payment.ReferenceNumber,
+                ReceiptNumber = archiveRecord.ReceiptNumber,
+                IsArchived = isArchived,
                 ArchiveStatus = archiveRecord.ArchiveStatus,
                 ArchiveMethod = archiveRecord.ArchiveMethod,
+                StorageReference = archiveRecord.StorageReference,
+                DocumentFileName = archiveRecord.DocumentFileName,
                 ConfirmedByUserName = currentUserName,
                 ConfirmedAt = now
             };

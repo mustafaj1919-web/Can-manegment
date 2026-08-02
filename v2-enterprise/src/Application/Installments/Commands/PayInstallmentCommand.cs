@@ -371,6 +371,7 @@ namespace CarShowroomManagementV2.Application.Installments.Commands
                 var payment = new Payment
                 {
                     Id = Guid.NewGuid(),
+                    InstallmentId = installment.Id,
                     Type = isPurchasePlan ? PaymentType.Payment : PaymentType.Receipt,
                     Method = request.PaymentMethod,
                     Amount = amount,
