@@ -150,8 +150,8 @@ export function adaptInstallmentReceiptData(raw: any): InstallmentReceiptViewMod
       subtitle: 'منصة إدارة المعرض المتكاملة',
       phone: '+964 770 123 4567',
       email: 'info@alasdiqaacars.com',
-      website: 'www.alasdiqaacars.com',
-      address: 'بغداد - الكرادة - شارع 62',
+      website: 'al-asdiqa.com',
+      address: 'بغداد - الكريعات - شارع الوقف السيني',
       logoUrl: '/logo.png'
     },
     isCancelledOrReversed,

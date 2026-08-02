@@ -155,7 +155,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
         />
       </section>
 
-      <ReceiptFooter company={company} receiptNumber={cleanReceiptNumber} />
+      <ReceiptFooter company={company} />
     </article>
   )
 
