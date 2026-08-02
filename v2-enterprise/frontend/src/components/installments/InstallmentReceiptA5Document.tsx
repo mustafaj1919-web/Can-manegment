@@ -111,7 +111,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
       />
 
       {/* Identity strip: customer / vehicle / contract / current installment */}
-      <section className="a5-section flex divide-x divide-[#E5E7EB] py-1.5 border-b border-[#E5E7EB]">
+      <section className="a5-section flex divide-x divide-[#E5E7EB] py-1 border-b border-[#E5E7EB]">
         <CustomerCard customer={customer} />
         <VehicleCard vehicle={vehicle} />
         <ContractCard
@@ -123,7 +123,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
       </section>
 
       {/* Payment hero band: financial summary (right) + amount hero (left) */}
-      <section className="a5-section flex items-stretch py-2 border-b border-[#E5E7EB]">
+      <section className="a5-section flex items-stretch py-1 border-b border-[#E5E7EB]">
         <div className="flex-1 min-w-0 pe-4">
           <FinancialSummary progress={contractProgress} currency={payment.currency} />
         </div>
@@ -168,7 +168,7 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
         @media print {
           @page {
             size: A5 landscape;
-            margin: 0;
+            margin: 6mm 8mm;
           }
 
           html, body {
@@ -176,9 +176,9 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
             color: #111827 !important;
             margin: 0 !important;
             padding: 0 !important;
-            width: 210mm !important;
-            height: 148mm !important;
-            overflow: hidden !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -190,10 +190,10 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
           #print-root {
             display: block !important;
             position: static !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
             padding: 0 !important;
-            width: 210mm !important;
-            height: 148mm !important;
+            width: 100% !important;
+            height: auto !important;
           }
 
           #print-root .a5-document-root {
@@ -203,12 +203,13 @@ export function InstallmentReceiptA5Document({ data }: InstallmentReceiptA5Docum
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
-            margin: 0 !important;
-            padding: 5mm 7mm !important;
-            width: 210mm !important;
-            height: 148mm !important;
-            min-height: 148mm !important;
-            max-height: 148mm !important;
+            margin: 0 auto !important;
+            padding: 3mm 2mm 2mm 2mm !important;
+            width: 100% !important;
+            max-width: 194mm !important;
+            height: 136mm !important;
+            min-height: 136mm !important;
+            max-height: 136mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             transform: none !important;
