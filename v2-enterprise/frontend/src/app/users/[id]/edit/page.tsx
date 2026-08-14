@@ -1,14 +1,15 @@
 'use client'
 
-import { use } from 'react'
+import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
 import { getUser } from '@/lib/api/users'
 import { UserForm } from '@/components/forms/UserForm'
 import { Skeleton } from '@/components/ui/skeleton'
 
-export default function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function EditUserPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
   const userId = id
 
   const { data: user, isLoading, isError } = useQuery({

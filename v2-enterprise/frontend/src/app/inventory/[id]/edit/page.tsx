@@ -1,6 +1,6 @@
 'use client'
 
-import { use } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle } from 'lucide-react'
@@ -9,9 +9,9 @@ import { CarForm } from '@/components/forms/CarForm'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 
-export default function EditCarPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const id = rawId
+export default function EditCarPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
 
   const { data: car, isLoading, isError } = useQuery({
     queryKey: ['car', id],

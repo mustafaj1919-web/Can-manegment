@@ -1,6 +1,6 @@
 'use client'
 
-import { use } from 'react'
+import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Printer, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
@@ -17,9 +17,10 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   Cancelled: { label: 'ملغى',   cls: 'text-muted-foreground' },
 }
 
-export default function SchedulePrintPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const planId = rawId
+export default function SchedulePrintPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
+  const planId = id
 
   const { data: plan, isLoading } = useQuery({
     queryKey: ['installment-plan', planId],

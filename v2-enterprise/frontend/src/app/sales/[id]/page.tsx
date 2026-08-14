@@ -1,7 +1,7 @@
 'use client'
 
-import { use } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   CheckCircle2, Clock, AlertTriangle, AlertCircle, FileText, ArrowUpRight,
@@ -61,9 +61,9 @@ function ScheduleRow({ sc }: { sc: InstallmentScheduleItem }) {
   )
 }
 
-export default function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const id = rawId
+export default function SaleDetailPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ?? ''
 
   const { data: sale, isLoading, isError } = useQuery({
     queryKey: ['sale', id],

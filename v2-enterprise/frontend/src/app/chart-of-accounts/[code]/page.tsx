@@ -1,6 +1,7 @@
 'use client'
 
-import { use, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, ArrowUpRight, ArrowDownLeft, Scale } from 'lucide-react'
@@ -13,8 +14,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 
-export default function AccountStatementPage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = use(params)
+export default function AccountStatementPage() {
+  const routeParams = useParams<{ code: string }>()
+  const code = routeParams?.code ? String(routeParams.code) : ""
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [applied, setApplied] = useState({ from: '', to: '' })

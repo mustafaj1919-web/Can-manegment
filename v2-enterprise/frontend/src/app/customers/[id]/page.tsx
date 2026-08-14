@@ -1,6 +1,7 @@
 'use client'
 
-import { use, useState, useRef } from 'react'
+import { useParams } from 'next/navigation'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -119,9 +120,9 @@ function StatCard({ label, value, sub, icon: Icon, cls }: { label: string; value
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const id = rawId
+export default function CustomerDetailPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
   const token = useAuthStore(s => s.token)
   const qc = useQueryClient()
   const [tab, setTab] = useState('overview')

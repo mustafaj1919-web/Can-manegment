@@ -11,6 +11,7 @@ const tajawal = Tajawal({
   weight: ['300', '400', '500', '700', '800', '900'],
   variable: '--font-tajawal',
   display: 'swap',
+  fallback: ['system-ui', 'Segoe UI', 'sans-serif'],
 })
 
 const plexSansArabic = IBM_Plex_Sans_Arabic({
@@ -18,6 +19,7 @@ const plexSansArabic = IBM_Plex_Sans_Arabic({
   weight: ['300', '400', '500', '600', '700'],
   variable: '--font-receipt',
   display: 'swap',
+  fallback: ['system-ui', 'Segoe UI', 'sans-serif'],
 })
 
 const inter = Inter({
@@ -25,6 +27,7 @@ const inter = Inter({
   weight: ['300', '400', '500', '600', '700', '800'],
   variable: '--font-inter',
   display: 'swap',
+  fallback: ['system-ui', 'sans-serif'],
 })
 
 const jetbrainsMono = JetBrains_Mono({
@@ -32,6 +35,7 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ['400', '500'],
   variable: '--font-mono',
   display: 'swap',
+  fallback: ['monospace'],
 })
 
 export const metadata = {

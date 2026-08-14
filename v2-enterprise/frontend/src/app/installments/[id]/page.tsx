@@ -1,6 +1,7 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -446,9 +447,10 @@ function ViewArchiveModal({
   )
 }
 
-export default function InstallmentPlanPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const planId = rawId
+export default function InstallmentPlanPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
+  const planId = id
   const qc = useQueryClient()
   const [payingSchedule, setPayingSchedule] = useState<InstallmentScheduleItem | null>(null)
   const [archivingSchedule, setArchivingSchedule] = useState<InstallmentScheduleItem | null>(null)

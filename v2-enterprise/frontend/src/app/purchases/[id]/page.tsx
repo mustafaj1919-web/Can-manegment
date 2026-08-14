@@ -1,6 +1,7 @@
 'use client'
 
-import { use, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Calendar, Car, Hash, Phone, User, PlusCircle, Loader2, XCircle } from 'lucide-react'
@@ -130,9 +131,9 @@ function AddPaymentForm({
   )
 }
 
-export default function PurchaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const id = rawId
+export default function PurchaseDetailPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
   const queryClient = useQueryClient()
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)

@@ -1,6 +1,7 @@
 'use client'
 
-import { use, useState, useEffect, useRef } from 'react'
+import { useParams } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -45,8 +46,9 @@ interface ChatMessageType {
   content: string
 }
 
-export default function CarDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function CarDetailPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
   const qc = useQueryClient()
   const { user, token } = useAuthStore()
 

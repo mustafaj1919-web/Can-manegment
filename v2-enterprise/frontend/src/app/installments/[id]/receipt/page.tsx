@@ -1,6 +1,6 @@
 'use client'
 
-import { use } from 'react'
+import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { getInstallmentPlan } from '@/lib/api/installments'
 import { get } from '@/lib/api/client'
@@ -11,9 +11,10 @@ import Link from 'next/link'
 import { adaptInstallmentReceiptData } from '@/components/installments/installmentReceiptAdapter'
 import { InstallmentReceiptPreview } from '@/components/installments/InstallmentReceiptPreview'
 
-export default function InstallmentReceiptPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = use(params)
-  const planId = rawId
+export default function InstallmentReceiptPage() {
+  const routeParams = useParams<{ id: string }>()
+  const id = routeParams?.id ? String(routeParams.id) : ""
+  const planId = id
 
   const { data: plan, isLoading: isPlanLoading } = useQuery({
     queryKey: ['installment-plan', planId],
