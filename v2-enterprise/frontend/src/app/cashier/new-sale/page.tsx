@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { cn, formatMoney } from '@/lib/utils'
 import { getAvailableCars, getBuyers, createSale } from '@/lib/api/sales'
-import { extractApiError } from '@/lib/api/client'
+import { get, extractApiError } from '@/lib/api/client'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +31,7 @@ import { SectionCard } from '@/components/shared/SectionCard'
 import { QuickCustomerDialog } from '@/components/cashier/QuickCustomerDialog'
 import { PrintReceiptModal } from '@/components/cashier/PrintReceiptModal'
 import { StepIndicator } from '@/components/cashier/StepIndicator'
+import { VehicleOwnershipCard } from '@/components/sales/new/VehicleOwnershipCard'
 
 const PAYMENT_METHODS = [
   { value: 'Cash',          label: 'نقداً (صندوق)' },
@@ -77,6 +78,15 @@ export default function CashierNewSale() {
   /* ── Validation errors ── */
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  /* ── Pre-sale Ownership state ── */
+  const [ownershipType, setOwnershipType] = useState<number>(3)
+  const [ownerPersonName, setOwnerPersonName] = useState<string>('')
+  const [ownerPersonPhone, setOwnerPersonPhone] = useState<string>('')
+  const [ownerPersonIdNumber, setOwnerPersonIdNumber] = useState<string>('')
+  const [ownerNotes, setOwnerNotes] = useState<string>('')
+  const [supplierId, setSupplierId] = useState<string>('')
+  const [supplierReference, setSupplierReference] = useState<string>('')
+
   /* ── Fetch Cars and Buyers ── */
   const { data: cars = [], isLoading: carsLoading } = useQuery({
     queryKey: ['available-cars'],
@@ -89,6 +99,17 @@ export default function CashierNewSale() {
     queryFn: getBuyers,
     staleTime: 30_000,
   })
+
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: async () => {
+      const res = await get<any>('/Suppliers?per_page=100')
+      const items = res?.data ? (Array.isArray(res.data) ? res.data : (res.data.items ?? [])) : (Array.isArray(res) ? res : [])
+      return items
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const suppliers = suppliersData ?? []
 
   /* ── Keyboard Shortcuts Listener ── */
   useEffect(() => {
@@ -367,6 +388,26 @@ export default function CashierNewSale() {
               </AnimatePresence>
             </div>
           </SectionCard>
+
+          {/* Pre-Sale Vehicle Ownership Card */}
+          <VehicleOwnershipCard
+            ownershipType={ownershipType}
+            setOwnershipType={setOwnershipType}
+            ownerPersonName={ownerPersonName}
+            setOwnerPersonName={setOwnerPersonName}
+            ownerPersonPhone={ownerPersonPhone}
+            setOwnerPersonPhone={setOwnerPersonPhone}
+            ownerPersonIdNumber={ownerPersonIdNumber}
+            setOwnerPersonIdNumber={setOwnerPersonIdNumber}
+            ownerNotes={ownerNotes}
+            setOwnerNotes={setOwnerNotes}
+            supplierId={supplierId}
+            setSupplierId={setSupplierId}
+            supplierReference={supplierReference}
+            setSupplierReference={setSupplierReference}
+            suppliers={suppliers}
+            customersAsSellers={buyers}
+          />
 
           {/* المشتري */}
           <SectionCard 

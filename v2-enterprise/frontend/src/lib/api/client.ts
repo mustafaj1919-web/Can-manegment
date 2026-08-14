@@ -36,7 +36,9 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       const cfg = error.config as (InternalAxiosRequestConfig & { skipAuthRedirect?: boolean }) | undefined
-      if (!cfg?.skipAuthRedirect && typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+      const currentPath = (typeof window !== 'undefined' ? window.location.pathname : '').toLowerCase()
+      const isPublicPath = currentPath.includes('/login') || currentPath.startsWith('/showroom') || currentPath.startsWith('/qr')
+      if (!cfg?.skipAuthRedirect && !isPublicPath) {
         try { useAuthStore.getState().clearAuth() } catch { /* store may not be ready */ }
         window.location.href = '/login'
       }

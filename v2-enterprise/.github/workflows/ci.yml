@@ -1,0 +1,86 @@
+name: Enterprise ERP CI/CD Pipeline
+
+on:
+  push:
+    branches: [ v2-enterprise, main ]
+  pull_request:
+    branches: [ v2-enterprise, main ]
+
+jobs:
+  backend-ci:
+    name: Backend Build & Test (.NET 8/10)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+
+    - name: Restore Dependencies
+      run: dotnet restore CarShowroomManagementV2.sln
+
+    - name: Build Solution
+      run: dotnet build CarShowroomManagementV2.sln --configuration Release --no-restore
+
+    - name: Run Unit Tests
+      run: dotnet test CarShowroomManagementV2.sln --configuration Release -f net10.0 --no-build --verbosity normal
+
+  frontend-ci:
+    name: Frontend Build & Test (Next.js / React)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: 'frontend/package-lock.json'
+
+    - name: Install Frontend Dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Run TypeScript Check
+      run: |
+        cd frontend
+        npm run type-check
+
+    - name: Run Design System Tests
+      run: |
+        cd frontend
+        npm run test:ds
+
+    - name: Production Build
+      run: |
+        cd frontend
+        npm run build
+      env:
+        NEXT_TELEMETRY_DISABLED: 1
+
+  docker-ci:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    needs: [backend-ci, frontend-ci]
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Verify Backend API Docker Image Build
+      run: docker build -t carshowroom-v2-api:ci -f src/API/Dockerfile .
+
+    - name: Verify Frontend Docker Image Build
+      run: |
+        cd frontend
+        docker build -t carshowroom-v2-frontend:ci -f Dockerfile .

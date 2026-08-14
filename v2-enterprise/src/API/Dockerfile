@@ -22,7 +22,7 @@ FROM build AS publish
 RUN dotnet publish "API.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # 3. مرحلة التشغيل النهائية (Runtime Stage)
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine3.19 AS final
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine3.19 AS final
 WORKDIR /app
 
 # Disable telemetry and diagnostics for security hardening

@@ -225,7 +225,14 @@ export async function cancelPurchase(
   id: number | string,
   payload: { cancel_reason?: string } = {},
 ): Promise<CancelPurchaseResponse> {
-  return Promise.reject(new Error('إلغاء فواتير الشراء غير متاح حالياً'))
+  await post<any>(`/Purchases/${id}/cancel`, {
+    reason: payload.cancel_reason,
+  })
+  return {
+    id,
+    status: 'Cancelled',
+    cancel_reason: payload.cancel_reason || '',
+  }
 }
 
 /* ─── Additional Purchase Payment ───────────────────────────────────────── */

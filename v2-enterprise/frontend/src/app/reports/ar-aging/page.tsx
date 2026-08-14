@@ -3,11 +3,13 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Clock3, RefreshCw, Users } from 'lucide-react'
+import { AlertCircle, Clock3, RefreshCw, Users, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatDate, formatMoney } from '@/lib/utils'
 import { getArAgingReport, type ArAgingBucket, type ArAgingItem } from '@/lib/api/reports'
+import { exportXlsx } from '@/lib/export'
+import { toast } from 'sonner'
 
 const BUCKET_STYLES: Record<string, { card: string; text: string; badge: string }> = {
   current: { card: 'border-sky-500/20 bg-sky-500/5', text: 'text-sky-300', badge: 'border-sky-500/20 bg-sky-500/10 text-sky-300' },
@@ -53,6 +55,7 @@ function AgingRow({ item }: { item: ArAgingItem }) {
 
 export default function ArAgingPage() {
   const [activeBucket, setActiveBucket] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['ar-aging'],
@@ -62,6 +65,66 @@ export default function ArAgingPage() {
   })
 
   const selectedBucket = data?.buckets.find((bucket) => bucket.bucket === activeBucket)
+
+  const handleExport = async () => {
+    if (!data) return
+    if (exporting) return
+    setExporting(true)
+
+    try {
+      const headers = [
+        'اسم العميل',
+        'عدد المطالبات',
+        'أقدم تأخير (أيام)',
+        'إجمالي الذمم المدينة (Gross AR)',
+        'الأرصدة الدائنة للعملاء',
+        'صافي مركز العميل'
+      ]
+
+      const rows: (string | number)[][] = []
+
+      data.customers.forEach(c => {
+        const grossAr = Number(c.total_iqd || 0)
+        const creditBal = grossAr < 0 ? Math.abs(grossAr) : 0
+        const positiveAr = grossAr > 0 ? grossAr : 0
+        const netPos = positiveAr - creditBal
+
+        rows.push([
+          c.customer_name ?? '—',
+          Number(c.items_count || 0),
+          Number(c.oldest_days_past_due || 0),
+          positiveAr,
+          creditBal,
+          netPos
+        ])
+      })
+
+      // Authoritative summary row
+      const totalGrossAr = data.customers.reduce((s, c) => s + (c.total_iqd > 0 ? c.total_iqd : 0), 0)
+      const totalCreditBals = data.customers.reduce((s, c) => s + (c.total_iqd < 0 ? Math.abs(c.total_iqd) : 0), 0)
+      const totalNetPos = totalGrossAr - totalCreditBals
+
+      rows.push([
+        `إجمالي تقرير أعمار الذمم (${data.customers.length} عميل)`,
+        Number(data.total_count || 0),
+        '',
+        totalGrossAr,
+        totalCreditBals,
+        totalNetPos
+      ])
+
+      const dateStr = new Date().toISOString().split('T')[0]
+      const filename = `ar-aging-report-${dateStr}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+      toast.success('تم تصدير تقرير أعمار الذمم المدينة بنجاح!')
+    } catch (err) {
+      console.error('[ArAging Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -77,10 +140,22 @@ export default function ArAgingPage() {
             </p>
           </div>
         </div>
-        <Button variant="glass" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-8 gap-2">
-          <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
-          تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="glass"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting}
+            className="h-8 gap-2"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>{exporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
+          </Button>
+          <Button variant="glass" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-8 gap-2">
+            <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
+            تحديث
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

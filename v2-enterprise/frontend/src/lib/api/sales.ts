@@ -199,7 +199,72 @@ function mapPaymentMethod(method?: string): number {
   }
 }
 
+function resolveOwnershipPayload(payload: any) {
+  let rawType = payload.ownership_type
+  let rawName = payload.owner_person_name?.toString().trim() || null
+  let rawPhone = payload.owner_person_phone?.toString().trim() || null
+  let rawIdNum = payload.owner_person_id_number?.toString().trim() || null
+  let rawSupplierId = payload.supplier_id || null
+
+  let ownershipType = 3 // COMPANY (default المعرض نفسه)
+
+  if (rawType === 'PERSON' || rawType === 'Person' || rawType === 1 || rawType === '1') {
+    ownershipType = 1
+  } else if (rawType === 'SUPPLIER' || rawType === 'Supplier' || rawType === 2 || rawType === '2') {
+    ownershipType = 2
+  } else if (rawType === 'COMPANY' || rawType === 'Company' || rawType === 3 || rawType === '3') {
+    ownershipType = 3
+  } else {
+    if (rawName && rawName.length > 0) {
+      ownershipType = 1 // PERSON
+    } else if (rawSupplierId) {
+      ownershipType = 2 // SUPPLIER
+    } else {
+      ownershipType = 3 // COMPANY
+    }
+  }
+
+  if (ownershipType === 3) {
+    return {
+      OwnershipType: 3,
+      OwnerPersonName: null,
+      OwnerPersonPhone: null,
+      OwnerPersonIdNumber: null,
+      OwnerNotes: null,
+      SupplierId: null,
+      SupplierReference: null,
+      SupplyDate: null
+    }
+  }
+
+  if (ownershipType === 2) {
+    return {
+      OwnershipType: 2,
+      OwnerPersonName: null,
+      OwnerPersonPhone: null,
+      OwnerPersonIdNumber: null,
+      OwnerNotes: payload.owner_notes ?? null,
+      SupplierId: rawSupplierId ?? null,
+      SupplierReference: payload.supplier_reference ?? null,
+      SupplyDate: payload.supply_date ?? null
+    }
+  }
+
+  return {
+    OwnershipType: 1,
+    OwnerPersonName: rawName || 'مالك شخصي غير مسمى',
+    OwnerPersonPhone: rawPhone,
+    OwnerPersonIdNumber: rawIdNum,
+    OwnerNotes: payload.owner_notes ?? null,
+    SupplierId: null,
+    SupplierReference: null,
+    SupplyDate: null
+  }
+}
+
 export async function createSale(payload: CreateSalePayload): Promise<{ id: number | string; invoice_number: string }> {
+  const ownershipData = resolveOwnershipPayload(payload)
+
   // مطابقة الحقول لـ CreateSaleContractCommand المتوقع في الخلفية
   const body = {
     CustomerId: payload.buyer_id,
@@ -210,6 +275,7 @@ export async function createSale(payload: CreateSalePayload): Promise<{ id: numb
     Discount: payload.discount ?? 0,
     DownPayment: payload.paid_amount ?? 0,
     PaymentMethod: mapPaymentMethod(payload.payment_method),
+    ...ownershipData,
     InstallmentPeriodMonths: payload.number_of_months ?? 0,
     CustomMonthlyInstallmentAmount: (payload as any).custom_monthly_installment_amount ?? null,
     ProfitRatePercentage: (payload as any).profit_rate ?? 0,

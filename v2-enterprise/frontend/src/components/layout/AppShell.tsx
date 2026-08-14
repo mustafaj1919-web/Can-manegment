@@ -46,7 +46,8 @@ const EXTRA_MOBILE_LINKS = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isPublicRoute = pathname === '/login' || pathname.startsWith('/showroom')
+  const lowerPath = (pathname || '').toLowerCase()
+  const isPublicRoute = lowerPath === '/login' || lowerPath.startsWith('/showroom') || lowerPath.startsWith('/qr')
   const router = useRouter()
   const prefersReducedMotion = useReducedMotion()
   const { isAuthenticated, isLoading, setAuth, clearAuth, setLoading } = useAuthStore()
@@ -165,15 +166,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return null
   }
 
-  // Get dynamic FAB action config
+  // Get dynamic FAB action config (disabled on contract/receipt pages to prevent print contamination)
   const currentRootPath = '/' + pathname.split('/')[1]
-  const fabAction = FAB_ACTIONS[pathname] || FAB_ACTIONS[currentRootPath] || null
+  const isPrintOrDocPage = pathname.includes('/contract') || pathname.includes('/receipt') || pathname.includes('/print')
+  const fabAction = isPrintOrDocPage ? null : (FAB_ACTIONS[pathname] || FAB_ACTIONS[currentRootPath] || null)
+
 
   return (
     <div className="app-shell-root relative min-h-screen bg-background flex flex-row" dir="rtl">
       {/* Main content + Topbar */}
       <div className="flex flex-col flex-1 min-h-screen min-w-0 transition-all duration-200">
-        <TopNav />
+        <div className="print:hidden">
+          <TopNav />
+        </div>
 
         <main className="flex-1 pb-24 lg:pb-12">
           <div className="page-container">
@@ -202,7 +207,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.8, opacity: 0 }}
-            className="fixed z-40 bottom-20 start-6 lg:bottom-6 lg:start-6"
+            className="fixed z-40 bottom-20 start-6 lg:bottom-6 lg:start-6 print:hidden"
           >
             <Link
               href={fabAction.href}
@@ -216,7 +221,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       {/* ─── 4. BOTTOM TAB BAR (Mobile only, <= 768px) ─── */}
-      <nav className="fixed bottom-0 inset-x-0 h-16 bg-background/90 backdrop-blur-md border-t border-border-subtle z-40 flex items-center justify-around px-2 lg:hidden">
+      <nav className="fixed bottom-0 inset-x-0 h-16 bg-background/90 backdrop-blur-md border-t border-border-subtle z-40 flex items-center justify-around px-2 lg:hidden print:hidden">
         <LayoutGroup id="mobile-tabs">
           {/* Tab 1: Dashboard */}
           <Link
@@ -376,8 +381,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       {/* ─── 6. AI ASSISTANT ─── */}
-      <ChatLauncher isOpen={aiOpen} onClick={() => setAiOpen(!aiOpen)} />
-      <ChatPanel isOpen={aiOpen} onClose={() => setAiOpen(false)} />
+      <div className="print:hidden">
+        <ChatLauncher isOpen={aiOpen} onClick={() => setAiOpen(!aiOpen)} />
+        <ChatPanel isOpen={aiOpen} onClose={() => setAiOpen(false)} />
+      </div>
     </div>
   )
 }

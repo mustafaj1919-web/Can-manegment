@@ -3,9 +3,9 @@
 import { use, useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Calendar, Car, Hash, Phone, User, PlusCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Calendar, Car, Hash, Phone, User, PlusCircle, Loader2, XCircle } from 'lucide-react'
 import { cn, formatDate, formatMoney, formatNumber, getStatusVariant, translateStatus } from '@/lib/utils'
-import { getPurchaseById, addPurchasePayment } from '@/lib/api/purchases'
+import { getPurchaseById, addPurchasePayment, cancelPurchase } from '@/lib/api/purchases'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { DetailHeader } from '@/components/shared/DetailHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from 'sonner'
 
 const METHOD_LABELS: Record<string, string> = {
@@ -134,6 +135,8 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
   const id = rawId
   const queryClient = useQueryClient()
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   const { data: purchase, isLoading, isError } = useQuery({
     queryKey: ['purchase', id],
@@ -141,6 +144,19 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
     staleTime: 30_000,
     retry: 1,
     enabled: !!id,
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelPurchase(id, { cancel_reason: cancelReason }),
+    onSuccess: () => {
+      toast.success('تم إلغاء فاتورة الشراء وعكس القيود المحاسبية بنجاح')
+      setShowCancelDialog(false)
+      queryClient.invalidateQueries({ queryKey: ['purchase', id] })
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? err?.message ?? 'حدث خطأ أثناء إلغاء فاتورة الشراء')
+    },
   })
 
   if (isLoading) {
@@ -187,6 +203,31 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
             {translateStatus(purchase.status)}
           </span>
         }
+        actions={
+          purchase.status !== 'Cancelled' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCancelDialog(true)}
+              className="h-8 gap-1.5 text-xs text-rose-400 border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-300"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              إلغاء الفاتورة
+            </Button>
+          ) : null
+        }
+      />
+
+      <ConfirmDialog
+        open={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={() => cancelMutation.mutate()}
+        title="تأكيد إلغاء فاتورة الشراء"
+        description="هل أنت متأكد من رغبتك في إلغاء فاتورة الشراء هذه؟ سيتم تغيير حالتها إلى 'ملغاة' وعكس كافة القيود المحاسبية التابعة لها."
+        confirmText="نعم، إلغاء الفاتورة"
+        cancelText="تراجع"
+        variant="danger"
+        loading={cancelMutation.isPending}
       />
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

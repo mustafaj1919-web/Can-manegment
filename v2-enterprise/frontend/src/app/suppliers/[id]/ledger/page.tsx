@@ -247,16 +247,47 @@ export default function SupplierLedgerPage() {
 
   function handlePrint() { window.print() }
 
+  const [exporting, setExporting] = useState(false)
+
   async function handleExportXlsx() {
-    if (!data?.entries?.length) return
-    const headers = ['التاريخ', 'رقم القيد', 'البيان', 'العملة', 'مدين', 'دائن', 'الرصيد المتراكم']
-    const rows = data.entries.map((e: any) => [
-      formatDate(e.date), e.entry_number, e.description, e.currency,
-      e.debit > 0 ? e.debit : '',
-      e.credit > 0 ? e.credit : '',
-      e.running_balance
-    ])
-    await exportXlsx(`كشف-${data.supplier?.name}-${startDate}`, headers, rows)
+    if (exporting) return
+    setExporting(true)
+
+    try {
+      const headers = ['التاريخ', 'رقم القيد', 'البيان', 'العملة', 'مدين', 'دائن', 'الرصيد الجاري']
+      const entryList = Array.isArray(filteredEntries) ? filteredEntries : []
+      const rows: (string | number)[][] = entryList.map((e: any) => [
+        e.date ? formatDate(e.date) : '—',
+        e.entry_number ?? '—',
+        e.description ?? '—',
+        e.currency ?? activeCurrency,
+        Number(e.debit || 0),
+        Number(e.credit || 0),
+        Number(e.running_balance || 0)
+      ])
+
+      // Authoritative summary row
+      rows.push([
+        `إجمالي كشف الحساب (${activeCurrency})`,
+        '',
+        '',
+        activeCurrency,
+        Number(activeSummary.total_debit || 0),
+        Number(activeSummary.total_credit || 0),
+        Number(activeSummary.balance || 0)
+      ])
+
+      const suppCode = data?.supplier?.id ? `SUPP-${data.supplier.id}` : id
+      const filename = `supplier-ledger-${suppCode}-${startDate}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+      toast.success(`تم تصدير كشف حساب المورد (${entryList.length} حركة) بنجاح!`)
+    } catch (err) {
+      console.error('[SupplierLedger Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const currenciesList = useMemo(() => {
@@ -340,7 +371,7 @@ export default function SupplierLedgerPage() {
               onExport={handleExportXlsx}
               onPrint={handlePrint}
               onPayClick={() => setShowPay(true)}
-              hasEntries={filteredEntries.length > 0}
+              hasEntries={!isLoading}
             />
 
             {/* 3. Currency Balance Summary */}

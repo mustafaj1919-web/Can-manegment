@@ -1,0 +1,31 @@
+import type { Metadata } from "next";
+import PageHero from "@/components/shared/PageHero";
+import { Container, Section } from "@/components/ui/Container";
+import LocationsList from "./LocationsList";
+import CtaBanner from "@/components/shared/CtaBanner";
+
+export const metadata: Metadata = {
+  title: "Locations",
+  description: "Find an Al-Sadaka Motors showroom near you in Baghdad, Erbil, and Basra.",
+};
+
+export default function LocationsPage() {
+  return (
+    <>
+      <PageHero
+        eyebrow={{ en: "Find Us", ar: "زورنا" }}
+        title={{ en: "Showrooms across Iraq", ar: "معارضنا في جميع أنحاء العراق" }}
+        description={{
+          en: "Visit any of our four showrooms for sales, service, and genuine parts.",
+          ar: "زر أياً من معارضنا الأربعة للمبيعات والصيانة وقطع الغيار الأصلية.",
+        }}
+      />
+      <Section className="pt-0">
+        <Container>
+          <LocationsList />
+        </Container>
+      </Section>
+      <CtaBanner />
+    </>
+  );
+}

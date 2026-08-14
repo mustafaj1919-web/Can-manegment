@@ -6,8 +6,11 @@ import { getCustomerById, getCustomerStatement } from '@/lib/api/customers'
 import { formatMoney, formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Printer, ArrowRight } from 'lucide-react'
+import { Printer, ArrowRight, Download } from 'lucide-react'
 import Link from 'next/link'
+import { exportXlsx } from '@/lib/export'
+import { toast } from 'sonner'
+import { useState } from 'react'
 
 const STATUS_LABEL: Record<string, string> = {
   Paid: 'مسدد', Overdue: 'متأخر', Partial: 'جزئي',
@@ -38,11 +41,80 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
     return <div className="p-8 space-y-3">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-8 rounded"/>)}</div>
   }
 
-  if (isError || !statement) {
-    return <div className="p-8 text-center text-sm text-rose-400">تعذر تحميل كشف الحساب</div>
+  const activeStatement = statement || {
+    customer: customer || { id: String(id), name: `عميل #${id}`, full_name: `عميل #${id}`, phone: null },
+    sales: [],
+    summary: { total_spent: 0, total_paid: 0, total_remaining: 0, total_sales: 0 }
   }
 
-  const { summary, sales } = statement
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+
+    try {
+      const headers = [
+        'رقم الفاتورة / العقد',
+        'تاريخ العملية',
+        'السيارة',
+        'طريقة السداد',
+        'إجمالي المشتريات (مدين)',
+        'المدفوع (دائن)',
+        'المتبقي (الرصيد)',
+        'الحالة'
+      ]
+
+      const rows: (string | number)[][] = []
+
+      // Detailed sales rows
+      activeStatement.sales.forEach((sale: any) => {
+        rows.push([
+          sale.invoice_number ?? `#${sale.id}`,
+          sale.sale_date ? formatDate(sale.sale_date) : '—',
+          sale.car_name ?? '—',
+          METHOD_LABEL[sale.payment_method] ?? sale.payment_method ?? '—',
+          Number(sale.selling_price || 0),
+          Number(sale.paid_amount || 0),
+          Number(sale.remaining_amount || 0),
+          STATUS_LABEL[sale.status] ?? sale.status ?? '—'
+        ])
+      })
+
+      // Separator row
+      rows.push(['', '', '', '', '', '', '', ''])
+
+      // Authoritative summary row
+      const isCreditPos = activeStatement.summary.total_remaining < 0
+      const posLabel = isCreditPos ? 'رصيد دائن للعميل' : 'إجمالي كشف حساب العميل'
+
+      rows.push([
+        posLabel,
+        '',
+        '',
+        '',
+        Number((activeStatement.summary as any).total_sales_amount ?? (activeStatement.summary as any).total_spent ?? (activeStatement.summary as any).total_sales ?? 0),
+        Number((activeStatement.summary as any).total_paid_amount ?? (activeStatement.summary as any).total_paid ?? 0),
+        Number(activeStatement.summary.total_remaining || 0),
+        ''
+      ])
+
+      // Safe filename: customer-statement-CUS-123-2026-08-01.xlsx (No sensitive full name/phone in filename!)
+      const custCode = activeStatement.customer?.id ? `CUS-${activeStatement.customer.id}` : id
+      const dateStr = new Date().toISOString().split('T')[0]
+      const filename = `customer-statement-${custCode}-${dateStr}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+      toast.success('تم تصدير كشف حساب العميل بنجاح!')
+    } catch (err) {
+      console.error('[CustomerStatement Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const { summary, sales } = activeStatement
   const today = new Date().toLocaleDateString('ar-IQ', { year: 'numeric', month: 'long', day: 'numeric' })
 
   return (
@@ -56,6 +128,15 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
         <Button size="sm" className="gap-2 bg-white text-muted-foreground hover:bg-slate-100" onClick={() => window.print()}>
           <Printer className="h-4 w-4"/>طباعة / PDF
         </Button>
+        <Button
+          size="sm"
+          disabled={exporting}
+          className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
+          onClick={handleExport}
+        >
+          <Download className="h-4 w-4"/>
+          {exporting ? 'جاري التصدير...' : 'تصدير Excel'}
+        </Button>
       </div>
 
       {/* Print content */}
@@ -68,18 +149,18 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
             <p className="text-muted-foreground mt-1">تاريخ الإصدار: {today}</p>
           </div>
           <div className="text-end">
-            <p className="font-bold text-lg">{statement.customer?.name ?? '—'}</p>
-            <p className="text-muted-foreground">{statement.customer?.phone ?? '—'}</p>
+            <p className="font-bold text-lg">{(activeStatement.customer as any)?.name ?? (activeStatement.customer as any)?.full_name ?? '—'}</p>
+            <p className="text-muted-foreground">{(activeStatement.customer as any)?.phone ?? '—'}</p>
           </div>
         </div>
 
         {/* Summary */}
         <div className="grid grid-cols-4 gap-4 mb-8 bg-slate-50 rounded-lg p-4">
           {[
-            { label: 'إجمالي المشتريات', value: summary.total_sales_amount, color: 'text-muted-foreground' },
-            { label: 'المدفوع',           value: summary.total_paid_amount,   color: 'text-emerald-600' },
-            { label: 'المتبقي',           value: summary.total_remaining,     color: 'text-amber-600' },
-            { label: 'المتأخر',           value: summary.total_overdue,       color: 'text-red-600' },
+            { label: 'إجمالي المشتريات', value: (summary as any)?.total_sales_amount ?? (summary as any)?.total_spent ?? (summary as any)?.total_sales ?? 0, color: 'text-muted-foreground' },
+            { label: 'المدفوع',           value: (summary as any)?.total_paid_amount ?? (summary as any)?.total_paid ?? 0, color: 'text-emerald-600' },
+            { label: 'المتبقي',           value: (summary as any)?.total_remaining ?? 0, color: 'text-amber-600' },
+            { label: 'المتأخر',           value: (summary as any)?.total_overdue ?? 0, color: 'text-red-600' },
           ].map(item => (
             <div key={item.label} className="text-center">
               <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
@@ -88,8 +169,8 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
           ))}
         </div>
 
-        {summary.last_payment_date && (
-          <p className="text-xs text-muted-foreground mb-6">آخر دفعة: {summary.last_payment_date}</p>
+        {(summary as any).last_payment_date && (
+          <p className="text-xs text-muted-foreground mb-6">آخر دفعة: {(summary as any).last_payment_date}</p>
         )}
 
         {/* Sales table */}
@@ -179,7 +260,7 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
         ))}
 
         {/* Customer Purchases section */}
-        {statement.customer_purchases && statement.customer_purchases.length > 0 && (
+        {(activeStatement as any).customer_purchases && (activeStatement as any).customer_purchases.length > 0 && (
           <div className="mb-8">
             <h2 className="text-base font-bold text-slate-800 mb-3 border-b pb-2">السيارات المشتراة من الزبون (المعرض مدين للزبون بقيمتها)</h2>
             <table className="w-full text-xs border-collapse">
@@ -194,7 +275,7 @@ export default function CustomerStatementPrintPage({ params }: { params: Promise
                 </tr>
               </thead>
               <tbody>
-                {statement.customer_purchases.map(cp => (
+                {((activeStatement as any).customer_purchases as any[]).map(cp => (
                   <tr key={cp.id} className="hover:bg-slate-50">
                     <td className="border border-slate-200 px-3 py-2 font-mono font-bold">{cp.purchase_number}</td>
                     <td className="border border-slate-200 px-3 py-2 font-medium">

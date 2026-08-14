@@ -3,14 +3,14 @@
 import { useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ShoppingBag, Plus, Car, User, Eye,
+  ShoppingBag, Plus, Car, User, Eye, XCircle,
   Calendar, ArrowUpRight, Download, Filter, X, RefreshCw
 } from 'lucide-react'
 import type { RowAction } from '@/components/shared/AdvancedTable'
 import { cn, formatMoney, formatDate, translateStatus, getStatusVariant } from '@/lib/utils'
-import { getPurchases, getPurchaseById, type PurchaseListItem } from '@/lib/api/purchases'
+import { getPurchases, getPurchaseById, cancelPurchase, type PurchaseListItem } from '@/lib/api/purchases'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
@@ -18,6 +18,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { exportXlsx } from '@/lib/export'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AdvancedTable, ColumnDef } from '@/components/shared/AdvancedTable'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from 'sonner'
 
 const STATUS_OPTS = [
   { value: 'all',       label: 'كل الحالات' },
@@ -119,8 +121,25 @@ export default function PurchasesPage() {
   const [page,      setPage]      = useState(1)
   const [exporting, setExporting] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [cancelTarget, setCancelTarget] = useState<PurchaseListItem | null>(null)
   const perPage = 20
   const router = useRouter()
+  const queryClient = useQueryClient()
+
+  const cancelMutation = useMutation({
+    mutationFn: () => {
+      if (!cancelTarget) return Promise.reject(new Error('لا توجد فاتورة محدودة'))
+      return cancelPurchase(cancelTarget.id)
+    },
+    onSuccess: () => {
+      toast.success('تم إلغاء فاتورة الشراء وعكس القيود المحاسبية بنجاح')
+      setCancelTarget(null)
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? err?.message ?? 'حدث خطأ أثناء إلغاء الفاتورة')
+    },
+  })
 
   const columns = useMemo<ColumnDef<PurchaseListItem>[]>(() => [
     {
@@ -506,7 +525,12 @@ export default function PurchasesPage() {
             exportFilename="فواتير-المشتريات"
             renderExpandedRow={(row) => <PurchasePaymentDetails purchaseId={row.id} />}
             rowActions={(purchase) => [
-              { label: 'عرض', icon: <Eye className="h-3 w-3" />, onClick: (p) => router.push(`/purchases/${p.id}`) },
+              { label: 'عرض التفاصيل', icon: <Eye className="h-3 w-3" />, onClick: (p) => router.push(`/purchases/${p.id}`) },
+              ...(purchase.status !== 'Cancelled' ? [{
+                label: 'إلغاء الفاتورة',
+                icon: <XCircle className="h-3 w-3 text-rose-400" />,
+                onClick: (p: PurchaseListItem) => setCancelTarget(p),
+              }] : [])
             ]}
             footer={
               <Pagination
@@ -520,6 +544,18 @@ export default function PurchasesPage() {
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={() => cancelMutation.mutate()}
+        title={`إلغاء فاتورة الشراء ${cancelTarget?.invoice_number ?? ''}`}
+        description={`هل أنت متأكد من إلغاء فاتورة الشراء رقم ${cancelTarget?.invoice_number ?? ''} للسيارة (${cancelTarget?.car_name ?? ''})؟ سيتم تغيير حالتها إلى ملغاة وعكس قيودها المحاسبية.`}
+        confirmText="نعم، إلغاء الفاتورة"
+        cancelText="تراجع"
+        variant="danger"
+        loading={cancelMutation.isPending}
+      />
 
     </div>
   )

@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, RefreshCw, AlertCircle } from 'lucide-react'
+import { AlertTriangle, RefreshCw, AlertCircle, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatMoney } from '@/lib/utils'
 import { getInstallmentAgingReport, type AgingBucket, type AgingSchedule } from '@/lib/api/installments'
+import { exportXlsx } from '@/lib/export'
+import { toast } from 'sonner'
 
 const BUCKET_COLORS: Record<string, { card: string; text: string; badge: string }> = {
   '1_30':  { card: 'border-amber-500/20 bg-amber-500/5',  text: 'text-amber-400',  badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
@@ -18,6 +20,7 @@ const BUCKET_COLORS: Record<string, { card: string; text: string; badge: string 
 
 export default function InstallmentAgingPage() {
   const [activeBucket, setActiveBucket] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['installment-aging'],
@@ -28,6 +31,51 @@ export default function InstallmentAgingPage() {
   const selectedBucket = data?.buckets.find(b => b.bucket === activeBucket)
   const totalOverdue  = data?.buckets.reduce((s, b) => s + b.total_iqd, 0) ?? 0
   const totalCount    = data?.buckets.reduce((s, b) => s + b.count, 0) ?? 0
+
+  const handleExport = async () => {
+    if (!data) return
+    if (exporting) return
+    setExporting(true)
+
+    try {
+      const headers = [
+        'فئة التأخير',
+        'عدد الأقساط المتأخرة',
+        'عدد العملاء',
+        'إجمالي المبلغ المتأخر (د.ع)'
+      ]
+
+      const rows: (string | number)[][] = []
+
+      data.buckets.forEach(b => {
+        rows.push([
+          b.label ?? '—',
+          Number(b.count || 0),
+          Number(b.customer_count || 0),
+          Number(b.total_iqd || 0)
+        ])
+      })
+
+      // Authoritative summary row
+      rows.push([
+        'إجمالي تقرير تقادم ديون الأقساط',
+        Number(totalCount),
+        '',
+        Number(totalOverdue)
+      ])
+
+      const dateStr = new Date().toISOString().split('T')[0]
+      const filename = `installment-aging-report-${dateStr}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+      toast.success('تم تصدير تقرير تقادم الديون بنجاح!')
+    } catch (err) {
+      console.error('[InstallmentAging Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -43,10 +91,22 @@ export default function InstallmentAgingPage() {
             </p>
           </div>
         </div>
-        <Button variant="glass" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 h-8">
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="glass"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting}
+            className="gap-2 h-8"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>{exporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
+          </Button>
+          <Button variant="glass" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 h-8">
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            تحديث
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

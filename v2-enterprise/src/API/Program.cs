@@ -147,6 +147,7 @@ using (var scope = app.Services.CreateScope())
         // استخدام InMemory أو التأكد من إتمام الترحيل في بيئات التطوير والإنتاج
         if (dbContext.Database.IsRelational())
         {
+            await dbContext.Database.MigrateAsync();
             Log.Information("قاعدة البيانات مهيأة ومعتمدة للمعالجة التشغيلية.");
         }
         else

@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { get } from '@/lib/api/client'
 import { useSalesInvoiceForm } from '@/components/sales/new/hooks/useSalesInvoiceForm'
@@ -12,9 +13,18 @@ import { PaymentGroupDetails } from '@/components/sales/new/PaymentGroupDetails'
 import { InstallmentsConfigCard } from '@/components/sales/new/InstallmentsConfigCard'
 import { SalesRepresentativeCard } from '@/components/sales/new/SalesRepresentativeCard'
 import { LiveInvoicePreviewPanel } from '@/components/sales/new/LiveInvoicePreviewPanel'
+import { VehicleOwnershipCard } from '@/components/sales/new/VehicleOwnershipCard'
 import { SalesFloatingActionBar } from '@/components/sales/new/SalesFloatingActionBar'
 
 export default function NewSalePage() {
+  // Pre-sale Ownership State
+  const [ownershipType, setOwnershipType] = React.useState<number>(3)
+  const [ownerPersonName, setOwnerPersonName] = React.useState<string>('')
+  const [ownerPersonPhone, setOwnerPersonPhone] = React.useState<string>('')
+  const [ownerPersonIdNumber, setOwnerPersonIdNumber] = React.useState<string>('')
+  const [ownerNotes, setOwnerNotes] = React.useState<string>('')
+  const [supplierId, setSupplierId] = React.useState<string>('')
+  const [supplierReference, setSupplierReference] = React.useState<string>('')
   // 1. Fetch active employees
   const { data: employeesData } = useQuery({
     queryKey: ['employees-active'],
@@ -26,6 +36,18 @@ export default function NewSalePage() {
     staleTime: 5 * 60 * 1000,
   })
   const employees = employeesData ?? []
+
+  // 1b. Fetch registered suppliers
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: async () => {
+      const res = await get<any>('/Suppliers?per_page=100')
+      const items = res?.data ? (Array.isArray(res.data) ? res.data : (res.data.items ?? [])) : (Array.isArray(res) ? res : [])
+      return items
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const suppliers = suppliersData ?? []
 
   // 2. Search hooks for vehicles and customers
   // First, we initialize a temporary vehicle search to lookup selected vehicle details
@@ -76,6 +98,26 @@ export default function NewSalePage() {
               isFetching={vehicleSearch.isFetching}
               onRefresh={vehicleSearch.refetch}
               errorMsg={form.errors.carId}
+            />
+
+            {/* Pre-Sale Vehicle Ownership Card */}
+            <VehicleOwnershipCard
+              ownershipType={ownershipType}
+              setOwnershipType={setOwnershipType}
+              ownerPersonName={ownerPersonName}
+              setOwnerPersonName={setOwnerPersonName}
+              ownerPersonPhone={ownerPersonPhone}
+              setOwnerPersonPhone={setOwnerPersonPhone}
+              ownerPersonIdNumber={ownerPersonIdNumber}
+              setOwnerPersonIdNumber={setOwnerPersonIdNumber}
+              ownerNotes={ownerNotes}
+              setOwnerNotes={setOwnerNotes}
+              supplierId={supplierId}
+              setSupplierId={setSupplierId}
+              supplierReference={supplierReference}
+              setSupplierReference={setSupplierReference}
+              suppliers={suppliers}
+              customersAsSellers={customerSearch.customers}
             />
 
             {/* Customer Selection Card */}

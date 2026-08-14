@@ -18,11 +18,14 @@ import {
   ChevronRight,
   Loader2,
   Printer,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react'
 import { cn, formatDate, formatMoney } from '@/lib/utils'
 import { getInstallments, getInstallmentPlan, payInstallmentSchedule, type InstallmentFilter } from '@/lib/api/installments'
 import type { InstallmentListItem } from '@/lib/api/installments'
+import { exportXlsx } from '@/lib/export'
+import { fetchPaginatedExportData } from '@/lib/financialExport'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -426,6 +429,107 @@ export default function InstallmentsPage() {
     </div>
   )
 
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+
+    try {
+      const result = await fetchPaginatedExportData<InstallmentListItem>({
+        fetchPage: async (params) => {
+          const res: any = await getInstallments({ page: params.page, per_page: params.pageSize, filter, search })
+          const rawData = res?.data ?? res
+          const items = Array.isArray(rawData) ? rawData : (rawData?.items ?? [])
+          const total = rawData?.total ?? items.length
+          return { items, total }
+        },
+        getId: (item) => item.id,
+        pageSize: 100,
+        maxRows: 5000,
+      })
+
+      const headers = [
+        'رقم العقد / الفاتورة',
+        'الزبون',
+        'السيارة',
+        'نوع الخطة',
+        'إجمالي العقد (مدين)',
+        'المبلغ المدفوع (دائن)',
+        'المبلغ المتبقي',
+        'العملة',
+        'قسط الشهر القادم',
+        'تاريخ الاستحقاق',
+        'الحالة'
+      ]
+
+      const rows: (string | number)[][] = result.items.map(item => [
+        item.invoice_number ?? `#${item.id}`,
+        item.buyer_name ?? '—',
+        item.car_name ?? '—',
+        item.plan_type === 'sale' ? 'بيع' : 'شراء',
+        Number(item.total_amount || 0),
+        Number(item.paid_amount || 0),
+        Number(item.remaining_amount || 0),
+        item.currency || 'USD',
+        Number(item.next_due_amount || 0),
+        item.next_due_date ? formatDate(item.next_due_date) : '—',
+        item.status === 'Paid' ? 'مسددة' : 'نشطة'
+      ])
+
+      // Authoritative summary row
+      const totalAmount = result.items.reduce((sum, item) => sum + Number(item.total_amount || 0), 0)
+      const totalPaid = result.items.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)
+      const totalRemaining = result.items.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0)
+
+      rows.push([
+        `إجمالي الأقساط المصدرة (${result.exportedCount} خطة)`,
+        '',
+        '',
+        '',
+        totalAmount,
+        totalPaid,
+        totalRemaining,
+        '',
+        '',
+        '',
+        ''
+      ])
+
+      const dateStr = new Date().toISOString().split('T')[0]
+      const filename = `installments-list-${filter}-${dateStr}.xlsx`
+
+      await exportXlsx(filename, headers, rows)
+
+      if (result.truncated) {
+        toast.warning(`تم تصدير أول ${result.exportedCount} خطة أقساط من أصل ${result.totalMatching}`)
+      } else {
+        toast.success(`تم تصدير ${result.exportedCount} خطة أقساط بنجاح!`)
+      }
+    } catch (err) {
+      console.error('[Installments Export Error]:', err)
+      toast.error('تعذر إنشاء ملف Excel. يرجى المحاولة مرة أخرى.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleExport}
+        disabled={exporting || isLoading}
+        className="h-8 gap-2 border-border/60 bg-secondary/30 text-xs hover:bg-secondary/40"
+      >
+        <Download className="h-3.5 w-3.5" />
+        <span>{exporting ? 'جاري التصدير...' : 'تصدير Excel'}</span>
+      </Button>
+      {viewToggle}
+    </div>
+  )
+
   const handleQuickPaySuccess = () => {
     setQuickPayPlanId(null)
     refetch()
@@ -440,7 +544,7 @@ export default function InstallmentsPage() {
         icon={<CalendarDays className="h-4 w-4" />}
         count={isLoading ? undefined : filteredItems.length}
         filtered={isFiltered}
-        actions={viewToggle}
+        actions={headerActions}
       />
 
       {/* ── Status Funnel Grid ── */}

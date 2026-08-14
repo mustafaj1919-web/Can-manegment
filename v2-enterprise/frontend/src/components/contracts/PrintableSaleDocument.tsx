@@ -2,6 +2,7 @@
 
 /**
  * PrintableSaleDocument — Official Two-Page Al-Asdiqaa Showroom Contract
+ * Enlarged typography, full A4 page coverage, shrink notes & enlarge signatures.
  */
 
 import React from 'react'
@@ -9,6 +10,8 @@ import { SHOWROOM } from '@/lib/showroom-config'
 import type { SaleDetail } from '@/lib/api/sales'
 import type { Car } from '@/lib/api/inventory'
 import type { Customer } from '@/lib/api/customers'
+
+export type SaleDocumentDto = any
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -48,21 +51,92 @@ const tr = (dict: string, key?: string | null) => (key ? (AR[dict][key] ?? key) 
 function FL({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div className="c-fl">
-      <span className="c-fl-lbl">{label}</span>
-      <span className="c-fl-val">{value != null && value !== '' ? value : ''}</span>
+      <span className="c-fl-lbl">{label}:</span>
+      <span className="c-fl-val">{value != null && value !== '' ? value : '—'}</span>
     </div>
   )
 }
 
 export interface PrintableSaleDocumentProps {
-  sale: SaleDetail
+  sale?: SaleDetail
+  document?: any
   fullCar?: Car | null
   fullBuyer?: Customer | null
   mode?: 'receipt' | 'contract'
 }
 
-export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSaleDocumentProps) {
+export function PrintableSaleDocument({ sale: inputSale, document, fullCar, fullBuyer }: PrintableSaleDocumentProps) {
+  const sale: SaleDetail = inputSale ?? (document ? {
+    id: document.id,
+    invoice_number: document.contractNumber || document.documentNumber,
+    sale_date: document.saleDate,
+    selling_price: document.financials?.sellingPriceAmount ?? 0,
+    paid_amount: document.financials?.depositPaidAmount ?? 0,
+    remaining_amount: document.financials?.remainingBalanceAmount ?? 0,
+    currency: document.financials?.currency || 'USD',
+    payment_method: document.financials?.paymentMethod || 'Cash',
+    sales_rep_name: document.organizerEmployeeNameSnapshot || document.preparedByEmployeeNameSnapshot,
+    sales_rep_phone: document.organizerEmployeePhoneSnapshot,
+    sales_rep_id_number: document.organizerEmployeeIdNumberSnapshot,
+    sales_rep_title: document.organizerEmployeeJobTitleSnapshot,
+    car: {
+      brand: document.vehicle?.brand,
+      model: document.vehicle?.model,
+      manufacturing_year: document.vehicle?.manufacturingYear,
+      color: document.vehicle?.color,
+      vin: document.vehicle?.vin,
+      engine_size: document.vehicle?.engineNumber,
+      plate_number: document.vehicle?.plateNumber,
+      mileage: document.vehicle?.mileage,
+      condition: document.vehicle?.condition,
+    },
+    buyer: {
+      name: document.buyer?.fullName,
+      phone: document.buyer?.phone,
+      id_number: document.buyer?.idNumber,
+      address: document.buyer?.address,
+    }
+  } as any : {} as any)
+
   const c = (fullCar ?? sale.car) as Car | null
+
+  // Resolve Seller (Party 1 / البائع) based on Ownership Type (PERSON, SUPPLIER, COMPANY):
+  const rawOwnershipType = (
+    (sale as any).ownership_type || 
+    (sale as any).ownershipType || 
+    (document as any)?.ownershipType ||
+    (c as any)?.ownership_type ||
+    ((sale as any).owner_person_name || (sale as any).ownerPersonName || (c as any)?.owner_person_name ? 'PERSON' : 
+     ((sale as any).supplier_name || (sale as any).supplierName || c?.supplier_name ? 'SUPPLIER' : 'COMPANY'))
+  )
+  
+  let ownershipType = String(rawOwnershipType).toUpperCase()
+  if (rawOwnershipType === 1 || rawOwnershipType === '1') ownershipType = 'PERSON'
+  if (rawOwnershipType === 2 || rawOwnershipType === '2') ownershipType = 'SUPPLIER'
+  if (rawOwnershipType === 3 || rawOwnershipType === '3') ownershipType = 'COMPANY'
+
+  let sellerName = SHOWROOM.name
+  let sellerIdNum = (sale as any).sales_rep_id_number ?? SHOWROOM.phones[0]
+  let sellerPhone = (sale as any).sales_rep_phone ?? SHOWROOM.phones[0]
+  let sellerAddress = (sale as any).sales_rep_address ?? 'بغداد — العراق'
+  let sellerTitle = 'الطرف الأول (البائع)'
+  let sellerEmail = 'sales@alasdiqaa.com'
+
+  if (ownershipType === 'PERSON') {
+    sellerName = (sale as any).owner_person_name || (sale as any).ownerPersonName || (c as any)?.owner_person_name || '—'
+    sellerIdNum = (sale as any).owner_person_id_number || (sale as any).ownerPersonIdNumber || (c as any)?.owner_person_id_number || '—'
+    sellerPhone = (sale as any).owner_person_phone || (sale as any).ownerPersonPhone || (c as any)?.owner_person_phone || '—'
+    sellerAddress = (sale as any).owner_address || (sale as any).ownerAddress || '—'
+    sellerTitle = 'الطرف الأول (البائع - المالك)'
+    sellerEmail = '—'
+  } else if (ownershipType === 'SUPPLIER') {
+    sellerName = (sale as any).supplier_name || (sale as any).supplierName || c?.supplier_name || (sale as any).supplier?.name || '—'
+    sellerIdNum = (sale as any).supplier_code || (sale as any).supplierCode || (sale as any).supplier_reference || '—'
+    sellerPhone = (sale as any).supplier_phone || (sale as any).supplierPhone || (sale as any).supplier?.phone || '—'
+    sellerAddress = (sale as any).supplier_address || (sale as any).supplierAddress || (sale as any).supplier?.address || '—'
+    sellerTitle = 'الطرف الأول (البائع - المورد)'
+    sellerEmail = (sale as any).supplier_email || '—'
+  }
 
   const buyerName    = fullBuyer?.full_name ?? fullBuyer?.name ?? sale.buyer?.name ?? '—'
   const buyerPhone   = fullBuyer?.phone    ?? sale.buyer?.phone ?? '—'
@@ -72,23 +146,31 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
   const repName    = sale.sales_rep_name    ?? SHOWROOM.nameShort
   const repPhone   = sale.sales_rep_phone   ?? SHOWROOM.phones[0]
   const repIdNum   = sale.sales_rep_id_number ?? '—'
-  const repTitle   = sale.sales_rep_title   ?? 'موظف مبيعات'
+  const repTitle   = sale.sales_rep_title   ?? 'منظّم العقد'
   const repAddress = sale.sales_rep_address ?? 'بغداد — العراق'
 
   const cond = tr('cond', c?.condition) || 'مستعملة'
   const payMethod = tr('pay', sale.payment_method) ?? (sale.remaining_amount > 0 ? 'أقساط' : 'نقداً')
 
   // Generate document verification code
-  const verificationCode = sale.id ? String(sale.id).substring(0, 10).toUpperCase() : '0503012200'
+  const verificationCode = 
+    (sale as any).verification_code || 
+    (sale as any).verificationCode || 
+    (sale as any).contract_number || 
+    (sale as any).contractNumber || 
+    (sale as any).document_number || 
+    (sale as any).documentNumber || 
+    sale.invoice_number || 
+    (sale.id ? String(sale.id) : '8666F9F1-D')
 
   // Estimate final payment date
   const finalPaymentDate = sale.installment_plan?.schedules 
     ? fmtDate(sale.installment_plan.schedules[sale.installment_plan.schedules.length - 1]?.due_date)
     : fmtDate(sale.sale_date)
 
-  // QR link (fallback to local if code not set)
-  const qrCodeText = (sale as any).einvoice_qr_code || `sale:${sale.id}`
-  const qrImageUrl = `https://chart.googleapis.com/chart?chs=80x80&cht=qr&chl=${encodeURIComponent(qrCodeText)}`
+  // Public QR target URL (Scannable with any mobile phone camera)
+  const publicQrTargetUrl = `https://admin.al-asdiqa.com/QR/${verificationCode}`
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicQrTargetUrl)}`
 
   return (
     <div className="c-doc-container" dir="rtl">
@@ -117,15 +199,15 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
               <p><span>تاريخ الإصدار:</span> <b>{fmtDate(sale.sale_date)}</b></p>
               <p><span>رمز الوثيقة:</span> <b className="font-mono">{verificationCode}</b></p>
             </div>
-            <img src={qrImageUrl} alt="QR Code" className="c-qr" />
+            <img src={qrImageUrl} alt="QR Code" className="c-qr" width={56} height={56} />
           </div>
         </div>
 
-        <div className="c-content space-y-4">
+        <div className="c-content space-y-3.5 flex-1 flex flex-col justify-between">
           {/* Section 1 */}
           <div className="c-sec">
             <h2 className="c-sec-title">أولاً: بيانات العقد</h2>
-            <div className="c-grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <FL label="رقم العقد" value={sale.invoice_number} />
               <FL label="تاريخ التحرير" value={fmtDate(sale.sale_date)} />
               <FL label="مكان التحرير" value="معرض شركة الأصدقاء - الفرع الرئيسي" />
@@ -138,20 +220,21 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           {/* Section 2 */}
           <div className="c-sec">
             <h2 className="c-sec-title">ثانياً: بيانات الطرف الأول (البائع)</h2>
-            <div className="c-grid grid-cols-2 gap-4">
-              <FL label="الاسم الكامل" value={SHOWROOM.name} />
-              <FL label="رقم الهوية أو البطاقة الوطنية" value={repIdNum} />
-              <FL label="رقم الهاتف" value={repPhone} />
-              <FL label="العنوان الكامل" value={repAddress} />
-              <FL label="صفة التوقيع" value={repTitle} />
-              <FL label="البريد الإلكتروني" value="sales@alasdiqaa.com" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+              <FL label="الاسم الكامل" value={sellerName} />
+              <FL label="رقم الهوية أو البطاقة الوطنية" value={sellerIdNum} />
+              <FL label="رقم الهاتف" value={sellerPhone} />
+              <FL label="العنوان الكامل" value={sellerAddress} />
+              <FL label="صفة التوقيع" value={sellerTitle} />
+              <FL label="البريد الإلكتروني" value={sellerEmail} />
             </div>
           </div>
+
 
           {/* Section 3 */}
           <div className="c-sec">
             <h2 className="c-sec-title">ثالثاً: بيانات الطرف الثاني (المشتري)</h2>
-            <div className="c-grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <FL label="الاسم الكامل" value={buyerName} />
               <FL label="رقم الهوية أو البطاقة الوطنية" value={buyerIdNum} />
               <FL label="رقم الهاتف" value={buyerPhone} />
@@ -164,7 +247,7 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           {/* Section 4 */}
           <div className="c-sec">
             <h2 className="c-sec-title">رابعاً: بيانات المركبة</h2>
-            <div className="c-grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <FL label="نوع المركبة" value={c?.brand} />
               <FL label="الموديل والفئة" value={c?.model} />
               <FL label="سنة الصنع" value={c?.manufacturing_year} />
@@ -180,8 +263,8 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
 
           {/* Section 5 */}
           <div className="c-sec">
-            <h2 className="c-sec-title">خامسة: القيمة المالية وطريقة الدفع</h2>
-            <div className="c-grid grid-cols-2 gap-4">
+            <h2 className="c-sec-title">خامساً: القيمة المالية وطريقة الدفع</h2>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <FL label="قيمة البيع رقماً" value={fmtMoney(sale.selling_price, sale.currency)} />
               <FL label="قيمة البيع كتابةً" value="فقط وقدره (تم تدقيق ومطابقة السعر مع الحسابات)" />
               <FL label="طريقة الدفع" value={payMethod} />
@@ -195,7 +278,7 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
         </div>
 
         {/* Security Warning Note */}
-        <div className="c-warning-box">
+        <div className="c-warning-box my-1.5">
           🛡️ تنبيه أمني: أي كشط أو تعديل أو إضافة في هذا العقد يُعد باطلاً ويخضع للمسؤولية القانونية ويعتبر تزويراً للوثائق.
         </div>
 
@@ -208,11 +291,11 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
       </div>
 
       {/* =======================================================================
-          PAGE 2: TERMS AND CONDITIONS (الشروط والأحكام)
+          PAGE 2: TERMS AND SIGNATURES (شروط العقد والتوقيعات)
          ======================================================================= */}
       <div className="c-page page-2">
         
-        {/* Header Block (Same layout) */}
+        {/* Header Block */}
         <div className="c-hdr">
           <div className="c-hdr-r">
             <img src="/logo.png" alt="شعار المعرض" className="c-logo" />
@@ -222,8 +305,8 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
             </div>
           </div>
           <div className="c-hdr-c">
-            <h1 className="c-doc-title">الشروط والأحكام</h1>
-            <p className="c-doc-subtitle">تقرأ البنود أدناه مع بيانات العقد في الصفحة الأولى وتعد جزءاً لا يتجزأ منه</p>
+            <h1 className="c-doc-title">عقد بيع وشراء مركبة</h1>
+            <p className="c-doc-subtitle">الصفحة الثانية — البنود والتوقيعات الرسمية</p>
           </div>
           <div className="c-hdr-l">
             <div className="c-meta-box">
@@ -231,23 +314,23 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
               <p><span>تاريخ الإصدار:</span> <b>{fmtDate(sale.sale_date)}</b></p>
               <p><span>رمز الوثيقة:</span> <b className="font-mono">{verificationCode}</b></p>
             </div>
-            <img src={qrImageUrl} alt="QR Code" className="c-qr" />
+            <img src={qrImageUrl} alt="QR Code" className="c-qr" width={56} height={56} />
           </div>
         </div>
 
-        <div className="c-content space-y-4 flex-1 flex flex-col justify-between">
+        <div className="c-content space-y-3 flex-1 flex flex-col justify-between">
           
           {/* Section 6: clauses */}
           <div className="c-sec">
             <h2 className="c-sec-title">سادساً: بنود العقد</h2>
-            <div className="c-clauses">
+            <div className="c-clauses space-y-1">
               <div className="c-clause">
                 <span className="c-clause-no">01</span>
                 <p>أقر الطرف الأول بأنه المالك أو المدخل قانوناً لبيع المركبة المبينة في هذا العقد، وأن جميع البيانات المقدمة صحيحة حسب المستندات المتاحة عند التعاقد.</p>
               </div>
               <div className="c-clause">
                 <span className="c-clause-no">02</span>
-                <p>أقر الطرف الثاني بأنه عاين المركبة معاينة نافية للجهالة، واطلع على حالتها الفنية والقانونية وقبل شرائها وفق البيانات والرسوم والمواصفات المحددة.</p>
+                <p>أقر الطرف الثاني بأنه عاين المركبة معاينة نافية للجهالة، واطلع على حالتها الفنية والقانونية وقبل بشرائها وفق البيانات والرسوم والمواصفات المحددة.</p>
               </div>
               <div className="c-clause">
                 <span className="c-clause-no">03</span>
@@ -276,42 +359,44 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
             </div>
           </div>
 
-          {/* Section 7: notes */}
-          <div className="c-sec">
+          {/* Section 7: notes (COMPACT) */}
+          <div className="c-sec c-sec-compact">
             <h2 className="c-sec-title">سابعاً: ملاحظات أو شروط إضافية</h2>
-            <div className="c-notes-area">
-              <p className="c-note-line">{(sale as any).notes || sale.payments?.[0]?.notes || 'لا يوجد ملاحظات إضافية تم تسجيلها.'}</p>
-              <p className="c-note-line"></p>
-              <p className="c-note-line"></p>
+            <div className="c-notes-area-compact">
+              <p className="c-note-line-compact">{(sale as any).notes || sale.payments?.[0]?.notes || 'لا يوجد ملاحظات إضافية تم تسجيلها.'}</p>
             </div>
           </div>
 
-          {/* Section 8: signatures */}
-          <div className="c-sec">
-            <h2 className="c-sec-title">ثامناً: التوقيعات والختم</h2>
+          {/* Section 8: signatures (PROMINENT & ENLARGED) */}
+          <div className="c-sec c-sec-signatures flex-1 flex flex-col justify-end">
+            <h2 className="c-sec-title c-sec-title-lg">ثامناً: التوقيعات والختم الرسمية</h2>
             
             <div className="c-sigs-grid">
               <div className="c-sig-box">
-                <div className="c-sig-title">توقيع البائع</div>
-                <div className="c-sig-name">الاسم: {SHOWROOM.name}</div>
+                <div className="c-sig-title">توقيع البائع (الطرف الأول)</div>
+                <div className="c-sig-line"></div>
+                <div className="c-sig-name">الاسم: {sellerName}</div>
               </div>
               <div className="c-sig-box">
-                <div className="c-sig-title">توقيع المشتري</div>
+                <div className="c-sig-title">توقيع المشتري (الطرف الثاني)</div>
+                <div className="c-sig-line"></div>
                 <div className="c-sig-name">الاسم: {buyerName}</div>
               </div>
               <div className="c-sig-box">
-                <div className="c-sig-title">توقيع ممثل الشركة</div>
+                <div className="c-sig-title">توقيع ممثل الشركة المختص</div>
+                <div className="c-sig-line"></div>
                 <div className="c-sig-name">الاسم: {repName}</div>
               </div>
             </div>
 
-            {/* Seal and note */}
+            {/* Seal and note (Enlarged) */}
             <div className="c-seal-wrap">
               <div className="c-seal-stamp">
                 <span>ختم</span>
                 <span>الشركة</span>
+                <span>الرسمي</span>
               </div>
-              <p className="c-seal-note">أقر الموقعون أعلاه بصحة البيانات والقيود واستلم نسخة من هذا العقد بعد المطابقة.</p>
+              <p className="c-seal-note">أقر الموقعون أعلاه بصحة البيانات والتفريغات الواردة في هذا العقد واستلم كل طرف نسخته الأصلية بعد المطابقة والتوقيع.</p>
             </div>
           </div>
         </div>
@@ -319,7 +404,7 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
         {/* Footer */}
         <div className="c-footer">
           <span>نسخة: العميل</span>
-          <span className="font-bold text-slate-500">ختم الشركة وتوقيع الطرفين</span>
+          <span className="font-bold text-slate-500">ختم الشركة وتوقيع الطرفين الرسمية</span>
           <span>نسخة: الشركة</span>
         </div>
       </div>
@@ -342,7 +427,8 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           color: #1e293b;
           width: 210mm;
           min-height: 297mm;
-          padding: 12mm 15mm;
+          max-height: 297mm;
+          padding: 10mm 14mm;
           box-shadow: 0 10px 25px rgba(0,0,0,0.3);
           border-radius: 4px;
           display: flex;
@@ -351,6 +437,7 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           font-family: 'Tajawal', sans-serif;
           box-sizing: border-box;
           position: relative;
+          overflow: hidden;
         }
 
         /* ── Header Styling ── */
@@ -358,29 +445,29 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           display: flex;
           justify-content: space-between;
           align-items: center;
-          border-bottom: 2px solid #0f223d;
+          border-bottom: 2.5px solid #0f223d;
           padding-bottom: 8px;
           margin-bottom: 12px;
         }
         .c-hdr-r {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
           flex: 1;
         }
         .c-logo {
-          height: 38px;
+          height: 42px;
           width: auto;
           object-fit: contain;
         }
         .c-co-name {
-          font-size: 13px;
+          font-size: 15px;
           font-weight: 900;
           color: #0f223d;
           line-height: 1.2;
         }
         .c-co-sub {
-          font-size: 9px;
+          font-size: 10px;
           color: #64748b;
           font-weight: 700;
         }
@@ -389,13 +476,14 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           flex: 2;
         }
         .c-doc-title {
-          font-size: 18px;
+          font-size: 21px;
           font-weight: 900;
           color: #0f223d;
           margin: 0;
+          letter-spacing: -0.3px;
         }
         .c-doc-subtitle {
-          font-size: 9px;
+          font-size: 9.5px;
           color: #b89a25;
           font-weight: 800;
           margin-top: 2px;
@@ -403,42 +491,51 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
         .c-hdr-l {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           justify-content: flex-end;
           flex: 1.5;
         }
         .c-meta-box {
-          font-size: 9px;
+          font-size: 9.5px;
           color: #334155;
           text-align: right;
           line-height: 1.5;
+          white-space: nowrap;
         }
         .c-meta-box span {
           color: #64748b;
-          font-weight: 600;
+          font-weight: 700;
           display: inline-block;
         }
         .c-meta-box b {
           color: #0f223d;
+          display: inline-block;
+          direction: ltr;
         }
         .c-qr {
-          height: 52px;
-          width: 52px;
+          height: 54px;
+          width: 54px;
           object-fit: contain;
-          border: 1px solid #e2e8f0;
+          border: 1.5px solid #e2e8f0;
           padding: 2px;
-          border-radius: 4px;
+          border-radius: 6px;
+          background: #ffffff;
         }
 
         /* ── Sections ── */
         .c-sec-title {
           background: #0f223d;
           color: #ffffff;
-          font-size: 10.5px;
+          font-size: 11px;
           font-weight: 900;
           padding: 5px 12px;
-          border-right: 4px solid #dc2626;
-          margin-bottom: 8px;
+          border-right: 5px solid #dc2626;
+          margin-bottom: 7px;
+          border-radius: 2px;
+        }
+        .c-sec-title-lg {
+          font-size: 12px;
+          padding: 6px 14px;
         }
 
         /* ── Form fields (dotted line) ── */
@@ -451,13 +548,13 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           min-height: 22px;
         }
         .c-fl-lbl {
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 800;
           color: #475569;
           white-space: nowrap;
         }
         .c-fl-val {
-          font-size: 10px;
+          font-size: 10.5px;
           font-weight: 900;
           color: #0f172a;
           flex: 1;
@@ -467,14 +564,16 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
         .c-clauses {
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 3px;
         }
         .c-clause {
           display: flex;
+          flex-direction: row;
           align-items: flex-start;
-          gap: 8px;
+          gap: 10px;
           border-bottom: 1px dotted #cbd5e1;
-          padding: 6px 0;
+          padding: 5px 0;
+          direction: rtl;
         }
         .c-clause:last-child {
           border-bottom: none;
@@ -483,94 +582,104 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           background: #f1f5f9;
           color: #0f223d;
           font-weight: 900;
-          font-size: 10px;
-          padding: 2px 6px;
+          font-size: 10.5px;
+          padding: 2.5px 8px;
           border-radius: 4px;
+          flex-shrink: 0;
+          min-width: 26px;
+          text-align: center;
         }
         .c-clause p {
-          font-size: 9.5px;
+          font-size: 10px;
           line-height: 1.5;
-          color: #334155;
+          color: #1e293b;
           margin: 0;
           font-weight: 700;
+          flex: 1;
         }
 
-        /* ── Notes area ── */
-        .c-notes-area {
+        /* ── Notes area (COMPACT) ── */
+        .c-notes-area-compact {
           border: 1px dashed #cbd5e1;
-          border-radius: 6px;
-          padding: 10px 15px;
+          border-radius: 5px;
+          padding: 6px 12px;
           background: #f8fafc;
         }
-        .c-note-line {
-          font-size: 10px;
+        .c-note-line-compact {
+          font-size: 9.5px;
           font-weight: 800;
           color: #475569;
-          min-height: 18px;
-          line-height: 1.5;
+          line-height: 1.4;
+          margin: 0;
         }
 
-        /* ── Signatures ── */
+        /* ── Signatures Section (ENLARGED) ── */
         .c-sigs-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
+          gap: 14px;
           margin-top: 10px;
         }
         .c-sig-box {
-          border: 1px solid #cbd5e1;
-          border-radius: 6px;
-          padding: 15px 10px 8px;
+          border: 1.5px solid #0f223d;
+          border-radius: 8px;
+          padding: 14px 12px 10px;
           text-align: center;
-          min-height: 58px;
+          min-height: 88px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
+          background: #ffffff;
         }
         .c-sig-title {
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 900;
           color: #0f223d;
         }
+        .c-sig-line {
+          min-height: 28px;
+        }
         .c-sig-name {
-          font-size: 9px;
-          color: #64748b;
-          font-weight: 700;
-          margin-top: 15px;
-          border-top: 1px dotted #cbd5e1;
-          padding-top: 4px;
+          font-size: 9.5px;
+          color: #334155;
+          font-weight: 800;
+          margin-top: 8px;
+          border-top: 1px dashed #94a3b8;
+          padding-top: 5px;
         }
 
-        /* ── Seal Stamp ── */
+        /* ── Seal Stamp (ENLARGED) ── */
         .c-seal-wrap {
           display: flex;
           align-items: center;
-          gap: 15px;
+          gap: 16px;
           margin-top: 12px;
           background: #f8fafc;
-          border-radius: 6px;
-          padding: 8px 12px;
-          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          padding: 10px 14px;
+          border: 1.5px solid #0f223d;
         }
         .c-seal-stamp {
-          width: 52px;
-          height: 52px;
-          border: 2px dashed #94a3b8;
+          width: 58px;
+          height: 58px;
+          border: 2px dashed #0f223d;
           border-radius: 50%;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          color: #94a3b8;
-          font-size: 8px;
+          color: #0f223d;
+          font-size: 9px;
           font-weight: 900;
-          line-height: 1.2;
+          line-height: 1.15;
           flex-shrink: 0;
+          background: #ffffff;
         }
         .c-seal-note {
-          font-size: 9px;
+          font-size: 9.5px;
           font-weight: 800;
-          color: #475569;
+          color: #334155;
+          line-height: 1.4;
         }
 
         /* ── Warning Box ── */
@@ -590,15 +699,15 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           display: flex;
           justify-content: space-between;
           font-size: 9px;
-          color: #94a3b8;
-          font-weight: 700;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 6px;
+          color: #64748b;
+          font-weight: 800;
+          border-top: 1px solid #cbd5e1;
+          padding-top: 5px;
           margin-top: 6px;
         }
 
         /* =======================================================================
-            PRINT STYLING
+            PRINT STYLING (Strict A4 2-Page Pagination Invariant)
            ======================================================================= */
         @media print {
           @page {
@@ -606,17 +715,19 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
             margin: 0;
           }
           
-          /* Hide app topbar, sidebar, etc. */
+          /* Hide app topbar, sidebar, FAB, floating actions, etc. */
           aside, header, nav, footer,
           [class*="toolbar"], [class*="Toolbar"],
           [class*="topbar"],  [class*="Topbar"],
           [class*="sidebar"], [class*="Sidebar"],
           [data-radix-scroll-area-viewport],
-          .print\\:hidden,
+          .print\\:hidden, .print\:hidden,
           [class*="receipt-toolbar"],
-          [class*="contract-toolbar"] {
+          [class*="contract-toolbar"],
+          .fixed, [class*="fixed"] {
             display: none !important;
           }
+
 
           html, body {
             margin: 0 !important;
@@ -633,16 +744,29 @@ export function PrintableSaleDocument({ sale, fullCar, fullBuyer }: PrintableSal
           .c-page {
             width: 210mm !important;
             height: 297mm !important;
-            page-break-after: always !important;
+            max-height: 297mm !important;
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
-            padding: 8mm 10mm !important;
+            padding: 8mm 12mm !important;
             box-sizing: border-box !important;
             position: relative !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: space-between !important;
+            overflow: hidden !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          .c-page.page-1 {
+            page-break-after: always !important;
+            break-after: page !important;
+          }
+
+          .c-page.page-2 {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
 
           .c-page * {

@@ -434,42 +434,34 @@
 }
 
 @media print {
-
+  .no-print,
+  .print\:hidden,
+  [class*="print:hidden"],
   .app-topnav,
   .app-mobile-backdrop,
-  .app-shell-root>aside {
+  .app-shell-root > aside,
+  nav.fixed,
+  [class*="fixed"],
+  [role="dialog"],
+  [data-radix-portal] {
     display: none !important;
   }
 
   .app-shell-root,
   .app-shell-main,
   .app-shell-content,
-  .page-container {
+  .page-container,
+  .app-shell-root > div,
+  main {
     margin: 0 !important;
     padding: 0 !important;
-    width: auto !important;
+    width: 100% !important;
     max-width: none !important;
     min-height: 0 !important;
     overflow: visible !important;
     background: white !important;
     box-shadow: none !important;
     transform: none !important;
-  }
-
-  /* Reset inner AppShell wrappers not covered by named classes */
-  .app-shell-root > div,
-  main {
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    min-height: 0 !important;
-  }
-
-  /* Hide bottom nav and FAB in print */
-  nav.fixed,
-  .fixed.bottom-0,
-  [class*="fixed bottom"] {
-    display: none !important;
   }
 
   html,

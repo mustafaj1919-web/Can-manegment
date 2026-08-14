@@ -107,7 +107,7 @@ export default function SaleContractPage() {
         <div className="contract-rep-wrap">
           <label className="contract-rep-label">
             <User className="contract-rep-icon" />
-            ممثل البائع
+            منظّم العقد
           </label>
           <select
             value={effectiveRepId ?? ''}
@@ -116,8 +116,8 @@ export default function SaleContractPage() {
               setSelectedEmpId(val || null)
             }}
             className="contract-rep-select"
-            aria-label="اختر ممثل البائع"
-            title="ممثل البائع"
+            aria-label="اختر منظّم العقد"
+            title="منظّم العقد"
           >
             <option value="">— اختر موظفاً —</option>
             {employees.map((emp) => (

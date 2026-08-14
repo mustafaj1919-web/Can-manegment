@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using CarShowroomManagementV2.Application.Common.Interfaces;
 using CarShowroomManagementV2.Domain.Entities;
+using CarShowroomManagementV2.Domain.Enums;
 using CarShowroomManagementV2.Infrastructure.Persistence.Interceptors;
 
 namespace CarShowroomManagementV2.Infrastructure.Persistence
@@ -206,10 +207,62 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 .HasForeignKey(s => s.AccountId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // إعدادات عقود المبيعات
+            // إعدادات عقود المبيعات والوثائق الرسمية
             modelBuilder.Entity<SalesContract>()
-                .HasIndex(sc => new { sc.ContractNumber, sc.BranchId })
+                .HasIndex(sc => sc.DocumentNumber)
                 .IsUnique();
+
+            modelBuilder.Entity<SalesContract>()
+                .HasIndex(sc => sc.VerificationCode)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesContract>()
+                .HasIndex(sc => new { sc.ContractNumber, sc.DocumentRevision })
+                .IsUnique();
+
+            modelBuilder.Entity<SalesContract>()
+                .HasIndex(sc => sc.SupplierId);
+
+            modelBuilder.Entity<SalesContract>()
+                .HasIndex(sc => sc.PreparedByUserId);
+
+            modelBuilder.Entity<SalesContract>()
+                .Property(sc => sc.DocumentStatus)
+                .HasDefaultValue(SaleDocumentStatus.DRAFT);
+
+            modelBuilder.Entity<SalesContract>()
+                .ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_SalesContracts_DocumentStatus", "\"DocumentStatus\" IN (1, 2, 3, 4)");
+                    t.HasCheckConstraint("CK_SalesContracts_OwnershipType", "\"OwnershipType\" IN (0, 1, 2, 3)");
+                });
+
+            modelBuilder.Entity<SalesContract>()
+                .HasIndex(sc => sc.DocumentStatus);
+
+            modelBuilder.Entity<SalesContract>()
+                .HasIndex(sc => sc.OwnershipType);
+
+            modelBuilder.Entity<SalesContract>()
+                .HasOne(sc => sc.ReissuedFromDocument)
+                .WithMany()
+                .HasForeignKey(sc => sc.ReissuedFromDocumentId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesContract>()
+                .HasOne(sc => sc.PreparedByUser)
+                .WithMany()
+                .HasForeignKey(sc => sc.PreparedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesContract>()
+                .HasOne(sc => sc.Supplier)
+                .WithMany()
+                .HasForeignKey(sc => sc.SupplierId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<SalesContract>()
                 .HasOne(sc => sc.Customer)
@@ -462,7 +515,7 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                 }
             }
 
-            // 3. عقود المبيعات: منع تغيير العميل والسيارة
+            // 3. عقود المبيعات: منع تغيير العميل والسيارة، وفرض الحماية المطلقة للوثائق المعتمدة (FINALIZED)
             foreach (var entry in ChangeTracker.Entries<SalesContract>())
             {
                 if (entry.State == EntityState.Modified)
@@ -475,6 +528,48 @@ namespace CarShowroomManagementV2.Infrastructure.Persistence
                     if (originalCustomerId != currentCustomerId || originalVehicleId != currentVehicleId)
                     {
                         throw new InvalidOperationException("قوانين الأمان: لا يمكن تغيير العميل أو السيارة المرتبطة بعقد المبيعات بعد إنشائه.");
+                    }
+
+                    var originalStatus = entry.OriginalValues.GetValue<SaleDocumentStatus>("DocumentStatus");
+                    var currentStatus = entry.CurrentValues.GetValue<SaleDocumentStatus>("DocumentStatus");
+
+                    if (originalStatus == SaleDocumentStatus.FINALIZED && currentStatus == SaleDocumentStatus.FINALIZED)
+                    {
+                        var protectedProperties = new[]
+                        {
+                            nameof(SalesContract.ContractNumber),
+                            nameof(SalesContract.DocumentNumber),
+                            nameof(SalesContract.DocumentRevision),
+                            nameof(SalesContract.VerificationCode),
+                            nameof(SalesContract.CustomerId),
+                            nameof(SalesContract.BuyerNameSnapshot),
+                            nameof(SalesContract.BuyerPhoneSnapshot),
+                            nameof(SalesContract.BuyerIdNumberSnapshot),
+                            nameof(SalesContract.VehicleId),
+                            nameof(SalesContract.VinSnapshot),
+                            nameof(SalesContract.EngineNumberSnapshot),
+                            nameof(SalesContract.OwnershipType),
+                            nameof(SalesContract.OwnerPersonNameSnapshot),
+                            nameof(SalesContract.SupplierId),
+                            nameof(SalesContract.SupplierNameSnapshot),
+                            nameof(SalesContract.CompanyNameSnapshot),
+                            nameof(SalesContract.SalePrice),
+                            nameof(SalesContract.TaxAmount),
+                            nameof(SalesContract.RegistrationFees),
+                            nameof(SalesContract.Discount),
+                            nameof(SalesContract.NetPrice),
+                            nameof(SalesContract.PreparedByUserId),
+                            nameof(SalesContract.TermsContentSnapshot)
+                        };
+
+                        foreach (var prop in protectedProperties)
+                        {
+                            var member = entry.Property(prop);
+                            if (member.IsModified && !Equals(member.OriginalValue, member.CurrentValue))
+                            {
+                                throw new InvalidOperationException($"قوانين الأمان: الوثيقة الرسمية معتمدة ومقفلة (FINALIZED). لا يمكن تعديل الخاصية '{prop}' مباشرة. يرجى استخدام أمر إعادة الإصدار (Reissue).");
+                            }
+                        }
                     }
                 }
             }

@@ -1183,6 +1183,9 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("InstallmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -1219,6 +1222,8 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.HasIndex("ContraAccountId");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("InstallmentId");
 
                     b.HasIndex("JournalEntryId");
 
@@ -1262,6 +1267,12 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
+                    b.Property<string>("Currency")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -1280,6 +1291,9 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("PreviousSaleContractId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("PurchaseCost")
                         .HasColumnType("numeric(18,4)");
 
@@ -1290,17 +1304,28 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("SourceType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("SupplierId")
+                    b.Property<Guid?>("SupplierId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("VehicleId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("PreviousSaleContractId")
+                        .IsUnique()
+                        .HasFilter("\"PreviousSaleContractId\" IS NOT NULL AND \"Status\" <> 'Cancelled'");
+
+                    b.HasIndex("SourceType");
 
                     b.HasIndex("SupplierId");
 
@@ -1309,7 +1334,14 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.HasIndex("PurchaseNumber", "BranchId")
                         .IsUnique();
 
-                    b.ToTable("Purchases");
+                    b.HasIndex("SourceType", "CustomerId");
+
+                    b.HasIndex("SourceType", "SupplierId");
+
+                    b.ToTable("Purchases", t =>
+                        {
+                            t.HasCheckConstraint("CK_Purchases_SourceIntegrity", "(\"SourceType\" = 1 AND \"SupplierId\" IS NOT NULL AND \"CustomerId\" IS NULL) OR (\"SourceType\" = 2 AND \"CustomerId\" IS NOT NULL AND \"SupplierId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("CarShowroomManagementV2.Domain.Entities.ReceiptArchiveRecord", b =>
@@ -1518,14 +1550,44 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BuyerAddressSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BuyerIdNumberSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BuyerNameSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BuyerPhoneSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BuyerVatNumberSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CompanyNameSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompanyRegistrationReference")
+                        .HasColumnType("text");
+
                     b.Property<string>("ContractNumber")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("CostBasis")
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Currency")
                         .HasColumnType("text");
 
                     b.Property<Guid>("CustomerId")
@@ -1539,6 +1601,19 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
 
                     b.Property<decimal>("Discount")
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("DocumentNotes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("DocumentRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DocumentStatus")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("DownPayment")
                         .HasColumnType("numeric(18,4)");
@@ -1558,6 +1633,24 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.Property<string>("EInvoiceXmlHash")
                         .HasColumnType("text");
 
+                    b.Property<string>("EngineNumberSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("FinalizedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("FinalizedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("FirstDueDateSnapshot")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ImportCountrySnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("InstallmentCountSnapshot")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -1567,16 +1660,61 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.Property<string>("LastModifiedBy")
                         .HasColumnType("text");
 
+                    b.Property<decimal?>("MonthlyInstallmentAmountSnapshot")
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<decimal>("NetPrice")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("OwnerNotes")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OwnerPersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OwnerPersonIdNumberSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OwnerPersonNameSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OwnerPersonPhoneSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<int>("OwnershipType")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("PaidAmountAtIssue")
                         .HasColumnType("numeric(18,4)");
 
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("integer");
 
+                    b.Property<string>("PlateNumberSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreparedByNameSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreparedByRoleSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PreparedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("Profit")
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<string>("ReceiptNumber")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("RegistrationFees")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid?>("ReissuedFromDocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("RemainingAmountAtIssue")
                         .HasColumnType("numeric(18,4)");
 
                     b.Property<decimal>("RemainingBalance")
@@ -1591,27 +1729,86 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                     b.Property<Guid?>("SalesRepId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SalespersonNameSnapshot")
+                        .HasColumnType("text");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SupplierNameSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SupplierReference")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SupplyDate")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<decimal>("TaxAmount")
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<string>("TermsContentSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TermsTemplateId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TermsTemplateVersion")
+                        .HasColumnType("text");
+
+                    b.Property<string>("VehicleBrandSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("VehicleColorSnapshot")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("VehicleId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("VehicleModelSnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("VehicleYearSnapshot")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VerificationCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("VinSnapshot")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("DocumentStatus");
+
+                    b.HasIndex("OwnershipType");
+
+                    b.HasIndex("PreparedByUserId");
+
+                    b.HasIndex("ReissuedFromDocumentId");
+
                     b.HasIndex("SaleDate");
 
                     b.HasIndex("SalesRepId");
 
+                    b.HasIndex("SupplierId");
+
                     b.HasIndex("VehicleId");
 
-                    b.HasIndex("ContractNumber", "BranchId")
+                    b.HasIndex("VerificationCode")
+                        .IsUnique();
+
+                    b.HasIndex("ContractNumber", "DocumentRevision")
                         .IsUnique();
 
                     b.ToTable("SalesContracts");
@@ -2543,6 +2740,11 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("CarShowroomManagementV2.Domain.Entities.Installment", "Installment")
+                        .WithMany()
+                        .HasForeignKey("InstallmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CarShowroomManagementV2.Domain.Entities.JournalEntry", "JournalEntry")
                         .WithMany()
                         .HasForeignKey("JournalEntryId");
@@ -2551,22 +2753,37 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
 
                     b.Navigation("ContraAccount");
 
+                    b.Navigation("Installment");
+
                     b.Navigation("JournalEntry");
                 });
 
             modelBuilder.Entity("CarShowroomManagementV2.Domain.Entities.Purchase", b =>
                 {
+                    b.HasOne("CarShowroomManagementV2.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CarShowroomManagementV2.Domain.Entities.SalesContract", "PreviousSaleContract")
+                        .WithMany()
+                        .HasForeignKey("PreviousSaleContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CarShowroomManagementV2.Domain.Entities.Supplier", "Supplier")
                         .WithMany()
                         .HasForeignKey("SupplierId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CarShowroomManagementV2.Domain.Entities.Vehicle", "Vehicle")
                         .WithMany()
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("PreviousSaleContract");
 
                     b.Navigation("Supplier");
 
@@ -2622,10 +2839,26 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("CarShowroomManagementV2.Domain.Entities.User", "PreparedByUser")
+                        .WithMany()
+                        .HasForeignKey("PreparedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CarShowroomManagementV2.Domain.Entities.SalesContract", "ReissuedFromDocument")
+                        .WithMany()
+                        .HasForeignKey("ReissuedFromDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CarShowroomManagementV2.Domain.Entities.Employee", "SalesRep")
                         .WithMany()
                         .HasForeignKey("SalesRepId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("CarShowroomManagementV2.Domain.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CarShowroomManagementV2.Domain.Entities.Vehicle", "Vehicle")
                         .WithMany()
@@ -2635,7 +2868,13 @@ namespace CarShowroomManagementV2.Infrastructure.Migrations
 
                     b.Navigation("Customer");
 
+                    b.Navigation("PreparedByUser");
+
+                    b.Navigation("ReissuedFromDocument");
+
                     b.Navigation("SalesRep");
+
+                    b.Navigation("Supplier");
 
                     b.Navigation("Vehicle");
                 });

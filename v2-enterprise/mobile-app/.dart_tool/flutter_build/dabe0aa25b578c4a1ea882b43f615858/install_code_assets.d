@@ -1,0 +1,1 @@
+ /Users/aldulimi/system/Can-manegment/v2-enterprise/mobile-app/.dart_tool/flutter_build/dabe0aa25b578c4a1ea882b43f615858/native_assets.json: 

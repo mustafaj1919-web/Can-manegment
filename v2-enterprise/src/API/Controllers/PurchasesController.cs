@@ -361,7 +361,25 @@ namespace CarShowroomManagementV2.API.Controllers
                 message = $"تم تسجيل {result.CreatedCount} سيارة بنجاح." + (result.Errors.Any() ? $" ({result.Errors.Count} خطأ)" : "")
             });
         }
+
+        // 6. إلغاء/حذف فاتورة شراء وعكس قيودها المحاسبية
+        [HttpPost("{id}/cancel")]
+        public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelPurchaseRequest? request)
+        {
+            var command = new CancelPurchaseCommand
+            {
+                PurchaseId = id,
+                Reason = request?.Reason
+            };
+            var success = await Mediator.Send(command);
+            return Ok(new
+            {
+                success = true,
+                message = "تم إلغاء فاتورة الشراء وعكس القيود المحاسبية بنجاح."
+            });
+        }
     }
 
     public record AddPurchasePaymentRequest(decimal Amount, string? PaymentMethod, string? Notes);
+    public record CancelPurchaseRequest(string? Reason);
 }
