@@ -506,10 +506,10 @@ export function NotificationCenter() {
         <PopoverContent
           align="end"
           sideOffset={10}
-          className="w-[94vw] max-w-[580px] sm:w-[580px] p-0 overflow-hidden rounded-3xl border border-slate-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl shadow-2xl shadow-slate-900/20 dir-rtl text-start"
+          className="w-[94vw] max-w-[580px] sm:w-[580px] h-[82vh] max-h-[640px] flex flex-col p-0 overflow-hidden rounded-3xl border border-slate-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl shadow-2xl shadow-slate-900/20 dir-rtl text-start"
         >
           {/* Top Header */}
-          <div className="px-5 py-4 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 dark:from-slate-900/80 dark:via-slate-950 dark:to-slate-900/80 border-b border-slate-200/80 dark:border-slate-800/80">
+          <div className="shrink-0 px-5 py-4 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 dark:from-slate-900/80 dark:via-slate-950 dark:to-slate-900/80 border-b border-slate-200/80 dark:border-slate-800/80">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <div className="h-9 w-9 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center ring-1 ring-emerald-500/25">
@@ -586,7 +586,7 @@ export function NotificationCenter() {
           </div>
 
           {/* Category Tab Filters */}
-          <div className="px-3 py-2 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
+          <div className="shrink-0 px-3 py-2 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1 min-w-max">
               {[
                 { id: 'all', label: 'الكل', count: countsPerCategory.all },
@@ -627,242 +627,240 @@ export function NotificationCenter() {
           </div>
 
           {/* Cards Scroll Container */}
-          <ScrollArea className="max-h-[460px] sm:max-h-[500px]">
-            <div className="p-3 space-y-4">
-              {groupedCards.map(group => (
-                <div key={group.key} className="space-y-2">
-                  <div className="flex items-center justify-between px-2 pt-1">
-                    <span className="text-[11px] font-bold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-                      ● {group.label}
-                    </span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                      {group.items.length} تنبيه
-                    </span>
-                  </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-4 pb-10 custom-scrollbar">
+            {groupedCards.map(group => (
+              <div key={group.key} className="space-y-2">
+                <div className="flex items-center justify-between px-2 pt-1">
+                  <span className="text-[11px] font-bold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+                    ● {group.label}
+                  </span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                    {group.items.length} تنبيه
+                  </span>
+                </div>
 
-                  <div className="space-y-2">
-                    {group.items.map(card => {
-                      const categoryCfg = CATEGORY_CONFIG[card.category]
-                      const priorityCfg = PRIORITY_CONFIG[card.priority]
-                      const IconComponent = categoryCfg.icon
+                <div className="space-y-2">
+                  {group.items.map(card => {
+                    const categoryCfg = CATEGORY_CONFIG[card.category]
+                    const priorityCfg = PRIORITY_CONFIG[card.priority]
+                    const IconComponent = categoryCfg.icon
 
-                      return (
-                        <div
-                          key={card.id}
-                          className={cn(
-                            'group relative p-3.5 rounded-2xl border transition-all duration-200',
-                            priorityCfg.borderBar,
-                            card.isRead
-                              ? 'bg-white dark:bg-slate-950 border-slate-200/60 dark:border-slate-800/60 opacity-85 hover:opacity-100'
-                              : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-900'
-                          )}
-                        >
-                          <div className="flex items-start gap-3">
-                            {/* Category Icon Badge */}
-                            <div className={cn(
-                              'h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ring-1 mt-0.5',
-                              categoryCfg.bgContainer,
-                              categoryCfg.ringColor
-                            )}>
-                              <IconComponent className={cn('h-4.5 w-4.5 stroke-[2.2]', categoryCfg.iconColor)} />
-                            </div>
+                    return (
+                      <div
+                        key={card.id}
+                        className={cn(
+                          'group relative p-3.5 rounded-2xl border transition-all duration-200',
+                          priorityCfg.borderBar,
+                          card.isRead
+                            ? 'bg-white dark:bg-slate-950 border-slate-200/60 dark:border-slate-800/60 opacity-85 hover:opacity-100'
+                            : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-900'
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Category Icon Badge */}
+                          <div className={cn(
+                            'h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ring-1 mt-0.5',
+                            categoryCfg.bgContainer,
+                            categoryCfg.ringColor
+                          )}>
+                            <IconComponent className={cn('h-4.5 w-4.5 stroke-[2.2]', categoryCfg.iconColor)} />
+                          </div>
 
-                            {/* Card Body */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="space-y-0.5">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-snug">
-                                      {card.title}
-                                    </h4>
-                                    {!card.isRead && (
-                                      <span className={cn('h-2 w-2 rounded-full', priorityCfg.dotBg)} />
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                    {card.subtitle}
-                                  </p>
+                          {/* Card Body */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-snug">
+                                    {card.title}
+                                  </h4>
+                                  {!card.isRead && (
+                                    <span className={cn('h-2 w-2 rounded-full', priorityCfg.dotBg)} />
+                                  )}
                                 </div>
-
-                                {/* Menu dropdown */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
-                                    {formatRelativeDate(card.timestamp)}
-                                  </span>
-
-                                  <DropdownMenu dir="rtl">
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                      >
-                                        <MoreVertical className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44 rounded-xl">
-                                      {card.actionUrl && (
-                                        <DropdownMenuItem asChild>
-                                          <Link href={card.actionUrl} className="flex items-center gap-2 cursor-pointer text-xs">
-                                            <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
-                                            <span>فتح التفاصيل</span>
-                                          </Link>
-                                        </DropdownMenuItem>
-                                      )}
-                                      <DropdownMenuItem onClick={() => handleToggleRead(card.id)} className="flex items-center gap-2 cursor-pointer text-xs">
-                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                        <span>{card.isRead ? 'تمييز كغير مقروء' : 'تمييز كمقروء'}</span>
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleCopyLink(card)} className="flex items-center gap-2 cursor-pointer text-xs">
-                                        {copiedId === card.id ? (
-                                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                        ) : (
-                                          <Copy className="h-3.5 w-3.5 text-slate-500" />
-                                        )}
-                                        <span>نسخ رابط التنبيه</span>
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem onClick={() => handleArchive(card.id)} className="flex items-center gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600">
-                                        <Archive className="h-3.5 w-3.5" />
-                                        <span>أرشفة التنبيه</span>
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                  {card.subtitle}
+                                </p>
                               </div>
 
-                              {/* Entities & Context Metadata Strip */}
-                              {(card.customerName || card.vehicleName || card.amount || card.overdueDays || card.journalNumber || card.contractNumber) && (
-                                <div className="mt-2.5 p-2 rounded-xl bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/50 flex items-center gap-3 flex-wrap text-xs">
-                                  {card.customerName && (
-                                    <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
-                                      <span className="text-[10px] text-slate-400">العميل:</span>
-                                      <span>{card.customerName}</span>
-                                    </div>
-                                  )}
-                                  {card.vehicleName && (
-                                    <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                                      <span className="text-[10px] text-slate-400">المركبة:</span>
-                                      <span>{card.vehicleName}</span>
-                                    </div>
-                                  )}
-                                  {card.journalNumber && (
-                                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
-                                      <span>{card.journalNumber}</span>
-                                    </div>
-                                  )}
-                                  {card.contractNumber && (
-                                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-purple-600 dark:text-purple-400 font-bold">
-                                      <span>{card.contractNumber}</span>
-                                    </div>
-                                  )}
-                                  {card.amount !== undefined && (
-                                    <div className="flex items-center gap-1 text-slate-900 dark:text-slate-100 font-bold money font-mono me-auto">
-                                      <span className="text-[10px] text-slate-400">المبلغ:</span>
-                                      <span className="text-emerald-700 dark:text-emerald-400">{formatMoney(card.amount, card.currency)}</span>
-                                    </div>
-                                  )}
-                                  {card.overdueDays !== undefined && (
-                                    <Badge variant="outline" className="text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 px-2 py-0.5">
-                                      تأخير: {card.overdueDays} يوم
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
+                              {/* Menu dropdown */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                                  {formatRelativeDate(card.timestamp)}
+                                </span>
 
-                              {/* Contextual Workflow Action Buttons */}
-                              {card.actionButtons && card.actionButtons.length > 0 && (
-                                <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                  {card.actionButtons.map((btn, bIdx) => {
-                                    if (btn.variant === 'whatsapp') {
-                                      return (
-                                        <Button
-                                          key={bIdx}
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={btn.onClick}
-                                          className="h-7 px-2.5 text-[11px] font-bold rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
-                                        >
-                                          <MessageCircle className="h-3.5 w-3.5 me-1 text-emerald-600" />
-                                          <span>{btn.label}</span>
-                                        </Button>
-                                      )
-                                    }
+                                <DropdownMenu dir="rtl">
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                                    {card.actionUrl && (
+                                      <DropdownMenuItem asChild>
+                                        <Link href={card.actionUrl} className="flex items-center gap-2 cursor-pointer text-xs">
+                                          <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                                          <span>فتح التفاصيل</span>
+                                        </Link>
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem onClick={() => handleToggleRead(card.id)} className="flex items-center gap-2 cursor-pointer text-xs">
+                                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      <span>{card.isRead ? 'تمييز كغير مقروء' : 'تمييز كمقروء'}</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleCopyLink(card)} className="flex items-center gap-2 cursor-pointer text-xs">
+                                      {copiedId === card.id ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5 text-slate-500" />
+                                      )}
+                                      <span>نسخ رابط التنبيه</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleArchive(card.id)} className="flex items-center gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600">
+                                      <Archive className="h-3.5 w-3.5" />
+                                      <span>أرشفة التنبيه</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
 
-                                    if (btn.url) {
-                                      return (
-                                        <Button
-                                          key={bIdx}
-                                          asChild
-                                          size="sm"
-                                          variant={bIdx === 0 ? 'default' : 'secondary'}
-                                          className={cn(
-                                            'h-7 px-2.5 text-[11px] font-bold rounded-lg shadow-2xs',
-                                            bIdx === 0
-                                              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 hover:bg-slate-800'
-                                              : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
-                                          )}
-                                        >
-                                          <Link href={btn.url}>
-                                            <span>{btn.label}</span>
-                                            <ArrowUpRight className="h-3 w-3 ms-1 opacity-70" />
-                                          </Link>
-                                        </Button>
-                                      )
-                                    }
+                            {/* Entities & Context Metadata Strip */}
+                            {(card.customerName || card.vehicleName || card.amount || card.overdueDays || card.journalNumber || card.contractNumber) && (
+                              <div className="mt-2.5 p-2 rounded-xl bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/50 flex items-center gap-3 flex-wrap text-xs">
+                                {card.customerName && (
+                                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
+                                    <span className="text-[10px] text-slate-400">العميل:</span>
+                                    <span>{card.customerName}</span>
+                                  </div>
+                                )}
+                                {card.vehicleName && (
+                                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                    <span className="text-[10px] text-slate-400">المركبة:</span>
+                                    <span>{card.vehicleName}</span>
+                                  </div>
+                                )}
+                                {card.journalNumber && (
+                                  <div className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                    <span>{card.journalNumber}</span>
+                                  </div>
+                                )}
+                                {card.contractNumber && (
+                                  <div className="flex items-center gap-1.5 font-mono text-[11px] text-purple-600 dark:text-purple-400 font-bold">
+                                    <span>{card.contractNumber}</span>
+                                  </div>
+                                )}
+                                {card.amount !== undefined && (
+                                  <div className="flex items-center gap-1 text-slate-900 dark:text-slate-100 font-bold money font-mono me-auto">
+                                    <span className="text-[10px] text-slate-400">المبلغ:</span>
+                                    <span className="text-emerald-700 dark:text-emerald-400">{formatMoney(card.amount, card.currency)}</span>
+                                  </div>
+                                )}
+                                {card.overdueDays !== undefined && (
+                                  <Badge variant="outline" className="text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 px-2 py-0.5">
+                                    تأخير: {card.overdueDays} يوم
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
 
+                            {/* Contextual Workflow Action Buttons */}
+                            {card.actionButtons && card.actionButtons.length > 0 && (
+                              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                {card.actionButtons.map((btn, bIdx) => {
+                                  if (btn.variant === 'whatsapp') {
                                     return (
                                       <Button
                                         key={bIdx}
                                         size="sm"
-                                        variant="secondary"
+                                        variant="outline"
                                         onClick={btn.onClick}
-                                        className="h-7 px-2.5 text-[11px] font-bold rounded-lg"
+                                        className="h-7 px-2.5 text-[11px] font-bold rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
                                       >
+                                        <MessageCircle className="h-3.5 w-3.5 me-1 text-emerald-600" />
                                         <span>{btn.label}</span>
                                       </Button>
                                     )
-                                  })}
-                                </div>
-                              )}
-                            </div>
+                                  }
+
+                                  if (btn.url) {
+                                    return (
+                                      <Button
+                                        key={bIdx}
+                                        asChild
+                                        size="sm"
+                                        variant={bIdx === 0 ? 'default' : 'secondary'}
+                                        className={cn(
+                                          'h-7 px-2.5 text-[11px] font-bold rounded-lg shadow-2xs',
+                                          bIdx === 0
+                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 hover:bg-slate-800'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                                        )}
+                                      >
+                                        <Link href={btn.url}>
+                                          <span>{btn.label}</span>
+                                          <ArrowUpRight className="h-3 w-3 ms-1 opacity-70" />
+                                        </Link>
+                                      </Button>
+                                    )
+                                  }
+
+                                  return (
+                                    <Button
+                                      key={bIdx}
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={btn.onClick}
+                                      className="h-7 px-2.5 text-[11px] font-bold rounded-lg"
+                                    >
+                                      <span>{btn.label}</span>
+                                    </Button>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
+              </div>
+            ))}
 
-              {/* Empty Filter State */}
-              {filteredCards.length === 0 && (
-                <div className="py-14 text-center space-y-3">
-                  <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center mx-auto ring-1 ring-slate-200 dark:ring-slate-800">
-                    <CheckCircle2 className="h-6 w-6 stroke-[1.8] text-emerald-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      لا توجد إشعارات في هذا التصنيف
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      جميع العمليات المحاسبية والعقود مسجلة وفي الموعد المطلوب
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveCategory('all')}
-                    className="h-8 text-xs font-semibold rounded-xl mt-2"
-                  >
-                    عرض جميع الإشعارات
-                  </Button>
+            {/* Empty Filter State */}
+            {filteredCards.length === 0 && (
+              <div className="py-14 text-center space-y-3">
+                <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center mx-auto ring-1 ring-slate-200 dark:ring-slate-800">
+                  <CheckCircle2 className="h-6 w-6 stroke-[1.8] text-emerald-500" />
                 </div>
-              )}
-            </div>
-          </ScrollArea>
+                <div>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    لا توجد إشعارات في هذا التصنيف
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    جميع العمليات المحاسبية والعقود مسجلة وفي الموعد المطلوب
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveCategory('all')}
+                  className="h-8 text-xs font-semibold rounded-xl mt-2"
+                >
+                  عرض جميع الإشعارات
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* Footer Bar */}
-          <div className="px-5 py-3.5 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 text-xs">
+          <div className="shrink-0 px-5 py-3.5 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 text-xs">
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
