@@ -140,6 +140,18 @@ namespace CarShowroomManagementV2.API.Controllers
                     .FirstOrDefaultAsync(s => s.ContractNumber == id || s.DocumentNumber == id);
             }
 
+            if (sc == null && int.TryParse(id, out var seqNum) && seqNum > 0)
+            {
+                sc = await _context.SalesContracts
+                    .Include(s => s.Customer)
+                    .Include(s => s.Vehicle)
+                    .Include(s => s.InstallmentPlan)
+                        .ThenInclude(ip => ip!.Installments)
+                    .OrderByDescending(s => s.SaleDate)
+                    .Skip(seqNum - 1)
+                    .FirstOrDefaultAsync();
+            }
+
             if (sc == null)
             {
                 return NotFound(new { success = false, message = "عقد البيع غير موجود." });
