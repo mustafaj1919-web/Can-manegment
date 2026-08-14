@@ -492,22 +492,4 @@ namespace CarShowroomManagementV2.API.Controllers
         public string? IdempotencyKey { get; set; }
         public string? Notes { get; set; }
     }
-
-    public static class InstallmentsControllerHelpers
-    {
-        public static Guid? ExtractScheduleIdFromHash(string? hash)
-        {
-            if (string.IsNullOrWhiteSpace(hash)) return null;
-            var parts = hash.Split('|');
-            foreach (var part in parts)
-            {
-                if (part.StartsWith("ScheduleId=", StringComparison.OrdinalIgnoreCase))
-                {
-                    var val = part.Substring("ScheduleId=".Length);
-                    if (Guid.TryParse(val, out var g)) return g;
-                }
-            }
-            return null;
-        }
-    }
 }
