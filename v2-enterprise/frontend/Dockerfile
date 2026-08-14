@@ -15,6 +15,7 @@ ARG BACKEND_URL=http://v2-enterprise-api:8080
 ENV BACKEND_URL=$BACKEND_URL
 
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_FONT_GOOGLE_MOCKED 1
 ENV NODE_ENV production
 
 # Run build process which outputs standalone folder
