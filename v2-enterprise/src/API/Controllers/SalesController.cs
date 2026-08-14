@@ -114,16 +114,31 @@ namespace CarShowroomManagementV2.API.Controllers
             });
         }
 
-        // 2. تفاصيل عقد بيع محدد بالمعرّف الفريد
+        // 2. تفاصيل عقد بيع محدد بالمعرّف الفريد أو برقم العقد
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetSaleById(Guid id)
+        public async Task<IActionResult> GetSaleById(string id)
         {
-            var sc = await _context.SalesContracts
-                .Include(s => s.Customer)
-                .Include(s => s.Vehicle)
-                .Include(s => s.InstallmentPlan)
-                    .ThenInclude(ip => ip!.Installments)
-                .FirstOrDefaultAsync(s => s.Id == id);
+            SalesContract? sc = null;
+
+            if (Guid.TryParse(id, out var guidId))
+            {
+                sc = await _context.SalesContracts
+                    .Include(s => s.Customer)
+                    .Include(s => s.Vehicle)
+                    .Include(s => s.InstallmentPlan)
+                        .ThenInclude(ip => ip!.Installments)
+                    .FirstOrDefaultAsync(s => s.Id == guidId);
+            }
+
+            if (sc == null)
+            {
+                sc = await _context.SalesContracts
+                    .Include(s => s.Customer)
+                    .Include(s => s.Vehicle)
+                    .Include(s => s.InstallmentPlan)
+                        .ThenInclude(ip => ip!.Installments)
+                    .FirstOrDefaultAsync(s => s.ContractNumber == id || s.DocumentNumber == id);
+            }
 
             if (sc == null)
             {
