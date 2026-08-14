@@ -23,6 +23,7 @@ const METHOD_LABEL: Record<string, string> = {
 export default function CustomerStatementPrintPage() {
   const routeParams = useParams<{ id: string }>()
   const id = routeParams?.id ? String(routeParams.id) : ""
+  const [exporting, setExporting] = useState(false)
 
   const { data: customer } = useQuery({
     queryKey: ['customer', id],
@@ -46,8 +47,6 @@ export default function CustomerStatementPrintPage() {
     sales: [],
     summary: { total_spent: 0, total_paid: 0, total_remaining: 0, total_sales: 0 }
   }
-
-  const [exporting, setExporting] = useState(false)
 
   const handleExport = async () => {
     if (exporting) return

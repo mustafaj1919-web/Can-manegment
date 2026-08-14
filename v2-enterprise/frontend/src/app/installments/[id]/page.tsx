@@ -459,6 +459,14 @@ export default function InstallmentPlanPage() {
   const [archivedMap, setArchivedMap] = useState<Record<string, ArchivedReceipt>>({})
   const [isReminderSending, setIsReminderSending] = useState<string | null>(null)
 
+  const { data: plan, isLoading, isError } = useQuery({
+    queryKey: ['installment-plan', planId],
+    queryFn:  () => getInstallmentPlan(planId),
+    staleTime: 30_000,
+    retry: 1,
+    enabled: !!planId,
+  })
+
   useEffect(() => {
     if (typeof window === 'undefined' || !planId) return
     try {
@@ -496,14 +504,6 @@ export default function InstallmentPlanPage() {
       setIsReminderSending(null)
     }
   }
-
-  const { data: plan, isLoading, isError } = useQuery({
-    queryKey: ['installment-plan', planId],
-    queryFn:  () => getInstallmentPlan(planId),
-    staleTime: 30_000,
-    retry: 1,
-    enabled: !!planId,
-  })
 
   function handlePaySuccess() {
     qc.invalidateQueries({ queryKey: ['installment-plan', planId] })
