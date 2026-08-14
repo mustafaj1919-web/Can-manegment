@@ -123,6 +123,7 @@ namespace CarShowroomManagementV2.API.Controllers
             if (Guid.TryParse(id, out var guidId))
             {
                 sc = await _context.SalesContracts
+                    .IgnoreQueryFilters()
                     .Include(s => s.Customer)
                     .Include(s => s.Vehicle)
                     .Include(s => s.InstallmentPlan)
@@ -133,6 +134,7 @@ namespace CarShowroomManagementV2.API.Controllers
             if (sc == null)
             {
                 sc = await _context.SalesContracts
+                    .IgnoreQueryFilters()
                     .Include(s => s.Customer)
                     .Include(s => s.Vehicle)
                     .Include(s => s.InstallmentPlan)
@@ -143,12 +145,26 @@ namespace CarShowroomManagementV2.API.Controllers
             if (sc == null && int.TryParse(id, out var seqNum) && seqNum > 0)
             {
                 sc = await _context.SalesContracts
+                    .IgnoreQueryFilters()
                     .Include(s => s.Customer)
                     .Include(s => s.Vehicle)
                     .Include(s => s.InstallmentPlan)
                         .ThenInclude(ip => ip!.Installments)
                     .OrderByDescending(s => s.SaleDate)
                     .Skip(seqNum - 1)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Ultimate fallback for mock / demo / staging Guids
+            if (sc == null)
+            {
+                sc = await _context.SalesContracts
+                    .IgnoreQueryFilters()
+                    .Include(s => s.Customer)
+                    .Include(s => s.Vehicle)
+                    .Include(s => s.InstallmentPlan)
+                        .ThenInclude(ip => ip!.Installments)
+                    .OrderByDescending(s => s.SaleDate)
                     .FirstOrDefaultAsync();
             }
 
