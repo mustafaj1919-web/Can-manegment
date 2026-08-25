@@ -236,7 +236,7 @@ export function CustomerSearchCombobox({
                       onClick={() => {
                         onSelectBuyer(String(buyer.id))
                         setIsOpen(false)
-                        setSearchTerm('')
+                        handleSearchChange('')
                       }}
                       className={`flex w-full items-center justify-between p-3 rounded-xl text-xs transition-all text-start ${
                         isSelected
