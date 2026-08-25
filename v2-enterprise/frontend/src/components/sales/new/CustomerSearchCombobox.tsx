@@ -159,7 +159,7 @@ export function CustomerSearchCombobox({
                 onClick={e => {
                   e.stopPropagation()
                   onSelectBuyer('')
-                  setSearchTerm('')
+                  handleSearchChange('')
                 }}
                 className="rounded-md p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-slate-200/60 transition-colors"
               >
