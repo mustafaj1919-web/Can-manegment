@@ -1,0 +1,518 @@
+{
+  "config": {
+    "configFile": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/playwright.config.ts",
+    "rootDir": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "tests/results/results.json"
+        }
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "tests/results/html",
+          "open": "never"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "receipt-print-qa-datasets.spec.ts",
+      "file": "receipt-print-qa-datasets.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "dataset A: exactly one A5 page, no clipped content, receipt renders",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 20228,
+                  "error": {
+                    "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=A\", waiting until \"networkidle\"\u001b[22m\n",
+                    "stack": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=A\", waiting until \"networkidle\"\u001b[22m\n\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16",
+                    "location": {
+                      "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                      "column": 16,
+                      "line": 76
+                    },
+                    "snippet": "  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                        "column": 16,
+                        "line": 76
+                      },
+                      "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=A\", waiting until \"networkidle\"\u001b[22m\n\n\n  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:54:19.986Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--c9b10-ped-content-receipt-renders-chromium/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--c9b10-ped-content-receipt-renders-chromium/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--c9b10-ped-content-receipt-renders-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                    "column": 16,
+                    "line": 76
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-dc05429e0f92aa828a5d",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset B: exactly one A5 page, no clipped content, receipt renders",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 20137,
+                  "error": {
+                    "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=B\", waiting until \"networkidle\"\u001b[22m\n",
+                    "stack": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=B\", waiting until \"networkidle\"\u001b[22m\n\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16",
+                    "location": {
+                      "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                      "column": 16,
+                      "line": 76
+                    },
+                    "snippet": "  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                        "column": 16,
+                        "line": 76
+                      },
+                      "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=B\", waiting until \"networkidle\"\u001b[22m\n\n\n  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:54:41.240Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--c494f-ped-content-receipt-renders-chromium/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--c494f-ped-content-receipt-renders-chromium/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--c494f-ped-content-receipt-renders-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                    "column": 16,
+                    "line": 76
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-9ebf6eb6a1670da8a549",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset C: exactly one A5 page, no clipped content, receipt renders",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3095,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:55:02.297Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-b51059d77063cedb1f0c",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset D: exactly one A5 page, no clipped content, receipt renders",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 20112,
+                  "error": {
+                    "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=D\", waiting until \"networkidle\"\u001b[22m\n",
+                    "stack": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=D\", waiting until \"networkidle\"\u001b[22m\n\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16",
+                    "location": {
+                      "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                      "column": 16,
+                      "line": 76
+                    },
+                    "snippet": "  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                        "column": 16,
+                        "line": 76
+                      },
+                      "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=D\", waiting until \"networkidle\"\u001b[22m\n\n\n  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:55:05.905Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--302d0-ped-content-receipt-renders-chromium/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--302d0-ped-content-receipt-renders-chromium/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--302d0-ped-content-receipt-renders-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                    "column": 16,
+                    "line": 76
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-36e9b1f6f96fd0ba3c98",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset E: exactly one A5 page, no clipped content, receipt renders",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 20143,
+                  "error": {
+                    "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=E\", waiting until \"networkidle\"\u001b[22m\n",
+                    "stack": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=E\", waiting until \"networkidle\"\u001b[22m\n\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16",
+                    "location": {
+                      "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                      "column": 16,
+                      "line": 76
+                    },
+                    "snippet": "  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                        "column": 16,
+                        "line": 76
+                      },
+                      "message": "TimeoutError: page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:3412/showroom/print-test-fixture?mode=single&dataset=E\", waiting until \"networkidle\"\u001b[22m\n\n\n  74 | for (const key of DATASET_KEYS) {\n  75 |   test(`dataset ${key}: exactly one A5 page, no clipped content, receipt renders`, async ({ page }) => {\n> 76 |     await page.goto(`${BASE}/showroom/print-test-fixture?mode=single&dataset=${key}`, { waitUntil: 'networkidle' })\n     |                ^\n  77 |     await page.waitForTimeout(300)\n  78 |\n  79 |     const receiptLocator = page.locator('[data-receipt-id]').first()\n    at /Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts:76:16"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:55:26.317Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--dcd99-ped-content-receipt-renders-chromium/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--dcd99-ped-content-receipt-renders-chromium/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/results/artifacts/receipt-print-qa-datasets--dcd99-ped-content-receipt-renders-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/aldulimi/system/Can-manegment/v2-enterprise/frontend/tests/e2e/receipt-print-qa-datasets.spec.ts",
+                    "column": 16,
+                    "line": 76
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-935206780f53f5bde063",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset F: exactly one A5 page, no clipped content, receipt renders",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2395,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:55:47.391Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-23e0429859b5de14a571",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset G: exactly one A5 page, no clipped content, receipt renders",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1751,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:55:50.523Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-77b9f9cb22db1354d24f",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        },
+        {
+          "title": "dataset H: exactly one A5 page, no clipped content, receipt renders",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1413,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-02T05:55:52.279Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7603fd924f60cf5db60c-4386cee6dbb5b945f8fb",
+          "file": "receipt-print-qa-datasets.spec.ts",
+          "line": 75,
+          "column": 7
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-08-02T05:54:19.757Z",
+    "duration": 94044.726,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 4,
+    "flaky": 0
+  }
+}

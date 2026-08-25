@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>وصل سداد قسط رسمي - Enterprise ERP</title>
+  
+  <!-- Google Fonts: IBM Plex Sans Arabic -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── RESET & BASE SETUP ─────────────────────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    @page {
+      size: 210mm 148mm landscape;
+      margin: 0;
+    }
+
+    @media print {
+      html, body {
+        width: 210mm;
+        height: 148mm;
+        background: #ffffff !important;
+      }
+      body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+
+    html, body {
+      font-family: 'IBM Plex Sans Arabic', -apple-system, sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+      width: 210mm;
+      height: 148mm;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── A5 CONTAINER CANVAS (210mm x 148mm) ───────────────────────────── */
+    .receipt-canvas {
+      width: 210mm;
+      height: 148mm;
+      min-height: 148mm;
+      max-height: 148mm;
+      position: relative;
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px;
+      overflow: hidden;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .num-tabular { font-variant-numeric: tabular-nums; direction: ltr; display: inline-block; }
+
+    /* ── 1. HEADER ─────────────────────────────────────────────────────── */
+    .receipt-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+
+    .brand-col {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      background: #0F172A;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .brand-info h1 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0F172A;
+      line-height: 1.2;
+    }
+    .brand-info p {
+      font-size: 10px;
+      color: #64748B;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .title-col {
+      text-align: center;
+    }
+    .doc-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #0F172A;
+      line-height: 1;
+      letter-spacing: -0.3px;
+    }
+    .doc-subtitle {
+      font-size: 9px;
+      font-weight: 600;
+      color: #64748B;
+      letter-spacing: 1.6px;
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    .meta-col {
+      text-align: left;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .meta-label {
+      color: #64748B;
+      font-weight: 500;
+    }
+    .meta-val {
+      color: #0F172A;
+      font-weight: 700;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #16A34A;
+      margin-top: 2px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #16A34A;
+    }
+
+    /* ── 2. MAIN INFO GRID (4 Equal Columns) ────────────────────────────── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      background: #F8FAFC;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .info-col-head {
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748B;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .info-item {
+      margin-bottom: 4px;
+    }
+    .info-item:last-child {
+      margin-bottom: 0;
+    }
+    .info-label {
+      font-size: 10px;
+      color: #64748B;
+    }
+    .info-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0F172A;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .info-val.highlight {
+      color: #059669;
+    }
+
+    /* ── 3. PAYMENT HERO ────────────────────────────────────────────────── */
+    .payment-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      background: #FFFFFF;
+    }
+    .tafqit-wrap {
+      flex: 1;
+      padding-left: 16px;
+    }
+    .tafqit-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: #059669;
+    }
+    .tafqit-words {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 2px;
+      line-height: 1.35;
+    }
+    .amount-wrap {
+      text-align: left;
+      flex-shrink: 0;
+    }
+    .amount-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: #64748B;
+      margin-bottom: 2px;
+    }
+    .amount-val-group {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .amount-num {
+      font-size: 38px;
+      font-weight: 800;
+      color: #059669;
+      line-height: 1;
+      letter-spacing: -0.5px;
+    }
+    .amount-curr {
+      font-size: 16px;
+      font-weight: 700;
+      color: #059669;
+    }
+
+    /* ── 4. FINANCIAL STATEMENT TABLE ──────────────────────────────────── */
+    .statement-card {
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #FFFFFF;
+    }
+    .statement-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    .statement-table td {
+      padding: 6px 16px;
+    }
+    .statement-table tr.border-b {
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .td-label {
+      color: #64748B;
+      font-weight: 500;
+      width: 25%;
+    }
+    .td-val {
+      font-weight: 600;
+      color: #0F172A;
+      text-align: left;
+      width: 25%;
+    }
+    .td-val.green {
+      color: #059669;
+      font-weight: 700;
+    }
+    .tr-remaining {
+      background: #F8FAFC;
+    }
+    .td-rem-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0F172A;
+      padding: 8px 16px !important;
+    }
+    .td-rem-val {
+      font-size: 15px;
+      font-weight: 800;
+      color: #D97706;
+      text-align: left;
+      padding: 8px 16px !important;
+    }
+
+    /* ── 5. INSTALLMENT STATUS (Progress Line) ─────────────────────────── */
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 6px 14px;
+      background: #F8FAFC;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+    }
+    .status-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: #0F172A;
+      white-space: nowrap;
+    }
+    .status-num {
+      color: #059669;
+      font-weight: 700;
+    }
+    .progress-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: #E5E7EB;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #16A34A;
+      border-radius: 999px;
+    }
+    .status-pct {
+      font-size: 11px;
+      font-weight: 700;
+      color: #16A34A;
+      white-space: nowrap;
+    }
+
+    /* ── 6. FOOTER ─────────────────────────────────────────────────────── */
+    .footer-bar {
+      padding-top: 8px;
+      border-top: 1px solid #E5E7EB;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: #64748B;
+      font-family: monospace;
+    }
+
+    /* Controls (Screen Preview Only) */
+    .print-controls {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0F172A;
+      padding: 8px 16px;
+      border-radius: 30px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+    }
+    .btn-print {
+      background: #059669;
+      color: white;
+      border: none;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-family: 'IBM Plex Sans Arabic', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating Print Controls for Browser Preview -->
+  <div class="print-controls no-print">
+    <button class="btn-print" onclick="window.print()">طباعة الوصل A5</button>
+  </div>
+
+  <!-- A5 Landscape Receipt Canvas -->
+  <div class="receipt-canvas" id="receiptContainer">
+
+    <!-- 1. HEADER -->
+    <header class="receipt-header">
+      <div class="brand-col">
+        <div class="brand-logo">ERP</div>
+        <div class="brand-info">
+          <h1 id="rCompanyName">الأصدقاء لتجارة السيارات</h1>
+          <p id="rCompanyTagline">الأنظمة المالية المتكاملة Enterprise</p>
+        </div>
+      </div>
+
+      <div class="title-col">
+        <div class="doc-title">وصل سداد قسط</div>
+        <div class="doc-subtitle">OFFICIAL INSTALLMENT PAYMENT RECEIPT</div>
+      </div>
+
+      <div class="meta-col">
+        <div class="meta-row">
+          <span class="meta-label">رقم الوصل:</span>
+          <span class="meta-val num-tabular" id="rReceiptNo">RCPT-000000</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">التاريخ:</span>
+          <span class="meta-val num-tabular" id="rDate">2026/07/24</span>
+        </div>
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span>مكتمل ومؤكد</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. MAIN INFORMATION GRID (4 Equal Columns) -->
+    <section class="info-grid">
+      <div>
+        <div class="info-col-head">بيانات العميل</div>
+        <div class="info-item">
+          <div class="info-label">اسم العميل</div>
+          <div class="info-val" id="rCustomerName">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">رقم الهاتف</div>
+          <div class="info-val num-tabular" id="rCustomerPhone">—</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="info-col-head">بيانات المركبة</div>
+        <div class="info-item">
+          <div class="info-label">نوع المركبة</div>
+          <div class="info-val" id="rVehicleName">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">رقم الهيكل</div>
+          <div class="info-val num-tabular" id="rVin">—</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="info-col-head">بيانات العقد</div>
+        <div class="info-item">
+          <div class="info-label">رقم العقد</div>
+          <div class="info-val num-tabular" id="rContractNo">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">العملة</div>
+          <div class="info-val" id="rCurrency">IQD</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="info-col-head">بيانات الدفعة</div>
+        <div class="info-item">
+          <div class="info-label">طريقة الدفع</div>
+          <div class="info-val" id="rPayMethod">نقداً</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">رقم القسط</div>
+          <div class="info-val highlight" id="rInstallmentChip">القسط 1 من 12</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. PAYMENT HERO -->
+    <section class="payment-hero">
+      <div class="tafqit-wrap">
+        <div class="tafqit-title">المبلغ المدفوع كلياً بالحروف:</div>
+        <div class="tafqit-words" id="rTafqitText">فقط صفر لا غير</div>
+      </div>
+      <div class="amount-wrap">
+        <div class="amount-title">المبلغ المدفوع الآن</div>
+        <div class="amount-val-group">
+          <span class="amount-num num-tabular" id="rAmountNow">0.00</span>
+          <span class="amount-curr" id="rAmountCurr">د.ع</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. FINANCIAL STATEMENT TABLE -->
+    <section class="statement-card">
+      <table class="statement-table">
+        <tbody>
+          <tr class="border-b">
+            <td class="td-label">قيمة العقد الإجمالية</td>
+            <td class="td-val num-tabular" id="rContractTotal">0.00</td>
+            <td class="td-label" style="border-right: 1px solid #E5E7EB;">المدفوع سابقاً</td>
+            <td class="td-val num-tabular" id="rPrevPaid">0.00</td>
+          </tr>
+          <tr class="border-b">
+            <td class="td-label">الدفعة الحالية</td>
+            <td class="td-val green num-tabular" id="rAmountCurrent">0.00</td>
+            <td class="td-label" style="border-right: 1px solid #E5E7EB;">إجمالي المدفوع</td>
+            <td class="td-val green num-tabular" id="rTotalPaid">0.00</td>
+          </tr>
+          <tr class="tr-remaining">
+            <td colspan="2" class="td-rem-label">الرصيد المتبقي المستحق</td>
+            <td colspan="2" class="td-rem-val num-tabular" id="rRemaining">0.00 د.ع</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 5. INSTALLMENT STATUS (Progress Line) -->
+    <section class="status-strip">
+      <div class="status-text">الأقساط المسددة: <span class="status-num num-tabular" id="rInstallmentCounts">0 / 0</span></div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="rProgressBar" style="width: 0%;"></div>
+      </div>
+      <div class="status-pct num-tabular" id="rPct">0%</div>
+    </section>
+
+    <!-- 6. FOOTER -->
+    <footer class="footer-bar">
+      <span>رمز الوصل: <span id="rFooterReceiptId">RCPT-000000</span></span>
+      <span>رقم القيد المحاسبي: JE-1094</span>
+      <span>صادر من Enterprise ERP النظام المحاسبي الموحد</span>
+    </footer>
+
+  </div>
+
+  <script>
+    function tafqitArabic(num, currency = 'IQD') {
+      if (typeof num !== 'number' || isNaN(num) || num === 0) {
+        return 'صفر ' + (currency === 'IQD' ? 'دينار عراقي' : 'دولار أمريكي') + ' لا غير';
+      }
+      const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'];
+      const tens = ['', 'عشرة', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+      const hundreds = ['', 'مائة', 'مائتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
+
+      function convertGroup(n) {
+        let str = '';
+        const h = Math.floor(n / 100);
+        const rem = n % 100;
+        const t = Math.floor(rem / 10);
+        const o = rem % 10;
+
+        if (h > 0) str += hundreds[h];
+        if (rem > 0) {
+          if (str !== '') str += ' و';
+          if (rem < 10) str += ones[o];
+          else if (rem === 10) str += 'عشرة';
+          else if (rem === 11) str += 'أحد عشر';
+          else if (rem === 12) str += 'اثنا عشر';
+          else if (rem < 20) str += ones[o] + ' عشر';
+          else {
+            if (o > 0) str += ones[o] + ' و' + tens[t];
+            else str += tens[t];
+          }
+        }
+        return str;
+      }
+
+      function convertNumber(n) {
+        if (n === 0) return '';
+        if (n < 1000) return convertGroup(n);
+        const millions = Math.floor(n / 1000000);
+        let remainder = n % 1000000;
+        const thousands = Math.floor(remainder / 1000);
+        remainder = remainder % 1000;
+        let parts = [];
+        if (millions > 0) {
+          if (millions === 1) parts.push('مليون');
+          else if (millions === 2) parts.push('مليونان');
+          else if (millions >= 3 && millions <= 10) parts.push(convertGroup(millions) + ' ملايين');
+          else parts.push(convertGroup(millions) + ' مليوناً');
+        }
+        if (thousands > 0) {
+          if (thousands === 1) parts.push('ألف');
+          else if (thousands === 2) parts.push('ألفان');
+          else if (thousands >= 3 && thousands <= 10) parts.push(convertGroup(thousands) + ' آلاف');
+          else parts.push(convertGroup(thousands) + ' ألفاً');
+        }
+        if (remainder > 0) parts.push(convertGroup(remainder));
+        return parts.join(' و');
+      }
+
+      const integerPart = Math.floor(Math.abs(num));
+      const decimalPart = Math.round((Math.abs(num) - integerPart) * 100);
+      let result = convertNumber(integerPart);
+      const currencyName = currency === 'IQD' ? 'دينار عراقي' : 'دولار أمريكي';
+      const subUnitName = currency === 'IQD' ? 'فلساً' : 'سنتاً';
+      let text = 'فقط ' + result + ' ' + currencyName;
+      if (decimalPart > 0) {
+        text += ' و' + convertNumber(decimalPart) + ' ' + subUnitName;
+      }
+      text += ' لا غير';
+      return text;
+    }
+
+    function formatNumber(val) {
+      const num = Number(val) || 0;
+      return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function render(data) {
+      const d = data || {};
+      const amountNow = Number(d.amountNow) || 0;
+      const previouslyPaid = Number(d.previouslyPaid) || 0;
+      const contractTotal = Number(d.contractTotal) || 0;
+      const totalPaid = previouslyPaid + amountNow;
+      const remaining = contractTotal - totalPaid;
+      const pct = contractTotal > 0 ? (Math.round((totalPaid / contractTotal) * 1000) / 10) : 0;
+      const currency = d.currency || 'IQD';
+
+      document.getElementById('rCompanyName').textContent = d.companyName || 'الأصدقاء لتجارة السيارات';
+      document.getElementById('rCompanyTagline').textContent = d.companyTagline || 'الأنظمة المالية المتكاملة Enterprise';
+      document.getElementById('rReceiptNo').textContent = d.receiptNo || 'RCPT-DEDDA33A';
+      document.getElementById('rFooterReceiptId').textContent = d.receiptNo || 'RCPT-DEDDA33A';
+      document.getElementById('rDate').textContent = d.date || '2026/07/24';
+
+      document.getElementById('rCustomerName').textContent = d.customerName || 'ليث سامي بدري';
+      document.getElementById('rCustomerPhone').textContent = d.customerPhone || '07700005002';
+      document.getElementById('rVehicleName').textContent = d.vehicleName || 'Land Cruiser 2024';
+      document.getElementById('rVin').textContent = d.vin || 'JTDKN3DU0A209841';
+      document.getElementById('rContractNo').textContent = d.contractNo || 'INV-20260724-00022';
+      document.getElementById('rCurrency').textContent = currency;
+
+      document.getElementById('rPayMethod').textContent = d.payMethod || 'نقداً';
+      document.getElementById('rInstallmentChip').textContent = `القسط ${d.installmentIndex || 1} من ${d.installmentsCount || 12}`;
+
+      document.getElementById('rAmountNow').textContent = formatNumber(amountNow);
+      document.getElementById('rAmountCurr').textContent = currency === 'IQD' ? 'د.ع' : '$';
+      document.getElementById('rTafqitText').textContent = tafqitArabic(amountNow, currency);
+
+      document.getElementById('rContractTotal').textContent = formatNumber(contractTotal);
+      document.getElementById('rPrevPaid').textContent = formatNumber(previouslyPaid);
+      document.getElementById('rAmountCurrent').textContent = formatNumber(amountNow);
+      document.getElementById('rTotalPaid').textContent = formatNumber(totalPaid);
+      document.getElementById('rRemaining').textContent = formatNumber(remaining) + (currency === 'IQD' ? ' د.ع' : ' $');
+
+      document.getElementById('rInstallmentCounts').textContent = `${d.installmentIndex || 1} / ${d.installmentsCount || 12}`;
+      document.getElementById('rProgressBar').style.width = pct + '%';
+      document.getElementById('rPct').textContent = pct + '%';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      render({
+        receiptNo: "RCPT-DEDDA33A",
+        date: "2026/07/24",
+        customerName: "ليث سامي بدري",
+        customerPhone: "07700005002",
+        vehicleName: "Land Cruiser 2024",
+        vin: "JTDKN3DU0A209841",
+        currency: "IQD",
+        contractNo: "INV-20260724-00022",
+        payMethod: "نقداً",
+        installmentIndex: 11,
+        installmentsCount: 12,
+        amountNow: 2291.67,
+        previouslyPaid: 25208.37,
+        contractTotal: 27500.00
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+/**
+ * Enterprise Design System v1 — CSS Variable Design Tokens & Print Stylesheet
+ * Single Visual Source of Truth for Colors, Shadows, Radii, Focus Rings, and Print Rules.
+ */
+
+:root {
+  /* ── Core Semantic Surface & Background Tokens ── */
+  --ds-background: #F8FAFC;
+  --ds-surface: #FFFFFF;
+  --ds-surface-subtle: #F1F5F9;
+  --ds-surface-hover: #F8FAFC;
+  --ds-border: #E5E7EB;
+  --ds-border-strong: #CBD5E1;
+
+  /* ── Typography Colors ── */
+  --ds-text-primary: #111827;
+  --ds-text-secondary: #6B7280;
+  --ds-text-muted: #94A3B8;
+  --ds-text-inverse: #FFFFFF;
+
+  /* ── Brand / Primary Accent (Enterprise Deep Teal) ── */
+  --ds-primary: #0F766E;
+  --ds-primary-hover: #115E59;
+  --ds-primary-subtle: #F0FDFA;
+
+  /* ── Semantic Status Colors ── */
+  --ds-success: #16A34A;
+  --ds-success-subtle: #F0FDF4;
+
+  --ds-warning: #D97706;
+  --ds-warning-subtle: #FFFBEB;
+
+  --ds-danger: #DC2626;
+  --ds-danger-subtle: #FEF2F2;
+
+  --ds-info: #2563EB;
+  --ds-info-subtle: #EFF6FF;
+
+  /* ── Radius Tokens ── */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 10px;
+  --ds-radius-xl: 12px;
+  --ds-radius-panel: 14px;
+
+  /* ── Focus Ring ── */
+  --ds-ring: #0F766E;
+  --ds-focus-ring: rgba(15, 118, 110, 0.2);
+}
+
+/* ── Motion & Animation Utility Classes ── */
+.ds-transition {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-transition,
+  .animate-in,
+  .animate-out {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ── Scoped Print Media Stylesheet (Phase 3, Step 11) ── */
+@media print {
+  /* Scoped utility classes for printable pages */
+  .ds-print-hidden {
+    display: none !important;
+  }
+
+  .ds-print-only {
+    display: block !important;
+  }
+
+  .ds-print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  .ds-print-table tr {
+    page-break-inside: avoid !important;
+  }
+
+  .ds-print-table th,
+  .ds-print-table td {
+    padding: 6px 8px !important;
+    border: 1px solid var(--ds-border) !important;
+  }
+}

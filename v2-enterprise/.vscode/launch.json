@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Alasdeqa Auto (Active Device / Simulator)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "mobile-app"
+    },
+    {
+      "name": "Alasdeqa Auto (macOS Desktop)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "mobile-app",
+      "args": ["-d", "macos"]
+    },
+    {
+      "name": "Alasdeqa Auto (Chrome Web)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "mobile-app",
+      "args": ["-d", "chrome"]
+    }
+  ]
+}
