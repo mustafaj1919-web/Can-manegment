@@ -19,6 +19,8 @@ interface CustomerSearchComboboxProps {
   isFetching: boolean
   onRefresh: () => void
   errorMsg?: string
+  searchTerm?: string
+  onSearchTermChange?: (term: string) => void
 }
 
 export function CustomerSearchCombobox({
@@ -32,8 +34,19 @@ export function CustomerSearchCombobox({
   isFetching,
   onRefresh,
   errorMsg,
+  searchTerm: parentSearchTerm,
+  onSearchTermChange,
 }: CustomerSearchComboboxProps) {
-  const [searchTerm, setSearchTerm] = useState('')
+  const [localSearchTerm, setLocalSearchTerm] = useState('')
+  const searchTerm = parentSearchTerm !== undefined ? parentSearchTerm : localSearchTerm
+
+  const handleSearchChange = (val: string) => {
+    setLocalSearchTerm(val)
+    if (onSearchTermChange) {
+      onSearchTermChange(val)
+    }
+  }
+
   const [isOpen, setIsOpen] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -171,13 +184,13 @@ export function CustomerSearchCombobox({
               <input
                 autoFocus
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => handleSearchChange(e.target.value)}
                 placeholder="ابحث بالاسم أو الهوية أو رقم الهاتف..."
                 className="flex-1 bg-transparent text-xs text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
                 dir="rtl"
               />
               {searchTerm && (
-                <button type="button" onClick={() => setSearchTerm('')} className="text-[#94A3B8] hover:text-[#0F172A]">
+                <button type="button" onClick={() => handleSearchChange('')} className="text-[#94A3B8] hover:text-[#0F172A]">
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}

@@ -132,6 +132,8 @@ export default function NewSalePage() {
               isFetching={customerSearch.isFetching}
               onRefresh={customerSearch.refetch}
               errorMsg={form.errors.buyerId}
+              searchTerm={customerSearch.searchTerm}
+              onSearchTermChange={customerSearch.setSearchTerm}
             />
 
             {/* Payment & Pricing Details Card */}
